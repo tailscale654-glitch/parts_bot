@@ -143,5 +143,6 @@
   "import_format_directory": "📇 Format: dilerlar ma’lumotnomasi",
   "directory_preview": "Fayldagi dilerlar: {total}\nViloyatlar: {regions}\n\n➕ Yangi: {new}\n🔄 Yangilandi: {updated}\n⛔ Faol emas (xaridorlarga ko‘rsatilmaydi): {disabled}",
   "directory_applied": "✅ Dilerlar ma’lumotnomasi yangilandi\n\n➕ Yangi: {new}\n🔄 Yangilandi: {updated}\n⛔ Faol emas: {disabled}\n\nViloyat, manzil va telefonlar ehtiyot qism kartalarida ko‘rinadi.",
-  "err_duplicate_dealer": "diler takrorlanadi ({other}-qatorda bor)"
+  "err_duplicate_dealer": "diler takrorlanadi ({other}-qatorda bor)",
+  "warn_unknown_models": "⚠️ Noma’lum model kodlari (o‘zgarishsiz ko‘rsatiladi): {models}.\nNomlar app/services/import_mapping.py (MODEL_NAMES) da belgilanadi."
 }

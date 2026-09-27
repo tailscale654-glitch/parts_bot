@@ -143,5 +143,6 @@
   "import_format_directory": "📇 Format: dealer directory",
   "directory_preview": "Dealers in file: {total}\nRegions: {regions}\n\n➕ New: {new}\n🔄 Updated: {updated}\n⛔ Inactive (hidden from customers): {disabled}",
   "directory_applied": "✅ Dealer directory updated\n\n➕ New: {new}\n🔄 Updated: {updated}\n⛔ Inactive: {disabled}\n\nRegions, addresses and phones are already shown on part cards.",
-  "err_duplicate_dealer": "duplicate dealer (already in row {other})"
+  "err_duplicate_dealer": "duplicate dealer (already in row {other})",
+  "warn_unknown_models": "⚠️ Unknown model codes (shown as is): {models}.\nNames are set in app/services/import_mapping.py (MODEL_NAMES)."
 }

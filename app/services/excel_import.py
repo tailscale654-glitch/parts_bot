@@ -237,11 +237,8 @@ def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
         elif prefix and token not in mapping.MODEL_NAMES:
             token = prefix + token  # продолжение списка без префикса
         codes.append(token)
-    result = []
-    for code in dict.fromkeys(codes):
-        name = mapping.MODEL_NAMES.get(code, code)
-        result.append((name, name, name))
-    return result or [mapping.ALL_MODELS]
+    names = dict.fromkeys(mapping.MODEL_NAMES.get(code, code) for code in codes)  # без повторов
+    return [(name, name, name) for name in names] or [mapping.ALL_MODELS]
 
 
 def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int,
@@ -268,6 +265,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
     skipped_status: dict[str, int] = {}
     no_price, no_dealer = 0, 0
     default_region_dealers: set[str] = set()
+    unknown_models: set[str] = set()
     offers: dict[tuple, dict] = {}  # (модель, артикул, дилер) → собранная строка
 
     data = df[df["Код запчасти"].map(_clean).notna()]  # итоговые строки внизу таблицы без артикула
@@ -303,7 +301,10 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         node = mapping.CATEGORIES.get((v.get("Тип запчасти") or "").upper(), mapping.OTHER_CATEGORY)
         updated = pd.to_datetime(v.get("Дата обновления"), format="%d.%m.%Y %H:%M:%S", errors="coerce")
 
+        known_names = set(mapping.MODEL_NAMES.values()) | {mapping.ALL_MODELS[0]}
         for model in _model_names(v.get("Автомобильная марка")):
+            if model[0] not in known_names:
+                unknown_models.add(model[0])
             key = (model[0].lower(), v["Код запчасти"].lower(), key_d)
             offer = offers.get(key)
             if offer is None:
@@ -325,6 +326,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         warnings.append(ImportError_(0, "warn_default_region", {
             "n": len(default_region_dealers), "dealers": ", ".join(sorted(default_region_dealers)),
         }))
+    if unknown_models:
+        warnings.append(ImportError_(0, "warn_unknown_models", {"models": ", ".join(sorted(unknown_models))}))
     if not offers:
         errors.append(ImportError_(0, "err_no_rows"))
 

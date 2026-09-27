@@ -35,7 +35,9 @@ def row(qty, code, name, status, typ, model, sale, real, dealer, date="25.09.202
 
 def test_model_code_lists():
     assert [m[0] for m in _model_names("T9-P33Z3,T8-P30BF")] == ["JAC T9", "JAC T8"]
-    assert [m[0] for m in _model_names("RF8-V9AA3,V9HA0")] == ["JAC RF8 (V9AA3)", "JAC RF8 (V9HA0)"]
+    assert [m[0] for m in _model_names("RF8-V9AA3,V9HA0")] == ["JAC RF8"]  # две комплектации — одна модель
+    assert [m[0] for m in _model_names("JS8P-S55NG")] == ["JAC JS8"]
+    assert [m[0] for m in _model_names("M4")] == ["JAC M4 Luxe"]
     assert _model_names("—")[0] == ("Все модели", "All models", "Barcha modellar")
     assert _model_names("XYZ-1")[0][0] == "XYZ-1"  # неизвестный код — как есть
 
@@ -48,6 +50,7 @@ def test_warehouse_export(tmp_path):
         row(1, "5206100P3010", "FRONT WINDSHIELD", "Бронь для заказа", "B", "T8-P30BF", 703815, 809445, "OOO «ASIAMOTOR»"),
         row(15, "3608100V670001", "BSM", "На складе", "D", "M4", 1193310, 1431911, "—"),
         row(1, "X1", "ODD PART", "У дилера", "ZZ", "T9-P33Z3,T8-P30BF", 100, 200, "OOO «ASIAMOTOR»"),
+        row(1, "X2", "NEW MODEL PART", "У дилера", "A", "XYZ-9", 100, 200, "OOO «ASIAMOTOR»"),
     ])
     rows, errors, warnings, fmt = validate_any(path, REGIONS, {"navoiyavtotransxizmat": 4})  # Навои — из справочника
     assert fmt == "warehouse" and errors == []
@@ -65,6 +68,8 @@ def test_warehouse_export(tmp_path):
     odd = [r for r in rows if r.part_number == "X1"]
     assert sorted(r.model["ru"] for r in odd) == ["JAC T8", "JAC T9"] and odd[0].node["ru"] == "Прочее"
 
+    unknown = next(w for w in warnings if w.key == "warn_unknown_models")
+    assert unknown.params["models"] == "XYZ-9"
     keys = {(w.key, w.params.get("status")) for w in warnings}
     assert ("warn_skipped_status", "Бронь для заказа") in keys and ("warn_skipped_status", "На складе") in keys
     default = next(w for w in warnings if w.key == "warn_default_region")
