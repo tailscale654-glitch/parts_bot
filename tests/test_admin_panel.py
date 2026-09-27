@@ -35,7 +35,7 @@ async def test_order_counts_and_tabs(db):
     tabs = order_tabs("ru", counts, "new")
     assert tabs[0][0].text == "• 🟡 Новые (1)" and tabs[0][1].text == "🔄 В работе (1)"
     assert AdminCB.unpack(tabs[1][2].callback_data).f == "all"
-    assert admin_menu_keyboard("ru", 1).inline_keyboard[0][0].text == "🛒 Заказы (1 новых)"
+    assert admin_menu_keyboard("ru", 1).inline_keyboard[0][0].text == "🛒 Заказы · 🟡 1"
 
 
 async def test_dealers_and_toggle(db):

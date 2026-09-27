@@ -2,19 +2,22 @@
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.database.repositories.admin import ORDER_FILTERS, AdminRepository
 from app.database.repositories.orders import OrderRepository
 from app.database.repositories.staff import StaffRepository
+from app.database.repositories.stats import PERIODS, StatsRepository, period_start
 from app.keyboards.admin import AdminCB, admin_menu_keyboard, btn, menu_button, order_tabs, pager
 from app.keyboards.orders import admin_order_keyboard
 from app.services.catalog import money, paginate
 from app.services.localization import i18n, localized_name
 from app.services.notify import person_name, send
+from app.services import orders as orders_service
 from app.services.orders import fmt_date, order_text, status_text
+from app.services.stats import export_filename, orders_excel, stats_text
 from app.states.admin import AdminStates
 from app.utils.filters import IsAdmin
 
@@ -232,6 +235,37 @@ async def staff_remove(callback: CallbackQuery, callback_data: AdminCB, user: Us
                i18n.t(removed.user.language, "staff_removed_notice", dealer=removed.dealer.name))
     await callback.answer(i18n.t(user.language, "staff_removed"))
     await _staff_view(callback, removed.dealer_id, callback_data.page, user.language, session)
+
+
+# ---------- статистика ----------
+
+@router.callback_query(AdminCB.filter(F.section == "stats"))
+async def stats(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    period = callback_data.f if callback_data.f in PERIODS else "today"
+    data = await StatsRepository(session).collect(period_start(period, orders_service.TIMEZONE))
+    tabs = [btn(("• " if p == period else "") + i18n.t(lang, f"period_{p}"), section="stats", f=p) for p in PERIODS]
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        tabs[:2], tabs[2:],
+        [btn(i18n.t(lang, "btn_export_excel"), section="export", f=period)],
+        menu_button(lang),
+    ])
+    await _edit(callback, stats_text(data, period, lang), kb)
+
+
+@router.callback_query(AdminCB.filter(F.section == "export"))
+async def export(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    period = callback_data.f if callback_data.f in PERIODS else "all"
+    items = await StatsRepository(session).orders_for_export(period_start(period, orders_service.TIMEZONE))
+    if not items:
+        await callback.answer(i18n.t(lang, "export_empty"), show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.answer_document(
+        BufferedInputFile(orders_excel(items, lang), filename=export_filename(period)),
+        caption=i18n.t(lang, "export_caption", period=i18n.t(lang, f"period_{period}"), n=len(items)),
+    )
 
 
 # ---------- каталог ----------

@@ -7,7 +7,7 @@ from app.services.localization import i18n
 
 
 class AdminCB(CallbackData, prefix="ap"):
-    section: str  # menu | orders | order | search | dealers | dealer | toggle | catalog | clients | client
+    section: str  # menu | orders | order | search | dealers | dealer | toggle | catalog | clients | client | stats | export
     f: str = ""  # вкладка заказов: new | work | done | cancel | all
     page: int = 1
     id: int = 0
@@ -37,7 +37,7 @@ def admin_menu_keyboard(lang: str, new_orders: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [btn(orders_text, section="orders", f="new" if new_orders else "all")],
         [btn(i18n.t(lang, "btn_adm_dealers"), section="dealers"), btn(i18n.t(lang, "btn_adm_catalog"), section="catalog")],
-        [btn(i18n.t(lang, "btn_adm_clients"), section="clients")],
+        [btn(i18n.t(lang, "btn_adm_stats"), section="stats", f="today"), btn(i18n.t(lang, "btn_adm_clients"), section="clients")],
         [InlineKeyboardButton(text=i18n.t(lang, "btn_upload_excel"), callback_data="adm:upload"),
          InlineKeyboardButton(text=i18n.t(lang, "btn_template"), callback_data="adm:template")],
     ])
