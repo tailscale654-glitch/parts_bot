@@ -8,6 +8,7 @@ from app.database.models import User
 from app.database.repositories.regions import RegionRepository
 from app.handlers.cart import cart_view
 from app.handlers.catalog import models_view
+from app.handlers.orders import orders_view
 from app.keyboards.language import language_keyboard
 from app.keyboards.main import main_reply_keyboard, menu_action, profile_keyboard
 from app.keyboards.phone import phone_keyboard
@@ -84,7 +85,8 @@ async def menu_button(message: Message, user: User, session: AsyncSession) -> No
         text, kb = await cart_view(user, session)
         await message.answer(text, reply_markup=kb)
     elif action == "btn_my_orders":
-        await message.answer(i18n.t(lang, "orders_empty"))
+        text, kb = await orders_view(user, session)
+        await message.answer(text, reply_markup=kb)
     elif action == "btn_profile":
         text, kb = profile_view(user)
         await message.answer(text, reply_markup=kb)

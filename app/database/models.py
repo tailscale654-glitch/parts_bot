@@ -150,3 +150,50 @@ class CartItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     stock: Mapped[Stock] = relationship(lazy="joined")
+
+
+ORDER_STATUSES = ("NEW", "CONFIRMED", "READY", "COMPLETED", "CANCELLED")
+
+
+class Order(Base):
+    """Заказ — всегда у одного дилера. Корзина с деталями от 2 дилеров = 2 заказа."""
+
+    __tablename__ = "orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)  # номер заказа (начинается с 10001)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    dealer_id: Mapped[int] = mapped_column(ForeignKey("dealers.id", ondelete="RESTRICT"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="NEW", index=True)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped[User] = relationship(lazy="joined")
+    dealer: Mapped[Dealer] = relationship(lazy="joined")
+    items: Mapped[list["OrderItem"]] = relationship(
+        lazy="selectin", back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
+    )
+
+
+class OrderItem(Base):
+    """Позиция заказа. Название, артикул и цена копируются — чтобы история не менялась после нового Excel."""
+
+    __tablename__ = "order_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), index=True)
+    part_id: Mapped[int | None] = mapped_column(ForeignKey("parts.id", ondelete="SET NULL"))
+    stock_id: Mapped[int | None] = mapped_column(ForeignKey("stocks.id", ondelete="SET NULL"))
+    part_number: Mapped[str] = mapped_column(String(64))
+    name_ru: Mapped[str] = mapped_column(String(255))
+    name_en: Mapped[str | None] = mapped_column(String(255))
+    name_uz: Mapped[str | None] = mapped_column(String(255))
+    model_name: Mapped[str | None] = mapped_column(String(128))
+    node_name: Mapped[str | None] = mapped_column(String(128))
+    quantity: Mapped[int] = mapped_column(Integer)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    total: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+
+    order: Mapped[Order] = relationship(back_populates="items")

@@ -1,4 +1,4 @@
-# JAC Parts Bot — Этап 5
+# JAC Parts Bot — Этап 6
 
 Telegram-бот каталога запчастей JAC. Сейчас готово: запуск в Docker, база PostgreSQL,
 регистрация «Язык → Регион → Номер телефона», после которой бот сразу открывает каталог
@@ -7,7 +7,8 @@ Telegram-бот каталога запчастей JAC. Сейчас готов
 В профиле можно сменить номер, регион и язык. Если у детали есть фото — оно показывается в карточке.
 Администратор загружает каталог, цены и остатки из Excel прямо в Telegram (`/admin`).
 В карточке детали — дилеры региона покупателя с ценой и наличием и кнопка «🛒 В корзину»;
-в корзине можно менять количество (не больше остатка). Оформление заказа — на следующем этапе.
+в корзине можно менять количество (не больше остатка) и оформить заказ. Администратор получает уведомление
+и меняет статус кнопками, покупатель видит историю в «📦 Мои заказы» и получает уведомления о статусе.
 
 ---
 
@@ -171,6 +172,7 @@ INFO  [alembic.runtime.migration] Running upgrade 0002 -> 0003, catalog: models,
 INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, dealers and stocks (prices / quantities)
 INFO  [alembic.runtime.migration] Running upgrade 0004 -> 0005, cart items
 INFO  [alembic.runtime.migration] Running upgrade 0005 -> 0006, dealer directory: code, name_key, enabled, in_directory
+INFO  [alembic.runtime.migration] Running upgrade 0006 -> 0007, orders and order items
 ... | INFO | jac_parts_bot | Bot @jac_parts_uz_bot started (long polling). Admins: 1
 ```
 
@@ -276,6 +278,27 @@ INFO  [alembic.runtime.migration] Running upgrade 0005 -> 0006, dealer directory
 - Кнопка **🛒 Дилер · цена** есть только у дилеров с наличием. Каждое нажатие — +1 шт., но не больше остатка.
 - **🛒 Корзина** в нижнем меню: ➖ / ➕ / ✖️ для каждой позиции, 🗑 Очистить, итоговая сумма.
   Если после новой загрузки Excel деталь закончилась — позиция помечается и не входит в сумму.
+
+## Заказы
+
+1. Покупатель: **🛒 Корзина → ✅ Оформить заказ** → экран «Проверьте заказ» → **✅ Подтвердить заказ**.
+   Если детали у нескольких дилеров — создаётся отдельный заказ на каждого дилера.
+2. Бот ещё раз проверяет наличие. Если пока покупатель думал, деталь купили — заказ не создаётся,
+   бот пишет, сколько осталось. Если всё в порядке — количество **резервируется** (вычитается из остатка дилера).
+3. Все администраторы из `ADMIN_IDS` получают «🔔 НОВЫЙ ЗАКАЗ №10001» с данными клиента и кнопками статуса:
+
+   | Статус | Кнопки у администратора |
+   |---|---|
+   | 🟡 Новый | ✅ Подтвердить · ❌ Отменить |
+   | 🔵 Подтверждён | 🟠 Готов к выдаче · ❌ Отменить |
+   | 🟠 Готов к выдаче | 🟢 Выдан · ❌ Отменить |
+   | 🟢 Выдан / 🔴 Отменён | — (конечные статусы) |
+
+   При каждой смене статуса покупателю приходит уведомление. При отмене зарезервированные детали возвращаются в остаток.
+4. **📦 Мои заказы** — последние 10 заказов; можно открыть любой. Пока заказ «Новый», покупатель может его отменить сам.
+
+> Администратор должен хотя бы раз нажать **Start** в боте — иначе Telegram не разрешит боту ему писать.
+> Номера заказов начинаются с 10001. Время показывается по Ташкенту (`TIMEZONE` в `.env`, по умолчанию `Asia/Tashkent`).
 
 ## Каталог и демо-данные
 
@@ -418,6 +441,7 @@ jac-parts-bot/
 │   │   ├── region.py           # выбор и смена региона
 │   │   ├── catalog.py          # каталог: модель → категория → деталь
 │   │   ├── cart.py             # корзина
+│   │   ├── orders.py           # оформление, мои заказы, статусы
 │   │   ├── phone.py            # номер телефона (регистрация и смена)
 │   │   ├── profile.py          # профиль
 │   │   ├── admin.py            # /admin: загрузка Excel
@@ -431,8 +455,8 @@ jac-parts-bot/
 │   ├── middlewares/db.py       # сессия БД + пользователь для каждого сообщения
 │   ├── database/
 │   │   ├── database.py         # подключение к PostgreSQL
-│   │   ├── models.py           # таблицы users, regions, models, nodes, parts, dealers, stocks, cart_items
-│   │   └── repositories/       # users, regions, catalog, stocks, cart
+│   │   ├── models.py           # users, regions, models, nodes, parts, dealers, stocks, cart_items, orders, order_items
+│   │   └── repositories/       # users, regions, catalog, stocks, cart, orders
 │   ├── services/               # localization.py, catalog.py, excel_import.py, excel_template.py, dealers.py,
 │   │                           # import_mapping.py (настройки складской выгрузки)
 │   ├── scripts/seed_demo.py    # демо-каталог
@@ -453,4 +477,4 @@ jac-parts-bot/
 docker compose run --rm --user root bot sh -c "pip install -q -r requirements-dev.txt && pytest -q"
 ```
 
-Ожидаемо: `66 passed`.
+Ожидаемо: `71 passed`.

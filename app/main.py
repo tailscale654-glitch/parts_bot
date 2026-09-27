@@ -7,9 +7,10 @@ from aiogram.types import ErrorEvent
 
 from app.config import load_settings
 from app.database.database import create_engine, create_session_factory
-from app.handlers import admin, cart, catalog, fallback, language, phone, profile, region, start
+from app.handlers import admin, cart, catalog, orders, fallback, language, phone, profile, region, start
 from app.middlewares.db import DbSessionMiddleware
 from app.services.localization import i18n
+from app.services.orders import set_timezone
 
 logger = logging.getLogger("jac_parts_bot")
 
@@ -23,6 +24,7 @@ async def main() -> None:
     # httpx/aiohttp не печатаем на DEBUG, чтобы токен из URL не попал в логи
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
+    set_timezone(settings.timezone)
     engine = create_engine(settings.database_url)
     session_factory = create_session_factory(engine)
 
@@ -38,6 +40,7 @@ async def main() -> None:
     dp.include_router(region.router)
     dp.include_router(profile.router)
     dp.include_router(catalog.router)
+    dp.include_router(orders.router)  # до cart: перехватывает «Оформить заказ»
     dp.include_router(cart.router)
     dp.include_router(phone.router)  # ловит все остальные сообщения — после остальных
     dp.include_router(fallback.router)  # всегда последним

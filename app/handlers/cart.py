@@ -1,5 +1,5 @@
 """Корзина: добавить из карточки детали, ➕/➖, удалить, очистить."""
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,7 @@ async def _refresh(callback: CallbackQuery, user: User, session: AsyncSession) -
             raise
 
 
-@router.callback_query(CartCB.filter())
+@router.callback_query(CartCB.filter(F.action != "checkout"))  # checkout — в handlers/orders.py
 async def cart_action(callback: CallbackQuery, callback_data: CartCB, user: User, session: AsyncSession) -> None:
     lang = user.language
     cart = CartRepository(session)
@@ -57,8 +57,7 @@ async def cart_action(callback: CallbackQuery, callback_data: CartCB, user: User
         await callback.answer(i18n.t(lang, "cart_cleared"))
         await _refresh(callback, user, session)
         return
-    elif action == "checkout":
-        await callback.answer(i18n.t(lang, "checkout_soon"), show_alert=True)  # этап 6
-        return
+    elif action == "show":  # «◀️ Назад в корзину» с экрана оформления
+        pass
     await callback.answer()
     await _refresh(callback, user, session)

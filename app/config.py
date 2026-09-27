@@ -36,6 +36,7 @@ class Settings:
     admin_ids: set[int]
     database_url: str = field(repr=False)
     default_language: str = "ru"
+    timezone: str = "Asia/Tashkent"  # время заказов показываем по Ташкенту
     log_level: str = "INFO"
 
 
@@ -48,4 +49,5 @@ def load_settings() -> Settings:
         admin_ids=_parse_admin_ids(os.getenv("ADMIN_IDS", "")),
         database_url=_build_database_url(),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        timezone=os.getenv("TIMEZONE", "Asia/Tashkent"),
     )
