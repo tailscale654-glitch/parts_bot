@@ -1,0 +1,240 @@
+"""Админ-панель: заказы, дилеры, каталог, клиенты. Только для ADMIN_IDS."""
+from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models import User
+from app.database.repositories.admin import ORDER_FILTERS, AdminRepository
+from app.database.repositories.orders import OrderRepository
+from app.keyboards.admin import AdminCB, admin_menu_keyboard, btn, menu_button, order_tabs, pager
+from app.keyboards.orders import admin_order_keyboard
+from app.services.catalog import money, paginate
+from app.services.localization import i18n, localized_name
+from app.services.orders import fmt_date, order_text, status_text
+from app.states.admin import AdminStates
+from app.utils.filters import IsAdmin
+
+router = Router(name="admin_panel")
+router.message.filter(IsAdmin())
+router.callback_query.filter(IsAdmin())
+
+PAGE = 10
+
+
+async def _edit(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None) -> None:
+    await callback.answer()
+    try:
+        await callback.message.edit_text(text[:4000], reply_markup=kb)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            raise
+
+
+def _name(user: User) -> str:
+    return " ".join(filter(None, [user.first_name, user.last_name])) or (f"@{user.username}" if user.username else "—")
+
+
+# ---------- меню ----------
+
+async def admin_menu_view(session: AsyncSession, lang: str | None) -> tuple[str, InlineKeyboardMarkup]:
+    counts = await AdminRepository(session).order_counts()
+    text = i18n.t(lang, "admin_menu")
+    if counts["new"]:
+        text += "\n\n" + i18n.t(lang, "admin_menu_new", n=counts["new"])
+    return text, admin_menu_keyboard(lang, counts["new"])
+
+
+@router.callback_query(AdminCB.filter(F.section == "menu"))
+async def show_menu(callback: CallbackQuery, user: User, session: AsyncSession, state: FSMContext) -> None:
+    await state.clear()
+    await _edit(callback, *await admin_menu_view(session, user.language))
+
+
+@router.callback_query(AdminCB.filter(F.section == "noop"))
+async def noop(callback: CallbackQuery) -> None:
+    await callback.answer()
+
+
+# ---------- заказы ----------
+
+def order_button_text(order, lang) -> str:
+    icon = status_text(order.status, lang).split(" ")[0]
+    return f"№{order.id} · {icon} · {money(order.total_amount, lang)} · {_name(order.user)}"
+
+
+@router.callback_query(AdminCB.filter(F.section == "orders"))
+async def orders(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    key = callback_data.f if callback_data.f in ORDER_FILTERS else "all"
+    repo = AdminRepository(session)
+    counts = await repo.order_counts()
+    page = paginate(counts[key], callback_data.page, PAGE)
+    items, total = await repo.orders_page(key, page.offset, PAGE)
+    lines = [i18n.t(lang, "adm_orders_title", tab=i18n.t(lang, f"tab_{key}")), ""]
+    if items:
+        lines.append(i18n.t(lang, "adm_shown", a=page.offset + 1, b=page.offset + len(items), total=total))
+    else:
+        lines.append(i18n.t(lang, "adm_orders_empty"))
+    rows = order_tabs(lang, counts, key)
+    rows += [[btn(order_button_text(o, lang), section="order", id=o.id, f=key, page=page.number)] for o in items]
+    nav = pager("orders", page, f=key)
+    if nav:
+        rows.append(nav)
+    rows.append([btn(i18n.t(lang, "btn_adm_search"), section="search")] + menu_button(lang))
+    await _edit(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(AdminCB.filter(F.section == "order"))
+async def order(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    order = await OrderRepository(session).get(callback_data.id)
+    if order is None:
+        await callback.answer(i18n.t(lang, "adm_not_found"), show_alert=True)
+        return
+    back = AdminCB(section="orders", f=callback_data.f or "all", page=callback_data.page).pack()
+    await _edit(callback, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang, back))
+
+
+@router.callback_query(AdminCB.filter(F.section == "search"))
+async def search_ask(callback: CallbackQuery, user: User, state: FSMContext) -> None:
+    await state.set_state(AdminStates.search_order)
+    await callback.answer()
+    await callback.message.answer(i18n.t(user.language, "adm_search_ask"))
+
+
+@router.message(AdminStates.search_order, F.text)
+async def search_order(message: Message, user: User, session: AsyncSession, state: FSMContext) -> None:
+    lang = user.language
+    number = message.text.strip().lstrip("№#")
+    if not number.isdigit():
+        await message.answer(i18n.t(lang, "adm_search_bad"))
+        return
+    await state.clear()
+    order = await OrderRepository(session).get(int(number))
+    if order is None:
+        await message.answer(i18n.t(lang, "adm_not_found"))
+        return
+    await message.answer(order_text(order, lang, for_admin=True), reply_markup=admin_order_keyboard(order, lang))
+
+
+# ---------- дилеры ----------
+
+@router.callback_query(AdminCB.filter(F.section == "dealers"))
+async def dealers(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    repo = AdminRepository(session)
+    _, total = await repo.dealers_page(0, 1)
+    page = paginate(total, callback_data.page, PAGE)
+    rows_data, _ = await repo.dealers_page(page.offset, PAGE)
+    lines = [i18n.t(lang, "adm_dealers_title")]
+    region = None
+    for r in rows_data:
+        if r.dealer.region_id != region:
+            region = r.dealer.region_id
+            lines += ["", f"📍 {localized_name(r.dealer.region, lang)}"]
+        icon = "🟢" if r.dealer.enabled and r.offers else ("⛔" if not r.dealer.enabled else "⚪")
+        lines.append(i18n.t(lang, "adm_dealer_line", icon=icon, name=r.dealer.name, offers=r.offers, orders=r.orders))
+    if total > PAGE:
+        lines += ["", i18n.t(lang, "adm_shown", a=page.offset + 1, b=page.offset + len(rows_data), total=total)]
+    rows = [[btn(r.dealer.name, section="dealer", id=r.dealer.id, page=page.number)] for r in rows_data]
+    nav = pager("dealers", page)
+    if nav:
+        rows.append(nav)
+    rows.append(menu_button(lang))
+    await _edit(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+async def _dealer_card(callback: CallbackQuery, dealer_id: int, page: int, lang, session: AsyncSession) -> None:
+    row = await AdminRepository(session).dealer(dealer_id)
+    if row is None:
+        await callback.answer(i18n.t(lang, "adm_not_found"), show_alert=True)
+        return
+    d = row.dealer
+    yes, no = i18n.t(lang, "yes"), i18n.t(lang, "no")
+    text = i18n.t(
+        lang, "adm_dealer_card",
+        name=d.name, code=d.code or "—", region=localized_name(d.region, lang), address=d.address or "—",
+        phone=d.phone or "—", visible=i18n.t(lang, "visible_yes" if d.enabled else "visible_no"),
+        active=yes if d.active else no, directory=yes if d.in_directory else no, offers=row.offers, orders=row.orders,
+    )
+    if d.in_directory:
+        text += "\n\n" + i18n.t(lang, "adm_dealer_note")
+    toggle = i18n.t(lang, "btn_dealer_hide" if d.enabled else "btn_dealer_show")
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [btn(toggle, section="toggle", id=d.id, page=page)],
+        [btn(i18n.t(lang, "btn_back"), section="dealers", page=page)],
+    ])
+    await _edit(callback, text, kb)
+
+
+@router.callback_query(AdminCB.filter(F.section == "dealer"))
+async def dealer(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    await _dealer_card(callback, callback_data.id, callback_data.page, user.language, session)
+
+
+@router.callback_query(AdminCB.filter(F.section == "toggle"))
+async def toggle_dealer(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    dealer = await AdminRepository(session).toggle_dealer(callback_data.id)
+    if dealer is not None:
+        await callback.answer(i18n.t(user.language, "dealer_shown" if dealer.enabled else "dealer_hidden"))
+    await _dealer_card(callback, callback_data.id, callback_data.page, user.language, session)
+
+
+# ---------- каталог ----------
+
+@router.callback_query(AdminCB.filter(F.section == "catalog"))
+async def catalog(callback: CallbackQuery, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    s = await AdminRepository(session).catalog_summary()
+    lines = [i18n.t(lang, "adm_catalog", active=s.parts_active, hidden=s.parts_hidden,
+                    offers=s.offers_in_stock, dealers=s.dealers_with_stock)]
+    if s.by_model:
+        lines += ["", i18n.t(lang, "adm_catalog_models")] + [f"• {name}: {n}" for name, n in s.by_model]
+    if s.by_node:
+        lines += ["", i18n.t(lang, "adm_catalog_nodes")] + [f"• {name}: {n}" for name, n in s.by_node]
+    await _edit(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=[menu_button(lang)]))
+
+
+# ---------- клиенты ----------
+
+@router.callback_query(AdminCB.filter(F.section == "clients"))
+async def clients(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    repo = AdminRepository(session)
+    started, registered = await repo.clients_total()
+    page = paginate(registered, callback_data.page, PAGE)
+    rows_data, _ = await repo.clients_page(page.offset, PAGE)
+    lines = [i18n.t(lang, "adm_clients_title", total=started, registered=registered), ""]
+    for r in rows_data:
+        region = localized_name(r.user.region, lang) if r.user.region else "—"
+        lines.append(i18n.t(lang, "adm_client_line", name=_name(r.user), phone=r.user.phone, region=region,
+                            orders=r.orders, spent=money(r.spent, lang)))
+    rows = [[btn(f"{_name(r.user)} · {r.user.phone}", section="client", id=r.user.id, page=page.number)] for r in rows_data]
+    nav = pager("clients", page)
+    if nav:
+        rows.append(nav)
+    rows.append(menu_button(lang))
+    await _edit(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(AdminCB.filter(F.section == "client"))
+async def client(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
+    repo = AdminRepository(session)
+    client_user = await repo.client(callback_data.id)
+    if client_user is None:
+        await callback.answer(i18n.t(lang, "adm_not_found"), show_alert=True)
+        return
+    orders, total = await repo.orders_page("all", 0, PAGE, user_id=client_user.id)
+    spent = sum((o.total_amount for o in orders if o.status != "CANCELLED"), start=0)
+    text = i18n.t(
+        lang, "adm_client_card", name=_name(client_user), phone=client_user.phone or "—",
+        region=localized_name(client_user.region, lang) if client_user.region else "—",
+        language=i18n.t(client_user.language, "language_name"), since=fmt_date(client_user.created_at)[:10],
+        orders=total, spent=money(spent, lang),
+    )
+    rows = [[btn(order_button_text(o, lang), section="order", id=o.id, f="all")] for o in orders]
+    rows.append([btn(i18n.t(lang, "btn_back"), section="clients", page=callback_data.page)])
+    await _edit(callback, text, InlineKeyboardMarkup(inline_keyboard=rows))

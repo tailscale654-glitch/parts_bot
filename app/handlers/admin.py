@@ -1,4 +1,4 @@
-"""Админ-панель (этап 4 — загрузка Excel). Доступ только для ADMIN_IDS из .env."""
+"""Админ: /admin и загрузка Excel. Разделы панели — в admin_panel.py. Доступ только для ADMIN_IDS из .env."""
 import logging
 import tempfile
 from pathlib import Path
@@ -26,13 +26,6 @@ router.callback_query.filter(IsAdmin())
 
 IMPORT_DIR = Path(tempfile.gettempdir()) / "jac_imports"
 MAX_ERRORS_SHOWN = 20
-
-
-def admin_keyboard(lang: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=i18n.t(lang, "btn_upload_excel"), callback_data="adm:upload")],
-        [InlineKeyboardButton(text=i18n.t(lang, "btn_template"), callback_data="adm:template")],
-    ])
 
 
 def confirm_keyboard(lang: str) -> InlineKeyboardMarkup:
@@ -84,9 +77,12 @@ def _remove(path: str | None) -> None:
 
 
 @router.message(Command("admin"))
-async def cmd_admin(message: Message, user: User, state: FSMContext) -> None:
+async def cmd_admin(message: Message, user: User, session: AsyncSession, state: FSMContext) -> None:
+    from app.handlers.admin_panel import admin_menu_view  # меню собирается в admin_panel.py
+
     await state.clear()
-    await message.answer(i18n.t(user.language, "admin_menu"), reply_markup=admin_keyboard(user.language))
+    text, kb = await admin_menu_view(session, user.language)
+    await message.answer(text, reply_markup=kb)
 
 
 @router.callback_query(F.data == "adm:template")

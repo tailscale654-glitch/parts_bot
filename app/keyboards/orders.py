@@ -54,11 +54,14 @@ def order_keyboard(order: Order, lang: str) -> InlineKeyboardMarkup:
 STATUS_ORDER = ["CONFIRMED", "READY", "COMPLETED", "CANCELLED"]
 
 
-def admin_order_keyboard(order: Order, lang: str) -> InlineKeyboardMarkup | None:
+def admin_order_keyboard(order: Order, lang: str, back: str | None = None) -> InlineKeyboardMarkup:
+    """Кнопки статуса (только разрешённые переходы) + «назад» в список заказов админ-панели."""
     allowed = [s for s in STATUS_ORDER if s in TRANSITIONS.get(order.status, set())]
-    if not allowed:
-        return None
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=i18n.t(lang, f"btn_st_{s}"), callback_data=AdminOrderCB(id=order.id, status=s).pack())
-        for s in allowed
-    ]])
+    rows = []
+    if allowed:
+        rows.append([
+            InlineKeyboardButton(text=i18n.t(lang, f"btn_st_{s}"), callback_data=AdminOrderCB(id=order.id, status=s).pack())
+            for s in allowed
+        ])
+    rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_adm_orders"), callback_data=back or "ap:orders:all:1:0")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

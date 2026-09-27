@@ -88,7 +88,7 @@ async def test_order_texts_and_keyboards(db):
     assert [b.text for b in admin_order_keyboard(order, "ru").inline_keyboard[0]] == ["✅ Подтвердить", "❌ Отменить"]
     assert order_keyboard(order, "ru").inline_keyboard[0][0].text == "❌ Отменить заказ"
     order.status = "COMPLETED"
-    assert admin_order_keyboard(order, "ru") is None
+    assert [[b.text for b in r] for r in admin_order_keyboard(order, "ru").inline_keyboard] == [["🛒 Заказы"]]
     assert len(order_keyboard(order, "ru").inline_keyboard) == 1  # только «К заказам»
 
 
