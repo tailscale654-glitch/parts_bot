@@ -94,8 +94,8 @@
   "import_fix_hint": "Faylni tuzatib, qayta yuklang. Baza o‘zgarmadi.",
   "import_more_errors": "…va yana {n} ta xato",
   "import_row": "{row}-qator: {error}",
-  "import_preview": "📄 Fayl tekshirildi\n\nModellar: {models}\nKategoriyalar: {nodes}\nEhtiyot qismlar: {parts}\nDilerlar: {dealers}\nViloyatlar: {regions}\n\n➕ Yangi qismlar: {new}\n🔄 Yangilandi: {updated}\n🙈 Yashiriladi (faylda yo‘q): {hidden}\n❌ Xatolar: 0",
-  "import_applied": "✅ Katalog yangilandi\n\n➕ Yangi qismlar: {new}\n🔄 Yangilandi: {updated}\n🙈 Yashirildi: {hidden}",
+  "import_preview": "📄 Fayl tekshirildi\n\nModellar: {models}\nKategoriyalar: {nodes}\nEhtiyot qismlar: {parts}\nDilerlar: {dealers}\nViloyatlar: {regions}\n\n➕ Yangi qismlar: {new}\n🔄 Yangilandi: {updated}\n🙈 Yashiriladi (faylda yo‘q): {hidden}\n🔒 Qoldiqdan ayirildi (botdagi yopilmagan buyurtmalarda): {reserved} dona\n❌ Xatolar: 0",
+  "import_applied": "✅ Katalog yangilandi\n\n➕ Yangi qismlar: {new}\n🔄 Yangilandi: {updated}\n🙈 Yashirildi: {hidden}\n🔒 Qoldiqdan ayirildi (botdagi yopilmagan buyurtmalarda): {reserved} dona",
   "import_cancelled": "Import bekor qilindi. Baza o‘zgarmadi.",
   "import_expired": "⚠️ Fayl topilmadi — qayta yuklang.",
   "import_db_error": "❌ Bazaga yozishda xatolik. Barcha o‘zgarishlar bekor qilindi, baza o‘zgarmadi.",
@@ -294,5 +294,9 @@
   "xl_sum": "Summa, so‘m",
   "stats_recent": "🧾 Oxirgi buyurtmalar:",
   "btn_stats_orders": "🧾 Barcha buyurtmalar tarkibi bilan",
-  "stats_orders_title": "🧾 TARKIBI BILAN BUYURTMALAR · {period}\n{shown}"
+  "stats_orders_title": "🧾 TARKIBI BILAN BUYURTMALAR · {period}\n{shown}",
+  "btn_adm_backup": "💾 Oxirgi backup",
+  "backup_caption": "💾 Baza zaxira nusxasi, {date} ({size}).\n\nUni serverdan alohida saqlang. Qanday tiklash — README, «Восстановление из backup» bo‘limi.",
+  "backup_none": "⚠️ Hozircha zaxira nusxalar yo‘q. backup konteynerini tekshiring: docker compose logs backup",
+  "backup_too_big": "⚠️ Nusxa 50 MB dan katta — Telegram uni yubormaydi. Serverdan yuklab oling: ~/parts_bot/backups"
 }

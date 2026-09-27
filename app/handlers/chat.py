@@ -2,7 +2,7 @@
 все сообщения сохраняются в order_messages."""
 import logging
 
-from aiogram import Bot, F, Router
+from aiogram import Bot, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup

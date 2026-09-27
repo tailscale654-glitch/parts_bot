@@ -1,5 +1,5 @@
 """Сотрудник дилера: «📋 Заказы дилера» — список и карточки заказов только своего дилера."""
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup

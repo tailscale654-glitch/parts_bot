@@ -94,8 +94,8 @@
   "import_fix_hint": "Исправьте файл и загрузите его снова. База не изменена.",
   "import_more_errors": "…и ещё ошибок: {n}",
   "import_row": "Строка {row}: {error}",
-  "import_preview": "📄 Файл проверен\n\nМоделей: {models}\nКатегорий: {nodes}\nДеталей: {parts}\nДилеров: {dealers}\nРегионов: {regions}\n\n➕ Новых деталей: {new}\n🔄 Обновлено: {updated}\n🙈 Будет скрыто (нет в файле): {hidden}\n❌ Ошибок: 0",
-  "import_applied": "✅ Каталог обновлён\n\n➕ Новых деталей: {new}\n🔄 Обновлено: {updated}\n🙈 Скрыто: {hidden}",
+  "import_preview": "📄 Файл проверен\n\nМоделей: {models}\nКатегорий: {nodes}\nДеталей: {parts}\nДилеров: {dealers}\nРегионов: {regions}\n\n➕ Новых деталей: {new}\n🔄 Обновлено: {updated}\n🙈 Будет скрыто (нет в файле): {hidden}\n🔒 Вычтено из остатков (в незакрытых заказах бота): {reserved} шт.\n❌ Ошибок: 0",
+  "import_applied": "✅ Каталог обновлён\n\n➕ Новых деталей: {new}\n🔄 Обновлено: {updated}\n🙈 Скрыто: {hidden}\n🔒 Вычтено из остатков (в незакрытых заказах бота): {reserved} шт.",
   "import_cancelled": "Импорт отменён. База не изменена.",
   "import_expired": "⚠️ Файл не найден — загрузите его заново.",
   "import_db_error": "❌ Ошибка при записи в базу. Все изменения отменены, база осталась прежней.",
@@ -294,5 +294,9 @@
   "xl_sum": "Сумма, сум",
   "stats_recent": "🧾 Последние заказы:",
   "btn_stats_orders": "🧾 Все заказы с составом",
-  "stats_orders_title": "🧾 ЗАКАЗЫ С СОСТАВОМ · {period}\n{shown}"
+  "stats_orders_title": "🧾 ЗАКАЗЫ С СОСТАВОМ · {period}\n{shown}",
+  "btn_adm_backup": "💾 Последний backup",
+  "backup_caption": "💾 Резервная копия базы от {date} ({size}).\n\nХраните её отдельно от сервера. Как восстановить — в README, раздел «Восстановление из backup».",
+  "backup_none": "⚠️ Резервных копий пока нет. Проверьте контейнер backup: docker compose logs backup",
+  "backup_too_big": "⚠️ Копия больше 50 МБ — Telegram не даст её отправить. Скачайте с сервера: папка ~/parts_bot/backups"
 }

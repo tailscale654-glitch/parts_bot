@@ -2,7 +2,9 @@
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
+from pathlib import Path
+
+from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
@@ -291,6 +293,34 @@ async def export(callback: CallbackQuery, callback_data: AdminCB, user: User, se
         BufferedInputFile(orders_excel(items, lang), filename=export_filename(period)),
         caption=i18n.t(lang, "export_caption", period=i18n.t(lang, f"period_{period}"), n=len(items)),
     )
+
+
+# ---------- резервная копия ----------
+
+BACKUP_DIR = Path("/bot/backups")  # в docker-compose сюда подключена папка ./backups (только чтение)
+TELEGRAM_FILE_LIMIT = 50 * 1024 * 1024
+
+
+def latest_backup(directory: Path = BACKUP_DIR) -> Path | None:
+    files = sorted(directory.glob("jac_parts_*.sql.gz")) if directory.exists() else []
+    return files[-1] if files else None  # имена с датой — последняя по алфавиту = самая новая
+
+
+@router.callback_query(AdminCB.filter(F.section == "backup"))
+async def send_backup(callback: CallbackQuery, user: User) -> None:
+    lang = user.language
+    path = latest_backup()
+    if path is None:
+        await callback.answer(i18n.t(lang, "backup_none"), show_alert=True)
+        return
+    size = path.stat().st_size
+    if size > TELEGRAM_FILE_LIMIT:
+        await callback.answer(i18n.t(lang, "backup_too_big"), show_alert=True)
+        return
+    date = path.stem.removeprefix("jac_parts_").removesuffix(".sql").replace("_", " ")
+    await callback.answer()
+    await callback.message.answer_document(
+        FSInputFile(path), caption=i18n.t(lang, "backup_caption", date=date, size=f"{size / 1024:.0f} КБ"))
 
 
 # ---------- каталог ----------

@@ -40,6 +40,7 @@ def admin_menu_keyboard(lang: str, new_orders: int) -> InlineKeyboardMarkup:
         [btn(i18n.t(lang, "btn_adm_stats"), section="stats", f="today"), btn(i18n.t(lang, "btn_adm_clients"), section="clients")],
         [InlineKeyboardButton(text=i18n.t(lang, "btn_upload_excel"), callback_data="adm:upload"),
          InlineKeyboardButton(text=i18n.t(lang, "btn_template"), callback_data="adm:template")],
+        [btn(i18n.t(lang, "btn_adm_backup"), section="backup")],
     ])
 
 

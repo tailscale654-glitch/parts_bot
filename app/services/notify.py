@@ -1,9 +1,10 @@
 """Уведомления: о новом заказе — администраторам и сотрудникам дилера;
 о смене статуса — клиенту и всем остальным участникам (кроме того, кто изменил)."""
+import asyncio
 import logging
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramRetryAfter
 from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,12 +25,19 @@ def person_name(user: User) -> str:
 
 async def send(bot: Bot, chat_id: int, text: str, kb: InlineKeyboardMarkup | None = None) -> bool:
     """Отправить, не падая, если человек не запускал бота или заблокировал его."""
-    try:
-        await bot.send_message(chat_id, text, reply_markup=kb)
-        return True
-    except TelegramAPIError as e:
-        logger.warning("Cannot send message to %s: %s", chat_id, e)
-        return False
+    for attempt in range(2):
+        try:
+            await bot.send_message(chat_id, text, reply_markup=kb)
+            return True
+        except TelegramRetryAfter as e:  # Telegram просит подождать (много сообщений подряд)
+            if attempt:
+                logger.warning("Rate limited sending to %s", chat_id)
+                return False
+            await asyncio.sleep(min(e.retry_after, 30))
+        except TelegramAPIError as e:
+            logger.warning("Cannot send message to %s: %s", chat_id, e)
+            return False
+    return False
 
 
 async def admin_recipients(session: AsyncSession, settings: Settings) -> list[tuple[int, str | None]]:

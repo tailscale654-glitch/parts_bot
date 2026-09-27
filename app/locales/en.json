@@ -94,8 +94,8 @@
   "import_fix_hint": "Fix the file and upload it again. The database was not changed.",
   "import_more_errors": "…and {n} more errors",
   "import_row": "Row {row}: {error}",
-  "import_preview": "📄 File checked\n\nModels: {models}\nCategories: {nodes}\nParts: {parts}\nDealers: {dealers}\nRegions: {regions}\n\n➕ New parts: {new}\n🔄 Updated: {updated}\n🙈 Will be hidden (not in file): {hidden}\n❌ Errors: 0",
-  "import_applied": "✅ Catalog updated\n\n➕ New parts: {new}\n🔄 Updated: {updated}\n🙈 Hidden: {hidden}",
+  "import_preview": "📄 File checked\n\nModels: {models}\nCategories: {nodes}\nParts: {parts}\nDealers: {dealers}\nRegions: {regions}\n\n➕ New parts: {new}\n🔄 Updated: {updated}\n🙈 Will be hidden (not in file): {hidden}\n🔒 Subtracted from stock (in open bot orders): {reserved} pcs\n❌ Errors: 0",
+  "import_applied": "✅ Catalog updated\n\n➕ New parts: {new}\n🔄 Updated: {updated}\n🙈 Hidden: {hidden}\n🔒 Subtracted from stock (in open bot orders): {reserved} pcs",
   "import_cancelled": "Import cancelled. The database was not changed.",
   "import_expired": "⚠️ File not found — please upload it again.",
   "import_db_error": "❌ Database write error. All changes were rolled back; the database is unchanged.",
@@ -294,5 +294,9 @@
   "xl_sum": "Sum, UZS",
   "stats_recent": "🧾 Latest orders:",
   "btn_stats_orders": "🧾 All orders with items",
-  "stats_orders_title": "🧾 ORDERS WITH ITEMS · {period}\n{shown}"
+  "stats_orders_title": "🧾 ORDERS WITH ITEMS · {period}\n{shown}",
+  "btn_adm_backup": "💾 Latest backup",
+  "backup_caption": "💾 Database backup from {date} ({size}).\n\nKeep it outside the server. How to restore — see README, “Restore from backup”.",
+  "backup_none": "⚠️ No backups yet. Check the backup container: docker compose logs backup",
+  "backup_too_big": "⚠️ The backup is larger than 50 MB — Telegram won't send it. Download it from the server: ~/parts_bot/backups"
 }

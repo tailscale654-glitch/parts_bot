@@ -1,3 +1,10 @@
+# Логи каждого контейнера — не больше 5 файлов по 10 МБ (чтобы не заполнить диск)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -13,6 +20,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging: *logging
     # Порт наружу НЕ открываем — база доступна только боту
 
   bot:
@@ -24,6 +32,27 @@ services:
         condition: service_healthy
     volumes:
       - ./data:/bot/data
+      - ./backups:/bot/backups:ro  # чтобы админ мог получить последнюю копию в Telegram
+    logging: *logging
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: "<+05>-5"  # время Ташкента (UTC+5)
+      BACKUP_TIME: "03:00"
+      BACKUP_KEEP_DAYS: "14"
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
 
 volumes:
   postgres_data:

@@ -9,6 +9,7 @@ from app.config import load_settings
 from app.database.database import create_engine, create_session_factory
 from app.handlers import admin, admin_panel, cart, catalog, chat, dealer, orders, fallback, language, phone, profile, region, start
 from app.middlewares.db import DbSessionMiddleware
+from app.services.alerts import ErrorAlerts
 from app.services.localization import i18n
 from app.services.orders import set_timezone
 
@@ -48,9 +49,12 @@ async def main() -> None:
     dp.include_router(phone.router)  # ловит все остальные сообщения — после остальных
     dp.include_router(fallback.router)  # всегда последним
 
+    alerts = ErrorAlerts()
+
     @dp.errors()
     async def on_error(event: ErrorEvent) -> bool:
         logger.exception("Update handling failed", exc_info=event.exception)
+        await alerts.notify(bot, settings.admin_ids, event.exception, event.update.update_id)
         update = event.update
         target = update.message or (update.callback_query and update.callback_query.message)
         if target is not None:
@@ -63,7 +67,8 @@ async def main() -> None:
     me = await bot.get_me()
     logger.info("Bot @%s started (long polling). Admins: %d", me.username, len(settings.admin_ids))
     try:
-        await dp.start_polling(bot)
+        # allowed_updates — только нужные типы обновлений (меньше лишнего трафика)
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         await bot.session.close()
         await engine.dispose()

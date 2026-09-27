@@ -16,10 +16,10 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import CarModel, Dealer, Node, Part, Region, Stock
+from app.database.models import CarModel, Dealer, Node, Order, OrderItem, Part, Region, Stock
 from app.services import import_mapping as mapping
 from app.services.part_names import has_translation, translate
 from app.services.dealers import dealer_key, find_region, is_directory, region_lookup, validate_directory
@@ -78,6 +78,7 @@ class ImportStats:
     new: int = 0
     updated: int = 0
     hidden: int = 0
+    reserved: int = 0  # штук вычтено из остатков: они в незакрытых заказах бота
 
 
 # ---------- чтение и проверка ----------
@@ -257,7 +258,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         return [], [ImportError_(0, "err_missing_columns", {"columns": ", ".join(missing)})], []
 
     region_by_code = {r.code: r.id for r in regions}
-    for dealer, code in {**mapping.DEALER_REGIONS, "__default__": mapping.DEFAULT_REGION}.items():
+    for code in {*mapping.DEALER_REGIONS.values(), mapping.DEFAULT_REGION}:
         if code not in region_by_code:
             errors.append(ImportError_(0, "err_mapping_region", {"code": code}))
     if errors:
@@ -451,6 +452,21 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
         stock.quantity = r.stock
         stock.delivery_days = r.delivery_days
         seen_stocks.add(key)
+
+    # 3б. Детали в незакрытых заказах бота уже обещаны покупателям. Складская программа о них
+    # не знает, поэтому вычитаем их из нового остатка — иначе одну деталь можно продать дважды.
+    reserved_rows = await session.execute(
+        select(OrderItem.part_id, Order.dealer_id, func.sum(OrderItem.quantity))
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.status.in_(("NEW", "CONFIRMED", "READY")), OrderItem.part_id.is_not(None))
+        .group_by(OrderItem.part_id, Order.dealer_id)
+    )
+    for part_id, dealer_id, qty in reserved_rows.all():
+        stock = stocks.get((part_id, dealer_id))
+        if stock is not None and (part_id, dealer_id) in seen_stocks:
+            taken = min(stock.quantity, int(qty))
+            stock.quantity -= taken
+            stats.reserved += taken
 
     # 4. Всё, чего нет в файле, скрываем (файл = полный прайс)
     for part in parts.values():

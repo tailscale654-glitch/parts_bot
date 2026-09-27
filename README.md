@@ -1,4 +1,4 @@
-# JAC Parts Bot — Этап 8
+# JAC Parts Bot
 
 Telegram-бот каталога запчастей JAC. Сейчас готово: запуск в Docker, база PostgreSQL,
 регистрация «Язык → Регион → Номер телефона», после которой бот сразу открывает каталог
@@ -429,31 +429,71 @@ docker compose logs -f bot
 
 ---
 
-## Резервная копия (backup) PostgreSQL
+## Резервная копия (backup) — делается сама
+
+В `docker-compose.yml` есть контейнер **backup**. Он делает копию базы:
+
+- сразу при запуске (`docker compose up -d`) — чтобы было видно, что всё работает;
+- каждый день в **03:00 по Ташкенту**;
+- копии лежат в папке **`~/parts_bot/backups/`** (`jac_parts_2026-09-28_0300.sql.gz`), старше **14 дней** удаляются.
+
+Проверить:
 
 ```bash
-mkdir -p ~/backups
-docker compose exec -T postgres pg_dump -U jac_bot -d jac_parts > ~/backups/jac_parts_$(date +%F_%H-%M).sql
-ls -lh ~/backups
+docker compose logs backup      # «backup OK: /backups/jac_parts_....sql.gz (24K)»
+ls -lh ~/parts_bot/backups
 ```
 
-Автоматический ежедневный backup в 03:00 — выполните `crontab -e` и добавьте строку:
+**Копия на сервере не спасёт, если сломается сам сервер.** Поэтому время от времени забирайте копию к себе:
+`/admin` → **💾 Последний backup** — бот пришлёт свежий файл прямо в Telegram (сохраните его, например, в «Избранное»).
 
+Сделать копию вручную прямо сейчас:
+
+```bash
+docker compose exec -T postgres pg_dump -U jac_bot -d jac_parts --no-owner | gzip > ~/parts_bot/backups/jac_parts_$(date +%F_%H%M)_manual.sql.gz
 ```
-0 3 * * * cd ~/jac-parts-bot && docker compose exec -T postgres pg_dump -U jac_bot -d jac_parts > ~/backups/jac_parts_$(date +\%F).sql
-```
+
+Время и срок хранения меняются в `docker-compose.yml` → `backup` → `BACKUP_TIME`, `BACKUP_KEEP_DAYS`.
 
 ## Восстановление из backup
 
+> ⚠️ Восстановление **заменяет всю базу** содержимым копии. Всё, что было после копии, пропадёт.
+
 ```bash
-docker compose stop bot
-docker compose exec -T postgres psql -U jac_bot -d postgres -c "DROP DATABASE jac_parts;"
+cd ~/parts_bot
+ls backups                                    # выберите файл
+docker compose stop bot backup
+docker compose exec -T postgres psql -U jac_bot -d postgres -c "DROP DATABASE jac_parts WITH (FORCE);"
 docker compose exec -T postgres psql -U jac_bot -d postgres -c "CREATE DATABASE jac_parts;"
-docker compose exec -T postgres psql -U jac_bot -d jac_parts < ~/backups/ИМЯ_ФАЙЛА.sql
-docker compose start bot
+gunzip -c backups/ИМЯ_ФАЙЛА.sql.gz | docker compose exec -T postgres psql -U jac_bot -d jac_parts
+docker compose start bot backup
+docker compose logs --tail 20 bot
 ```
 
+Если в `.env` другой `POSTGRES_USER` или `POSTGRES_DB` — подставьте их вместо `jac_bot` и `jac_parts`.
+
+Копию из Telegram сначала загрузите на сервер (с компьютера): `scp jac_parts_....sql.gz user1@IP_СЕРВЕРА:~/parts_bot/backups/`
+
 ---
+
+## Запуск в работу — чек-лист
+
+1. **Сервер:** `docker compose ps` — `postgres` (healthy), `bot` и `backup` — `Up`.
+2. **Админы:** каждый Telegram ID из `ADMIN_IDS` хотя бы раз нажал **Start** в боте (иначе бот не сможет им писать).
+3. **Справочник дилеров:** `/admin` → 📥 Загрузить Excel → файл дилеров → ✅ Применить.
+4. **Каталог:** `/admin` → 📥 Загрузить Excel → складская выгрузка → проверьте предупреждения → ✅ Применить.
+   Демо-детали после этого скроются сами.
+5. **Сотрудники дилеров:** `/admin` → 🏢 Дилеры → дилер → 🔗 Пригласить сотрудника → переслать ссылку.
+6. **Пробный заказ:** со своего телефона как покупатель → проверьте, что пришло уведомление админу и дилеру,
+   смените статус до «🟢 Выдан», напишите через «💬».
+7. **Backup:** `/admin` → 💾 Последний backup — файл пришёл.
+8. **Регулярно:** загружайте свежую выгрузку (например, каждое утро) — цены и остатки обновятся.
+   Детали из незакрытых заказов бот сам вычтет из новых остатков (в предпросмотре — строка «🔒 Вычтено…»).
+
+**Если в боте что-то сломается**, администраторы получат сообщение «⚠️ Ошибка в боте» с местом ошибки
+(одинаковые ошибки — не чаще раза в 10 минут). Пришлите его и вывод `docker compose logs --tail 100 bot` разработчику.
+
+Логи не заполнят диск: у каждого контейнера хранится не больше 5 файлов по 10 МБ.
 
 ## Если что-то пошло не так
 
@@ -466,6 +506,11 @@ docker compose start bot
 | `permission denied ... docker.sock` | Не выполнили `usermod -aG docker` или не перезашли в SSH. |
 | Бот молчит | `docker compose ps` и `docker compose logs --tail 50 bot` — ошибка будет в логах. |
 | `address already in use` | Порты наружу не открываются, так что это обычно не наша проблема — пришлите лог. |
+| `git pull`: *Your local changes would be overwritten* | На сервере правили файлы вручную. `git stash` (или `git checkout -- ИМЯ_ФАЙЛА`), затем снова `git pull`. |
+| Админу не приходят заказы | Этот Telegram ID есть в `ADMIN_IDS`? Нажимал ли он **Start** в боте? После правки `.env` — `docker compose up -d`. |
+| Дилеру не приходят заказы | В карточке дилера **👥 Сотрудники** — есть ли он там? Если нет — новое приглашение. |
+| `docker compose logs backup`: *backup FAILED* | Проверьте, что `postgres` работает (`docker compose ps`) и пароль в `.env` тот же, что при первом запуске. |
+| Нет места на диске | `df -h`; старые образы: `docker image prune -f`. Логи и копии ограничены автоматически. |
 
 ---
 
@@ -507,6 +552,8 @@ jac-parts-bot/
 │   └── locales/ru.json, en.json, uz.json   # все тексты бота
 ├── migrations/                 # Alembic: изменения структуры базы
 ├── tests/                      # автотесты
+├── scripts/backup.sh          # ежедневный backup (контейнер backup)
+├── backups/                   # копии базы (в Git не попадают)
 ├── Dockerfile, docker-compose.yml
 ├── .env.example
 └── requirements.txt
@@ -521,4 +568,4 @@ jac-parts-bot/
 docker compose run --rm --user root bot sh -c "pip install -q -r requirements-dev.txt && pytest -q"
 ```
 
-Ожидаемо: `83 passed`.
+Ожидаемо: `86 passed`.
