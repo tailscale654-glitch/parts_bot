@@ -1,0 +1,16 @@
+{
+  "choose_language": "🚗 JAC PARTS\n\nВыберите язык / Choose language / Tilni tanlang",
+  "language_saved": "✅ Language saved: English",
+  "main_menu_title": "🚗 JAC PARTS",
+  "region_line": "📍 Region: {region}",
+  "region_not_selected": "not selected",
+  "btn_catalog": "🚗 Catalog",
+  "btn_my_orders": "🛒 My orders",
+  "btn_change_region": "📍 Change region",
+  "btn_change_language": "🌐 Change language",
+  "btn_contact_manager": "📞 Contact manager",
+  "btn_main_menu": "🏠 Main menu",
+  "coming_soon": "🛠 This section is coming soon.",
+  "contact_manager_text": "📞 Write to us and a manager will reply shortly.",
+  "error_generic": "⚠️ Something went wrong. Please try again or press /start."
+}

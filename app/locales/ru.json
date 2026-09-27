@@ -1,0 +1,16 @@
+{
+  "choose_language": "🚗 JAC PARTS\n\nВыберите язык / Choose language / Tilni tanlang",
+  "language_saved": "✅ Язык сохранён: Русский",
+  "main_menu_title": "🚗 JAC ЗАПЧАСТИ",
+  "region_line": "📍 Регион: {region}",
+  "region_not_selected": "не выбран",
+  "btn_catalog": "🚗 Каталог",
+  "btn_my_orders": "🛒 Мои заказы",
+  "btn_change_region": "📍 Изменить регион",
+  "btn_change_language": "🌐 Изменить язык",
+  "btn_contact_manager": "📞 Связаться с менеджером",
+  "btn_main_menu": "🏠 Главное меню",
+  "coming_soon": "🛠 Этот раздел скоро появится.",
+  "contact_manager_text": "📞 Напишите нам, и менеджер ответит в ближайшее время.",
+  "error_generic": "⚠️ Произошла ошибка. Попробуйте ещё раз или нажмите /start."
+}

@@ -1,0 +1,16 @@
+{
+  "choose_language": "🚗 JAC PARTS\n\nВыберите язык / Choose language / Tilni tanlang",
+  "language_saved": "✅ Til saqlandi: O‘zbekcha",
+  "main_menu_title": "🚗 JAC EHTIYOT QISMLARI",
+  "region_line": "📍 Viloyat: {region}",
+  "region_not_selected": "tanlanmagan",
+  "btn_catalog": "🚗 Katalog",
+  "btn_my_orders": "🛒 Buyurtmalarim",
+  "btn_change_region": "📍 Viloyatni o‘zgartirish",
+  "btn_change_language": "🌐 Tilni o‘zgartirish",
+  "btn_contact_manager": "📞 Menejer bilan bog‘lanish",
+  "btn_main_menu": "🏠 Bosh menyu",
+  "coming_soon": "🛠 Bu bo‘lim tez orada paydo bo‘ladi.",
+  "contact_manager_text": "📞 Bizga yozing, menejer tez orada javob beradi.",
+  "error_generic": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring yoki /start bosing."
+}
