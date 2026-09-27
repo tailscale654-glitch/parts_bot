@@ -97,3 +97,10 @@ class StatsRepository:
     async def orders_for_export(self, since: datetime | None) -> list[Order]:
         result = await self.session.scalars(self._since(select(Order), Order.created_at, since).order_by(Order.id))
         return list(result.unique())
+
+    async def orders_page(self, since: datetime | None, offset: int, limit: int) -> tuple[list[Order], int]:
+        """Заказы периода, новые сверху (с составом — order.items загружаются сразу)."""
+        query = self._since(select(Order), Order.created_at, since)
+        total = await self.session.scalar(select(func.count()).select_from(query.subquery()))
+        result = await self.session.scalars(query.order_by(Order.id.desc()).offset(offset).limit(limit))
+        return list(result.unique()), total

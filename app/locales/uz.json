@@ -291,5 +291,8 @@
   "xl_category": "Kategoriya",
   "xl_qty": "Soni",
   "xl_price": "Narx, so‘m",
-  "xl_sum": "Summa, so‘m"
+  "xl_sum": "Summa, so‘m",
+  "stats_recent": "🧾 Oxirgi buyurtmalar:",
+  "btn_stats_orders": "🧾 Barcha buyurtmalar tarkibi bilan",
+  "stats_orders_title": "🧾 TARKIBI BILAN BUYURTMALAR · {period}\n{shown}"
 }

@@ -71,10 +71,27 @@ async def test_excel_export(db):
     head, row = [c.value for c in wb["Заказы"][1]], [c.value for c in wb["Заказы"][2]]
     assert head[0] == "№ заказа" and row[0] == orders[0].id and row[4] == "+998901234567" and row[9] == 170000
     item = [c.value for c in wb["Позиции"][2]]
-    assert item[4] == "Масляный фильтр" and item[5] == "101001" and item[8] == 2
+    assert item[4] == "+998901234567" and item[6] == "Масляный фильтр" and item[7] == "101001" and item[10] == 2
 
 
 async def test_empty_stats(db):
     s = await StatsRepository(db).collect(None)
     assert s.orders == 0 and "За этот период заказов нет." in stats_text(s, "all", "ru")
     assert isinstance(s, type(s)) and Order  # импорт используется
+
+
+async def test_stats_show_order_items(db):
+    user = await db.get(User, 1)
+    user.phone = "+998901234567"
+    await make_order(db, user, 1, qty=2)
+    await make_order(db, user, 2, qty=1, status="READY")
+    repo = StatsRepository(db)
+    recent, total = await repo.orders_page(None, 0, 5)
+    assert total == 2 and recent[0].id > recent[1].id  # новые сверху
+    for o in recent:
+        await db.refresh(o)
+    text = stats_text(await repo.collect(None), "all", "ru", recent)
+    assert "🧾 Последние заказы:" in text
+    assert "• Масляный фильтр (101001) × 2 = 170 000 сум" in text
+    assert "• Масляный фильтр (101001) × 1 = 82 000 сум" in text and "🟠 Готов к выдаче" in text
+    assert "🏢 JAC Ташкент №2" in text and "👤 " in text

@@ -291,5 +291,8 @@
   "xl_category": "Category",
   "xl_qty": "Qty",
   "xl_price": "Price, UZS",
-  "xl_sum": "Sum, UZS"
+  "xl_sum": "Sum, UZS",
+  "stats_recent": "🧾 Latest orders:",
+  "btn_stats_orders": "🧾 All orders with items",
+  "stats_orders_title": "🧾 ORDERS WITH ITEMS · {period}\n{shown}"
 }

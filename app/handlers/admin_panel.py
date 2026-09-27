@@ -17,7 +17,7 @@ from app.services.localization import i18n, localized_name
 from app.services.notify import person_name, send
 from app.services import orders as orders_service
 from app.services.orders import fmt_date, order_text, status_text
-from app.services.stats import export_filename, orders_excel, stats_text
+from app.services.stats import export_filename, orders_excel, orders_with_items_text, stats_text
 from app.states.admin import AdminStates
 from app.utils.filters import IsAdmin
 
@@ -243,14 +243,39 @@ async def staff_remove(callback: CallbackQuery, callback_data: AdminCB, user: Us
 async def stats(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
     lang = user.language
     period = callback_data.f if callback_data.f in PERIODS else "today"
-    data = await StatsRepository(session).collect(period_start(period, orders_service.TIMEZONE))
+    repo = StatsRepository(session)
+    since = period_start(period, orders_service.TIMEZONE)
+    data = await repo.collect(since)
+    recent, _ = await repo.orders_page(since, 0, 5)  # последние 5 заказов с составом
     tabs = [btn(("• " if p == period else "") + i18n.t(lang, f"period_{p}"), section="stats", f=p) for p in PERIODS]
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        tabs[:2], tabs[2:],
-        [btn(i18n.t(lang, "btn_export_excel"), section="export", f=period)],
-        menu_button(lang),
-    ])
-    await _edit(callback, stats_text(data, period, lang), kb)
+    rows = [tabs[:2], tabs[2:]]
+    if data.orders:
+        rows.append([btn(i18n.t(lang, "btn_stats_orders"), section="sorders", f=period)])
+    rows += [[btn(i18n.t(lang, "btn_export_excel"), section="export", f=period)], menu_button(lang)]
+    await _edit(callback, stats_text(data, period, lang, recent), InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+STATS_PAGE = 5
+
+
+@router.callback_query(AdminCB.filter(F.section == "sorders"))
+async def stats_orders(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    """Все заказы периода с составом, по 5 на странице."""
+    lang = user.language
+    period = callback_data.f if callback_data.f in PERIODS else "all"
+    since = period_start(period, orders_service.TIMEZONE)
+    repo = StatsRepository(session)
+    _, total = await repo.orders_page(since, 0, 1)
+    page = paginate(total, callback_data.page, STATS_PAGE)
+    items, _ = await repo.orders_page(since, page.offset, STATS_PAGE)
+    shown = i18n.t(lang, "adm_shown", a=page.offset + 1, b=page.offset + len(items), total=total) if items else i18n.t(lang, "stats_no_orders")
+    title = i18n.t(lang, "stats_orders_title", period=i18n.t(lang, f"period_{period}"), shown=shown)
+    rows = []
+    nav = pager("sorders", page, f=period)
+    if nav:
+        rows.append(nav)
+    rows.append([btn(i18n.t(lang, "btn_back"), section="stats", f=period)])
+    await _edit(callback, orders_with_items_text(items, lang, title), InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @router.callback_query(AdminCB.filter(F.section == "export"))

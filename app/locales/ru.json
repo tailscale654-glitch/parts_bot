@@ -291,5 +291,8 @@
   "xl_category": "Категория",
   "xl_qty": "Кол-во",
   "xl_price": "Цена, сум",
-  "xl_sum": "Сумма, сум"
+  "xl_sum": "Сумма, сум",
+  "stats_recent": "🧾 Последние заказы:",
+  "btn_stats_orders": "🧾 Все заказы с составом",
+  "stats_orders_title": "🧾 ЗАКАЗЫ С СОСТАВОМ · {period}\n{shown}"
 }
