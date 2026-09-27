@@ -8,12 +8,14 @@ MENU_LAYOUT = [
     ["btn_my_orders", "btn_profile"],
     ["btn_manager"],
 ]
-MENU_KEYS = [key for row in MENU_LAYOUT for key in row] + ["btn_cancel"]
+MENU_KEYS = [key for row in MENU_LAYOUT for key in row] + ["btn_cancel", "btn_dealer_orders"]
 
 
-def main_reply_keyboard(lang: str) -> ReplyKeyboardMarkup:
+def main_reply_keyboard(lang: str, staff: bool = False) -> ReplyKeyboardMarkup:
+    """staff=True — сотрудник дилера: сверху кнопка «📋 Заказы дилера»."""
+    layout = ([["btn_dealer_orders"]] if staff else []) + MENU_LAYOUT
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=i18n.t(lang, key)) for key in row] for row in MENU_LAYOUT],
+        keyboard=[[KeyboardButton(text=i18n.t(lang, key)) for key in row] for row in layout],
         resize_keyboard=True,
         is_persistent=True,  # меню всегда видно, не прячется
     )

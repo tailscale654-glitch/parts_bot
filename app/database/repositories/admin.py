@@ -49,8 +49,10 @@ class AdminRepository:
 
     # ---------- заказы ----------
 
-    def _orders_query(self, key: str, user_id: int | None = None):
+    def _orders_query(self, key: str, user_id: int | None = None, dealer_id: int | None = None):
         query = select(Order)
+        if dealer_id is not None:
+            query = query.where(Order.dealer_id == dealer_id)
         statuses = ORDER_FILTERS.get(key, ())
         if statuses:
             query = query.where(Order.status.in_(statuses))
@@ -58,13 +60,18 @@ class AdminRepository:
             query = query.where(Order.user_id == user_id)
         return query
 
-    async def order_counts(self) -> dict[str, int]:
-        rows = dict((await self.session.execute(select(Order.status, func.count()).group_by(Order.status))).all())
+    async def order_counts(self, dealer_id: int | None = None) -> dict[str, int]:
+        query = select(Order.status, func.count()).group_by(Order.status)
+        if dealer_id is not None:
+            query = query.where(Order.dealer_id == dealer_id)
+        rows = dict((await self.session.execute(query)).all())
         return {key: (sum(rows.values()) if not st else sum(rows.get(s, 0) for s in st))
                 for key, st in ORDER_FILTERS.items()}
 
-    async def orders_page(self, key: str, offset: int, limit: int, user_id: int | None = None) -> tuple[list[Order], int]:
-        query = self._orders_query(key, user_id)
+    async def orders_page(
+        self, key: str, offset: int, limit: int, user_id: int | None = None, dealer_id: int | None = None,
+    ) -> tuple[list[Order], int]:
+        query = self._orders_query(key, user_id, dealer_id)
         total = await self.session.scalar(select(func.count()).select_from(query.subquery()))
         result = await self.session.scalars(query.order_by(Order.id.desc()).offset(offset).limit(limit))
         return list(result.unique()), total

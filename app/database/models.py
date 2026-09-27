@@ -197,3 +197,45 @@ class OrderItem(Base):
     total: Mapped[Decimal] = mapped_column(Numeric(14, 2))
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class DealerStaff(Base):
+    """Сотрудник дилера: Telegram-пользователь, который получает заказы своего дилера."""
+
+    __tablename__ = "dealer_staff"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dealer_id: Mapped[int] = mapped_column(ForeignKey("dealers.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)  # один дилер на человека
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    dealer: Mapped[Dealer] = relationship(lazy="joined")
+    user: Mapped[User] = relationship(lazy="joined")
+
+
+class DealerInvite(Base):
+    """Одноразовая ссылка-приглашение для сотрудника дилера (действует 7 дней)."""
+
+    __tablename__ = "dealer_invites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(32), unique=True)
+    dealer_id: Mapped[int] = mapped_column(ForeignKey("dealers.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+    dealer: Mapped[Dealer] = relationship(lazy="joined")
+
+
+class OrderMessage(Base):
+    """Переписка по заказу между клиентом и дилером (через бота)."""
+
+    __tablename__ = "order_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), index=True)
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    to_side: Mapped[str] = mapped_column(String(8))  # client | dealer
+    text: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

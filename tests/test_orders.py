@@ -86,10 +86,15 @@ async def test_order_texts_and_keyboards(db):
     assert order_line(order, "en").startswith(f"№{order.id} · ")
 
     assert [b.text for b in admin_order_keyboard(order, "ru").inline_keyboard[0]] == ["✅ Подтвердить", "❌ Отменить"]
-    assert order_keyboard(order, "ru").inline_keyboard[0][0].text == "❌ Отменить заказ"
+    texts = lambda kb: [[b.text for b in r] for r in kb.inline_keyboard]  # noqa: E731
+    assert texts(order_keyboard(order, "ru")) == [["💬 Написать дилеру"], ["❌ Отменить заказ"], ["◀️ К заказам"]]
+    assert texts(admin_order_keyboard(order, "ru"))[1:] == [["💬 Написать клиенту"], ["🛒 Заказы"]]
+    assert texts(admin_order_keyboard(order, "ru", staff=True))[-1] == ["📋 Заказы дилера"]
     order.status = "COMPLETED"
-    assert [[b.text for b in r] for r in admin_order_keyboard(order, "ru").inline_keyboard] == [["🛒 Заказы"]]
-    assert len(order_keyboard(order, "ru").inline_keyboard) == 1  # только «К заказам»
+    assert texts(admin_order_keyboard(order, "ru")) == [["💬 Написать клиенту"], ["🛒 Заказы"]]
+    assert texts(order_keyboard(order, "ru")) == [["💬 Написать дилеру"], ["◀️ К заказам"]]
+    order.status = "CANCELLED"
+    assert texts(order_keyboard(order, "ru")) == [["◀️ К заказам"]]
 
 
 async def test_user_sees_only_own_orders(db):

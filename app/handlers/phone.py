@@ -43,7 +43,7 @@ async def got_contact(message: Message, user: User, session: AsyncSession) -> No
         await message.answer(saved, reply_markup=main_reply_keyboard(lang))
         await open_catalog(message, user, session)
     else:
-        await send_main_menu(message, user, prefix=saved)
+        await send_main_menu(message, user, session, prefix=saved)
 
 
 @router.message()

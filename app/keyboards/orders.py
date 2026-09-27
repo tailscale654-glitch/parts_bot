@@ -13,9 +13,15 @@ class OrderCB(CallbackData, prefix="ord"):
 
 
 class AdminOrderCB(CallbackData, prefix="ost"):
-    """Кнопки статуса в уведомлении администратора."""
+    """Кнопки статуса у администратора и сотрудника дилера."""
     id: int
     status: str
+
+
+class ChatCB(CallbackData, prefix="chat"):
+    """Написать по заказу: to=client — клиенту (от дилера/админа), to=dealer — дилеру (от клиента)."""
+    to: str
+    id: int
 
 
 def checkout_keyboard(lang: str) -> InlineKeyboardMarkup:
@@ -43,6 +49,10 @@ def orders_list_keyboard(orders: list[Order], lang: str) -> InlineKeyboardMarkup
 
 def order_keyboard(order: Order, lang: str) -> InlineKeyboardMarkup:
     rows = []
+    if order.status != "CANCELLED":
+        rows.append([InlineKeyboardButton(
+            text=i18n.t(lang, "btn_chat_dealer"), callback_data=ChatCB(to="dealer", id=order.id).pack()
+        )])
     if order.status == "NEW":  # клиент может отменить, пока заказ не подтвердили
         rows.append([InlineKeyboardButton(
             text=i18n.t(lang, "btn_cancel_order"), callback_data=OrderCB(action="cancel", id=order.id).pack()
@@ -54,8 +64,11 @@ def order_keyboard(order: Order, lang: str) -> InlineKeyboardMarkup:
 STATUS_ORDER = ["CONFIRMED", "READY", "COMPLETED", "CANCELLED"]
 
 
-def admin_order_keyboard(order: Order, lang: str, back: str | None = None) -> InlineKeyboardMarkup:
-    """Кнопки статуса (только разрешённые переходы) + «назад» в список заказов админ-панели."""
+def admin_order_keyboard(
+    order: Order, lang: str, back: str | None = None, staff: bool = False,
+) -> InlineKeyboardMarkup:
+    """Кнопки статуса (только разрешённые переходы), «Написать клиенту» и «назад» к списку заказов.
+    staff=True — для сотрудника дилера (назад — в «Заказы дилера»)."""
     allowed = [s for s in STATUS_ORDER if s in TRANSITIONS.get(order.status, set())]
     rows = []
     if allowed:
@@ -63,5 +76,13 @@ def admin_order_keyboard(order: Order, lang: str, back: str | None = None) -> In
             InlineKeyboardButton(text=i18n.t(lang, f"btn_st_{s}"), callback_data=AdminOrderCB(id=order.id, status=s).pack())
             for s in allowed
         ])
-    rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_adm_orders"), callback_data=back or "ap:orders:all:1:0")])
+    rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_chat_client"), callback_data=ChatCB(to="client", id=order.id).pack())])
+    back_text, back_default = ("btn_dealer_orders", "dl:orders:all:1:0") if staff else ("btn_adm_orders", "ap:orders:all:1:0")
+    rows.append([InlineKeyboardButton(text=i18n.t(lang, back_text), callback_data=back or back_default)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def reply_keyboard(to: str, order_id: int, lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=i18n.t(lang, "btn_reply"), callback_data=ChatCB(to=to, id=order_id).pack())
+    ]])

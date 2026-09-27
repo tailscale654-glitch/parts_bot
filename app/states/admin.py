@@ -8,3 +8,7 @@ class ImportStates(StatesGroup):
 
 class AdminStates(StatesGroup):
     search_order = State()  # ждём номер заказа
+
+
+class ChatStates(StatesGroup):
+    writing = State()  # пишем сообщение по заказу (order_id и to — в данных состояния)

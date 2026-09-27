@@ -1,13 +1,16 @@
-"""Уведомления: администраторам — о новом заказе, клиенту — о смене статуса."""
+"""Уведомления: о новом заказе — администраторам и сотрудникам дилера;
+о смене статуса — клиенту и всем остальным участникам (кроме того, кто изменил)."""
 import logging
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.database.models import Order, User
+from app.database.repositories.staff import StaffRepository
 from app.keyboards.orders import admin_order_keyboard
 from app.services.localization import i18n
 from app.services.orders import order_text, status_text
@@ -15,36 +18,63 @@ from app.services.orders import order_text, status_text
 logger = logging.getLogger(__name__)
 
 
-async def _admin_languages(session: AsyncSession, admin_ids: set[int]) -> dict[int, str | None]:
-    """Язык каждого админа — из его профиля в боте, иначе русский."""
-    rows = await session.execute(select(User.telegram_id, User.language).where(User.telegram_id.in_(admin_ids)))
+def person_name(user: User) -> str:
+    return " ".join(filter(None, [user.first_name, user.last_name])) or (f"@{user.username}" if user.username else "—")
+
+
+async def send(bot: Bot, chat_id: int, text: str, kb: InlineKeyboardMarkup | None = None) -> bool:
+    """Отправить, не падая, если человек не запускал бота или заблокировал его."""
+    try:
+        await bot.send_message(chat_id, text, reply_markup=kb)
+        return True
+    except TelegramAPIError as e:
+        logger.warning("Cannot send message to %s: %s", chat_id, e)
+        return False
+
+
+async def admin_recipients(session: AsyncSession, settings: Settings) -> list[tuple[int, str | None]]:
+    """(telegram_id, язык) администраторов. Язык — из профиля в боте, иначе русский."""
+    rows = await session.execute(select(User.telegram_id, User.language).where(User.telegram_id.in_(settings.admin_ids)))
     langs = dict(rows.all())
-    return {admin_id: langs.get(admin_id) for admin_id in admin_ids}
+    return [(admin_id, langs.get(admin_id)) for admin_id in sorted(settings.admin_ids)]
 
 
-async def notify_admins_new_order(bot: Bot, settings: Settings, session: AsyncSession, order: Order) -> None:
-    for admin_id, lang in (await _admin_languages(session, settings.admin_ids)).items():
-        try:
-            await bot.send_message(admin_id, order_text(order, lang, for_admin=True),
-                                   reply_markup=admin_order_keyboard(order, lang))
-        except TelegramAPIError as e:  # админ не запускал бота или заблокировал его
-            logger.warning("Cannot notify admin %s about order %s: %s", admin_id, order.id, e)
+async def staff_recipients(session: AsyncSession, dealer_id: int) -> list[tuple[int, str | None]]:
+    return [(s.user.telegram_id, s.user.language) for s in await StaffRepository(session).staff_of(dealer_id)]
+
+
+async def notify_new_order(bot: Bot, settings: Settings, session: AsyncSession, order: Order) -> None:
+    admins = await admin_recipients(session, settings)
+    admin_ids = {a for a, _ in admins}
+    for chat_id, lang in admins:
+        await send(bot, chat_id, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang))
+    for chat_id, lang in await staff_recipients(session, order.dealer_id):
+        if chat_id not in admin_ids:  # если админ сам сотрудник дилера — одного сообщения достаточно
+            await send(bot, chat_id, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang, staff=True))
+
+
+def actor_text(actor: User, role: str, lang: str | None, dealer_name: str) -> str:
+    return i18n.t(lang, f"role_{role}", name=person_name(actor), dealer=dealer_name)
+
+
+async def notify_status_change(
+    bot: Bot, settings: Settings, session: AsyncSession, order: Order, actor: User, role: str,
+) -> None:
+    """role: admin | staff | client. Клиенту — всегда (если менял не он), остальным — коротко, кто что сделал."""
+    client = order.user
+    if actor.id != client.id:
+        await send(bot, client.telegram_id, i18n.t(
+            client.language, "order_status_changed", id=order.id, status=status_text(order.status, client.language)))
+    recipients = dict(await admin_recipients(session, settings))
+    for chat_id, lang in await staff_recipients(session, order.dealer_id):
+        recipients.setdefault(chat_id, lang)
+    recipients.pop(actor.telegram_id, None)
+    for chat_id, lang in recipients.items():
+        await send(bot, chat_id, i18n.t(
+            lang, "status_changed_by", id=order.id, status=status_text(order.status, lang),
+            who=actor_text(actor, role, lang, order.dealer.name)))
 
 
 async def notify_admins_text(bot: Bot, settings: Settings, session: AsyncSession, key: str, **params) -> None:
-    for admin_id, lang in (await _admin_languages(session, settings.admin_ids)).items():
-        try:
-            await bot.send_message(admin_id, i18n.t(lang, key, **params))
-        except TelegramAPIError as e:
-            logger.warning("Cannot notify admin %s: %s", admin_id, e)
-
-
-async def notify_client_status(bot: Bot, order: Order) -> None:
-    user = order.user
-    try:
-        await bot.send_message(
-            user.telegram_id,
-            i18n.t(user.language, "order_status_changed", id=order.id, status=status_text(order.status, user.language)),
-        )
-    except TelegramAPIError as e:
-        logger.warning("Cannot notify client %s about order %s: %s", user.telegram_id, order.id, e)
+    for chat_id, lang in await admin_recipients(session, settings):
+        await send(bot, chat_id, i18n.t(lang, key, **params))

@@ -1,11 +1,12 @@
 """Для каждого сообщения открывает сессию БД и загружает пользователя.
-Handlers получают готовые аргументы `session` и `user`."""
+Handlers получают готовые аргументы `session`, `user` и `staff_dealer_id`."""
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.database.repositories.staff import StaffRepository
 from app.database.repositories.users import UserRepository
 
 
@@ -23,10 +24,13 @@ class DbSessionMiddleware(BaseMiddleware):
             data["session"] = session
             tg_user = data.get("event_from_user")
             if tg_user is not None and not tg_user.is_bot:
-                data["user"] = await UserRepository(session).get_or_create(
+                user = await UserRepository(session).get_or_create(
                     telegram_id=tg_user.id,
                     username=tg_user.username,
                     first_name=tg_user.first_name,
                     last_name=tg_user.last_name,
                 )
+                data["user"] = user
+                # id дилера, если пользователь — сотрудник дилера (иначе None)
+                data["staff_dealer_id"] = await StaffRepository(session).dealer_id_for(user)
             return await handler(event, data)

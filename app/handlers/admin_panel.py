@@ -1,5 +1,5 @@
 """Админ-панель: заказы, дилеры, каталог, клиенты. Только для ADMIN_IDS."""
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
@@ -8,10 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.database.repositories.admin import ORDER_FILTERS, AdminRepository
 from app.database.repositories.orders import OrderRepository
+from app.database.repositories.staff import StaffRepository
 from app.keyboards.admin import AdminCB, admin_menu_keyboard, btn, menu_button, order_tabs, pager
 from app.keyboards.orders import admin_order_keyboard
 from app.services.catalog import money, paginate
 from app.services.localization import i18n, localized_name
+from app.services.notify import person_name, send
 from app.services.orders import fmt_date, order_text, status_text
 from app.states.admin import AdminStates
 from app.utils.filters import IsAdmin
@@ -162,7 +164,10 @@ async def _dealer_card(callback: CallbackQuery, dealer_id: int, page: int, lang,
     if d.in_directory:
         text += "\n\n" + i18n.t(lang, "adm_dealer_note")
     toggle = i18n.t(lang, "btn_dealer_hide" if d.enabled else "btn_dealer_show")
+    staff_count = len(await StaffRepository(session).staff_of(d.id))
     kb = InlineKeyboardMarkup(inline_keyboard=[
+        [btn(i18n.t(lang, "btn_invite_staff"), section="invite", id=d.id, page=page),
+         btn(i18n.t(lang, "btn_staff_list", n=staff_count), section="staff", id=d.id, page=page)],
         [btn(toggle, section="toggle", id=d.id, page=page)],
         [btn(i18n.t(lang, "btn_back"), section="dealers", page=page)],
     ])
@@ -180,6 +185,53 @@ async def toggle_dealer(callback: CallbackQuery, callback_data: AdminCB, user: U
     if dealer is not None:
         await callback.answer(i18n.t(user.language, "dealer_shown" if dealer.enabled else "dealer_hidden"))
     await _dealer_card(callback, callback_data.id, callback_data.page, user.language, session)
+
+
+@router.callback_query(AdminCB.filter(F.section == "invite"))
+async def invite(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession, bot: Bot) -> None:
+    lang = user.language
+    row = await AdminRepository(session).dealer(callback_data.id)
+    if row is None:
+        await callback.answer(i18n.t(lang, "adm_not_found"), show_alert=True)
+        return
+    token = await StaffRepository(session).create_invite(row.dealer.id)
+    link = f"https://t.me/{(await bot.me()).username}?start=dealer_{token}"
+    await callback.answer()
+    # отдельным сообщением — чтобы его было удобно переслать
+    await callback.message.answer(i18n.t(lang, "invite_created", dealer=row.dealer.name, link=link))
+
+
+async def _staff_view(callback: CallbackQuery, dealer_id: int, page: int, lang, session: AsyncSession) -> None:
+    row = await AdminRepository(session).dealer(dealer_id)
+    if row is None:
+        await callback.answer(i18n.t(lang, "adm_not_found"), show_alert=True)
+        return
+    staff = await StaffRepository(session).staff_of(dealer_id)
+    lines = [i18n.t(lang, "staff_title", dealer=row.dealer.name), ""]
+    lines += [i18n.t(lang, "staff_line", name=person_name(s.user), phone=s.user.phone or "—") for s in staff] or [
+        i18n.t(lang, "staff_empty")]
+    rows = [[btn(i18n.t(lang, "btn_staff_remove", name=person_name(s.user)), section="unstaff", id=s.id, page=page)]
+            for s in staff]
+    rows.append([btn(i18n.t(lang, "btn_invite_staff"), section="invite", id=dealer_id, page=page)])
+    rows.append([btn(i18n.t(lang, "btn_back"), section="dealer", id=dealer_id, page=page)])
+    await _edit(callback, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(AdminCB.filter(F.section == "staff"))
+async def staff_list(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession) -> None:
+    await _staff_view(callback, callback_data.id, callback_data.page, user.language, session)
+
+
+@router.callback_query(AdminCB.filter(F.section == "unstaff"))
+async def staff_remove(callback: CallbackQuery, callback_data: AdminCB, user: User, session: AsyncSession, bot: Bot) -> None:
+    removed = await StaffRepository(session).remove(callback_data.id)
+    if removed is None:
+        await callback.answer(i18n.t(user.language, "adm_not_found"), show_alert=True)
+        return
+    await send(bot, removed.user.telegram_id,
+               i18n.t(removed.user.language, "staff_removed_notice", dealer=removed.dealer.name))
+    await callback.answer(i18n.t(user.language, "staff_removed"))
+    await _staff_view(callback, removed.dealer_id, callback_data.page, user.language, session)
 
 
 # ---------- каталог ----------

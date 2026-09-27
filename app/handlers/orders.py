@@ -21,9 +21,8 @@ from app.keyboards.orders import (
     orders_list_keyboard,
 )
 from app.services.localization import i18n
-from app.services.notify import notify_admins_new_order, notify_admins_text, notify_client_status
+from app.services.notify import notify_new_order, notify_status_change
 from app.services.orders import checkout_preview_text, order_line, order_text, status_text, stock_problems_text
-from app.utils.filters import IsAdmin
 
 logger = logging.getLogger(__name__)
 router = Router(name="orders")
@@ -88,7 +87,7 @@ async def checkout_confirm(
     await _edit(callback, header, None)
     for order in orders:
         await callback.message.answer(order_text(order, lang), reply_markup=order_keyboard(order, lang))
-        await notify_admins_new_order(bot, settings, session, order)
+        await notify_new_order(bot, settings, session, order)
     logger.info("User %s created orders %s", user.telegram_id, [o.id for o in orders])
 
 
@@ -117,31 +116,35 @@ async def order_show_or_cancel(
             return
         await session.commit()
         await callback.answer(i18n.t(lang, "order_cancelled_by_client", id=order.id))
-        await notify_admins_text(bot, settings, session, "admin_client_cancelled", id=order.id)
+        await notify_status_change(bot, settings, session, order, actor=user, role="client")
     else:
         await callback.answer()
     await _edit(callback, order_text(order, lang), order_keyboard(order, lang))
 
 
-# ---------- администратор меняет статус ----------
+# ---------- администратор или сотрудник дилера меняет статус ----------
 
-@router.callback_query(AdminOrderCB.filter(), IsAdmin())
-async def admin_set_status(
-    callback: CallbackQuery, callback_data: AdminOrderCB, user: User, session: AsyncSession, bot: Bot,
+@router.callback_query(AdminOrderCB.filter())
+async def set_status(
+    callback: CallbackQuery, callback_data: AdminOrderCB, user: User, session: AsyncSession,
+    bot: Bot, settings: Settings, staff_dealer_id: int | None,
 ) -> None:
     lang = user.language
     repo = OrderRepository(session)
     order = await repo.get(callback_data.id)
-    if order is None:
-        await callback.answer(i18n.t(lang, "order_not_found"), show_alert=True)
+    is_admin = user.telegram_id in settings.admin_ids
+    is_staff = order is not None and staff_dealer_id == order.dealer_id
+    if order is None or not (is_admin or is_staff):  # чужой дилер или обычный клиент
+        await callback.answer(i18n.t(lang, "chat_forbidden"), show_alert=True)
         return
+    staff_view = is_staff and not is_admin
     if not await repo.set_status(order, callback_data.status):
-        # другой админ уже поменял статус (или кнопка устарела)
+        # статус уже поменял кто-то другой (или кнопка устарела)
         await callback.answer(i18n.t(lang, "admin_status_not_allowed", status=status_text(order.status, lang)), show_alert=True)
-        await _edit(callback, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang))
+        await _edit(callback, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang, staff=staff_view))
         return
     await session.commit()
     await callback.answer(i18n.t(lang, "admin_status_set", id=order.id, status=status_text(order.status, lang)))
-    await _edit(callback, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang))
-    await notify_client_status(bot, order)
-    logger.info("Admin %s set order %s → %s", callback.from_user.id, order.id, order.status)
+    await _edit(callback, order_text(order, lang, for_admin=True), admin_order_keyboard(order, lang, staff=staff_view))
+    await notify_status_change(bot, settings, session, order, actor=user, role="admin" if is_admin else "staff")
+    logger.info("User %s (%s) set order %s → %s", user.telegram_id, "admin" if is_admin else "staff", order.id, order.status)
