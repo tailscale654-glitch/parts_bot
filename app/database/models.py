@@ -1,7 +1,7 @@
 """Таблицы базы данных."""
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 SUPPORTED_LANGUAGES = ("ru", "en", "uz")
@@ -42,3 +42,50 @@ class User(Base):
 
     # lazy="joined" — регион загружается сразу вместе с пользователем
     region: Mapped[Region | None] = relationship(lazy="joined")
+
+
+class CarModel(Base):
+    """Модель автомобиля (JAC JS4, JAC T8 ...). Таблица называется models."""
+
+    __tablename__ = "models"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name_ru: Mapped[str] = mapped_column(String(128), unique=True)
+    name_en: Mapped[str | None] = mapped_column(String(128))
+    name_uz: Mapped[str | None] = mapped_column(String(128))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class Node(Base):
+    """Узел автомобиля (Двигатель, Тормозная система ...)."""
+
+    __tablename__ = "nodes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name_ru: Mapped[str] = mapped_column(String(128), unique=True)
+    name_en: Mapped[str | None] = mapped_column(String(128))
+    name_uz: Mapped[str | None] = mapped_column(String(128))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class Part(Base):
+    """Деталь. Одна строка = деталь для конкретной модели и узла."""
+
+    __tablename__ = "parts"
+    __table_args__ = (UniqueConstraint("model_id", "part_number", name="uq_parts_model_part_number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model_id: Mapped[int] = mapped_column(ForeignKey("models.id", ondelete="CASCADE"), index=True)
+    node_id: Mapped[int] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"), index=True)
+    name_ru: Mapped[str] = mapped_column(String(255))
+    name_en: Mapped[str | None] = mapped_column(String(255))
+    name_uz: Mapped[str | None] = mapped_column(String(255))
+    part_number: Mapped[str] = mapped_column(String(64), index=True)
+    description_ru: Mapped[str | None] = mapped_column(Text)
+    description_en: Mapped[str | None] = mapped_column(Text)
+    description_uz: Mapped[str | None] = mapped_column(Text)
+    photo: Mapped[str | None] = mapped_column(String(512))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+    model: Mapped[CarModel] = relationship(lazy="joined")
+    node: Mapped[Node] = relationship(lazy="joined")

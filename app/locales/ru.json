@@ -16,5 +16,14 @@
   "choose_region": "📍 Выберите регион:",
   "region_saved": "✅ Регион сохранён: {region}",
   "btn_back": "◀️ Назад",
-  "region_unavailable": "⚠️ Этот регион недоступен. Выберите другой."
+  "region_unavailable": "⚠️ Этот регион недоступен. Выберите другой.",
+  "choose_model": "🚗 Выберите модель:",
+  "choose_node": "🔧 {model}\n\nВыберите узел:",
+  "choose_part": "📦 {model} → {node}\n\nВыберите деталь:",
+  "catalog_empty": "📭 Каталог пока пуст. Загляните позже.",
+  "item_unavailable": "⚠️ Раздел больше недоступен. Откройте каталог заново.",
+  "part_model": "Модель: {model}",
+  "part_node": "Узел: {node}",
+  "part_number": "Артикул: {number}",
+  "prices_coming_soon": "💰 Цены и наличие у дилеров появятся в следующем обновлении."
 }

@@ -1,8 +1,9 @@
-# JAC Parts Bot — Этап 2
+# JAC Parts Bot — Этап 3
 
 Telegram-бот каталога запчастей JAC. Сейчас готово: запуск в Docker, база PostgreSQL,
-команда `/start`, выбор языка (🇷🇺 / 🇬🇧 / 🇺🇿), выбор и смена региона, главное меню.
-Каталог и заказы — на следующих этапах (кнопки пока показывают «скоро появится»).
+команда `/start`, выбор языка (🇷🇺 / 🇬🇧 / 🇺🇿), выбор и смена региона, главное меню,
+каталог «Модель → Узел → Деталь» на трёх языках с листанием страниц.
+Загрузка Excel, цены, дилеры и заказы — на следующих этапах.
 
 ---
 
@@ -162,6 +163,7 @@ docker compose logs -f bot
 ```
 INFO  [alembic.runtime.migration] Running upgrade  -> 0001, create users table
 INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, regions table + users.region_id
+INFO  [alembic.runtime.migration] Running upgrade 0002 -> 0003, catalog: models, nodes, parts
 ... | INFO | jac_parts_bot | Bot @jac_parts_uz_bot started (long polling). Admins: 1
 ```
 
@@ -178,6 +180,28 @@ INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, regions table + 
 7. Снова отправьте `/start` — бот помнит язык и регион и сразу показывает меню.
 
 ---
+
+## Каталог и демо-данные
+
+Каталог хранится в таблицах `models`, `nodes`, `parts`. Настоящие данные будут загружаться из Excel (этап 4).
+Чтобы проверить каталог уже сейчас, загрузите **демо-каталог** (4 модели, 7 узлов, 80 деталей):
+
+```bash
+docker compose exec bot python -m app.scripts.seed_demo
+```
+
+Ожидаемо: `Добавлено демо-деталей: 80`. Повторный запуск ничего не дублирует (`0`).
+
+В Telegram: **🚗 Каталог → JAC JS4 → Двигатель** — 11 деталей на двух страницах (`◀️ 1 / 2 ▶️`).
+У детали «Опора двигателя» специально нет узбекского названия — на узбекском она покажется по-русски.
+
+Удалить демо-данные (артикулы `DEMO-...`), когда загрузите настоящий каталог:
+
+```bash
+docker compose exec bot python -m app.scripts.seed_demo --remove
+```
+
+В каталоге видны только модели и узлы, в которых есть активные детали (`active = true`).
 
 ## Регионы
 
@@ -295,17 +319,21 @@ jac-parts-bot/
 │   ├── handlers/
 │   │   ├── start.py            # /start, главное меню
 │   │   ├── language.py         # выбор и смена языка
-│   │   └── region.py           # выбор и смена региона
+│   │   ├── region.py           # выбор и смена региона
+│   │   ├── catalog.py          # каталог: модель → узел → деталь
+│   │   └── fallback.py         # устаревшие кнопки (подключается последним)
 │   ├── keyboards/
 │   │   ├── main.py             # кнопки главного меню
 │   │   ├── language.py         # кнопки выбора языка
-│   │   └── region.py           # кнопки выбора региона
+│   │   ├── region.py           # кнопки выбора региона
+│   │   └── catalog.py          # кнопки каталога и страниц
 │   ├── middlewares/db.py       # сессия БД + пользователь для каждого сообщения
 │   ├── database/
 │   │   ├── database.py         # подключение к PostgreSQL
-│   │   ├── models.py           # таблицы users, regions
-│   │   └── repositories/       # users.py, regions.py
-│   ├── services/localization.py
+│   │   ├── models.py           # таблицы users, regions, models, nodes, parts
+│   │   └── repositories/       # users.py, regions.py, catalog.py
+│   ├── services/               # localization.py, catalog.py (страницы, карточка детали)
+│   ├── scripts/seed_demo.py    # демо-каталог
 │   └── locales/ru.json, en.json, uz.json   # все тексты бота
 ├── migrations/                 # Alembic: изменения структуры базы
 ├── tests/                      # автотесты
@@ -323,4 +351,4 @@ jac-parts-bot/
 docker compose run --rm --user root bot sh -c "pip install -q -r requirements-dev.txt && pytest -q"
 ```
 
-Ожидаемо: `15 passed`.
+Ожидаемо: `26 passed`.

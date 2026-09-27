@@ -51,7 +51,7 @@ async def contact_manager(callback: CallbackQuery, user: User) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data.in_({"menu:catalog", "menu:orders"}))
+@router.callback_query(F.data == "menu:orders")
 async def coming_soon(callback: CallbackQuery, user: User) -> None:
-    # Заглушки: каталог и заказы делаем на следующих этапах
+    # Заглушка: заказы делаем на этапе 6
     await callback.answer(i18n.t(user.language, "coming_soon"), show_alert=True)

@@ -7,7 +7,7 @@ from aiogram.types import ErrorEvent
 
 from app.config import load_settings
 from app.database.database import create_engine, create_session_factory
-from app.handlers import language, region, start
+from app.handlers import catalog, fallback, language, region, start
 from app.middlewares.db import DbSessionMiddleware
 from app.services.localization import i18n
 
@@ -34,6 +34,8 @@ async def main() -> None:
     dp.include_router(start.router)
     dp.include_router(language.router)
     dp.include_router(region.router)
+    dp.include_router(catalog.router)
+    dp.include_router(fallback.router)  # всегда последним
 
     @dp.errors()
     async def on_error(event: ErrorEvent) -> bool:

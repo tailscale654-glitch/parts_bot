@@ -16,5 +16,14 @@
   "choose_region": "📍 Choose your region:",
   "region_saved": "✅ Region saved: {region}",
   "btn_back": "◀️ Back",
-  "region_unavailable": "⚠️ This region is unavailable. Please choose another one."
+  "region_unavailable": "⚠️ This region is unavailable. Please choose another one.",
+  "choose_model": "🚗 Choose a model:",
+  "choose_node": "🔧 {model}\n\nChoose a system:",
+  "choose_part": "📦 {model} → {node}\n\nChoose a part:",
+  "catalog_empty": "📭 The catalog is empty for now. Please check back later.",
+  "item_unavailable": "⚠️ This section is no longer available. Please open the catalog again.",
+  "part_model": "Model: {model}",
+  "part_node": "System: {node}",
+  "part_number": "Part number: {number}",
+  "prices_coming_soon": "💰 Dealer prices and stock will appear in the next update."
 }

@@ -16,5 +16,14 @@
   "choose_region": "📍 Viloyatni tanlang:",
   "region_saved": "✅ Viloyat saqlandi: {region}",
   "btn_back": "◀️ Orqaga",
-  "region_unavailable": "⚠️ Bu viloyat mavjud emas. Boshqasini tanlang."
+  "region_unavailable": "⚠️ Bu viloyat mavjud emas. Boshqasini tanlang.",
+  "choose_model": "🚗 Modelni tanlang:",
+  "choose_node": "🔧 {model}\n\nUzelni tanlang:",
+  "choose_part": "📦 {model} → {node}\n\nEhtiyot qismni tanlang:",
+  "catalog_empty": "📭 Katalog hozircha bo‘sh. Keyinroq qarang.",
+  "item_unavailable": "⚠️ Bu bo‘lim endi mavjud emas. Katalogni qaytadan oching.",
+  "part_model": "Model: {model}",
+  "part_node": "Uzel: {node}",
+  "part_number": "Artikul: {number}",
+  "prices_coming_soon": "💰 Dilerlardagi narx va mavjudlik keyingi yangilanishda paydo bo‘ladi."
 }
