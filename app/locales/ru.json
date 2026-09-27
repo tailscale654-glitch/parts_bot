@@ -118,7 +118,7 @@
   "warn_skipped_status": "⏭ Пропущено «{status}»: {n}",
   "warn_no_dealer": "⏭ Без дилера: {n}",
   "warn_no_price": "⏭ Без цены: {n}",
-  "warn_default_region": "⚠️ У {n} дилеров не указан регион — пока они в регионе «Ташкент»: {dealers}.\nРегионы задаются в app/services/import_mapping.py (DEALER_REGIONS).",
+  "warn_default_region": "⚠️ {n} дилеров нет в справочнике — пока они в регионе «Ташкент»: {dealers}.\nДобавьте их в справочник дилеров и загрузите его (или укажите в app/services/import_mapping.py).",
   "warn_bad_row": "строка пропущена: нет названия или количества",
   "err_mapping_region": "в import_mapping.py неизвестный код региона «{code}»",
   "currency": "сум",
@@ -139,5 +139,9 @@
   "btn_checkout": "✅ Оформить заказ",
   "cart_cleared": "Корзина очищена.",
   "checkout_soon": "Оформление заказа появится в следующем обновлении.",
-  "cart_limit_short": "⚠️ Больше нет в наличии у этого дилера"
+  "cart_limit_short": "⚠️ Больше нет в наличии у этого дилера",
+  "import_format_directory": "📇 Формат: справочник дилеров",
+  "directory_preview": "Дилеров в файле: {total}\nРегионов: {regions}\n\n➕ Новых: {new}\n🔄 Обновлено: {updated}\n⛔ Неактивных (не показываются покупателям): {disabled}",
+  "directory_applied": "✅ Справочник дилеров обновлён\n\n➕ Новых: {new}\n🔄 Обновлено: {updated}\n⛔ Неактивных: {disabled}\n\nРегионы, адреса и телефоны уже видны в карточках деталей.",
+  "err_duplicate_dealer": "дилер повторяется (уже есть в строке {other})"
 }

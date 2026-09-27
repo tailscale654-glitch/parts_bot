@@ -38,15 +38,14 @@ MODEL_NAMES = {
     "RF8-V9HA0": "JAC RF8 (V9HA0)",
 }
 
-# Дилер (как в колонке «На Дилера») → регион в боте.
+# Регион дилера берётся из СПРАВОЧНИКА ДИЛЕРОВ (файл «Название / Код / Адрес / Район / ... / Статус»,
+# загружается так же: /admin → 📥 Загрузить Excel).
+# Здесь можно указать регион для дилеров, которых нет в справочнике. Пример:
+#     "ИП OOO «LUCKYCAR»": "tashkent_city",
 # Коды регионов: tashkent_city, tashkent, samarkand, bukhara, andijan, fergana, namangan,
 # kashkadarya, surkhandarya, khorezm, karakalpakstan, jizzakh, navoi, syrdarya
-# ⚠️ Заполнено по названиям (догадки). Дилеры, которых здесь нет, попадут в DEFAULT_REGION.
 DEALER_REGIONS = {
-    "ООО «Navoiy Avtotrans xizmat»": "navoi",
-    "ООО «BILLUR MOTORS QIZILTEPA»": "navoi",
-    "OOO «AUTOCENTER NURAFSHON»": "tashkent",
-    "OOO «NURAFSHON AUTO ZONE»": "tashkent",
-    "ООО «TOSHKENT-MOTORS-TRADE»": "tashkent_city",
 }
+
+# Дилеры, которых нет ни в справочнике, ни в DEALER_REGIONS, попадают в этот регион
 DEFAULT_REGION = "tashkent_city"

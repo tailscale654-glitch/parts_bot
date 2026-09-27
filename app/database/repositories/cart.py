@@ -6,7 +6,7 @@ from app.database.models import CartItem, Stock, User
 
 
 def is_available(stock: Stock) -> bool:
-    return stock.quantity > 0 and stock.part.active and stock.dealer.active
+    return stock.quantity > 0 and stock.part.active and stock.dealer.active and stock.dealer.enabled
 
 
 class CartRepository:

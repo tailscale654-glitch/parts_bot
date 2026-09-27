@@ -49,14 +49,14 @@ def test_warehouse_export(tmp_path):
         row(15, "3608100V670001", "BSM", "На складе", "D", "M4", 1193310, 1431911, "—"),
         row(1, "X1", "ODD PART", "У дилера", "ZZ", "T9-P33Z3,T8-P30BF", 100, 200, "OOO «ASIAMOTOR»"),
     ])
-    rows, errors, warnings, fmt = validate_any(path, REGIONS)
+    rows, errors, warnings, fmt = validate_any(path, REGIONS, {"navoiyavtotransxizmat": 4})  # Навои — из справочника
     assert fmt == "warehouse" and errors == []
 
     ecu = [r for r in rows if r.part_number == "1026301V02H4"]
     assert len(ecu) == 1 and ecu[0].stock == 5  # две строки одного дилера сложены
     assert ecu[0].price == Decimal("1999000")  # цена реализации из самой свежей строки
     assert ecu[0].model["ru"] == "JAC M3" and ecu[0].node["ru"] == "Электрика и электроника"
-    assert ecu[0].region_id == 1  # China Group нет в DEALER_REGIONS → Ташкент
+    assert ecu[0].region_id == 1  # China Group нет в справочнике → Ташкент
 
     belt = next(r for r in rows if r.part_number == "1015601GD190")
     assert belt.price == Decimal("72870")  # цена реализации 0 → цена продажи

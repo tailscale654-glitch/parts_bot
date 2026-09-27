@@ -14,7 +14,8 @@ class StockRepository:
         result = await self.session.scalars(
             select(Stock)
             .join(Dealer, Dealer.id == Stock.dealer_id)
-            .where(Stock.part_id == part_id, Dealer.region_id == region_id, Dealer.active.is_(True))
+            .where(Stock.part_id == part_id, Dealer.region_id == region_id,
+                   Dealer.active.is_(True), Dealer.enabled.is_(True))
             .order_by((Stock.quantity > 0).desc(), Stock.price, Dealer.name)
         )
         return list(result.unique())
@@ -25,7 +26,8 @@ class StockRepository:
             select(func.count(func.distinct(Dealer.region_id)))
             .select_from(Stock)
             .join(Dealer, Dealer.id == Stock.dealer_id)
-            .where(Stock.part_id == part_id, Stock.quantity > 0, Dealer.active.is_(True), Dealer.region_id != region_id)
+            .where(Stock.part_id == part_id, Stock.quantity > 0, Dealer.active.is_(True),
+                   Dealer.enabled.is_(True), Dealer.region_id != region_id)
         )
 
     async def get(self, stock_id: int) -> Stock | None:

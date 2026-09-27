@@ -118,7 +118,7 @@
   "warn_skipped_status": "⏭ Skipped “{status}”: {n}",
   "warn_no_dealer": "⏭ No dealer: {n}",
   "warn_no_price": "⏭ No price: {n}",
-  "warn_default_region": "⚠️ {n} dealers have no region — placed in “Tashkent” for now: {dealers}.\nRegions are set in app/services/import_mapping.py (DEALER_REGIONS).",
+  "warn_default_region": "⚠️ {n} dealers are not in the directory — placed in “Tashkent” for now: {dealers}.\nAdd them to the dealer directory and upload it (or set them in app/services/import_mapping.py).",
   "warn_bad_row": "row skipped: no name or quantity",
   "err_mapping_region": "unknown region code “{code}” in import_mapping.py",
   "currency": "UZS",
@@ -139,5 +139,9 @@
   "btn_checkout": "✅ Checkout",
   "cart_cleared": "Cart cleared.",
   "checkout_soon": "Checkout will be available in the next update.",
-  "cart_limit_short": "⚠️ No more stock at this dealer"
+  "cart_limit_short": "⚠️ No more stock at this dealer",
+  "import_format_directory": "📇 Format: dealer directory",
+  "directory_preview": "Dealers in file: {total}\nRegions: {regions}\n\n➕ New: {new}\n🔄 Updated: {updated}\n⛔ Inactive (hidden from customers): {disabled}",
+  "directory_applied": "✅ Dealer directory updated\n\n➕ New: {new}\n🔄 Updated: {updated}\n⛔ Inactive: {disabled}\n\nRegions, addresses and phones are already shown on part cards.",
+  "err_duplicate_dealer": "duplicate dealer (already in row {other})"
 }

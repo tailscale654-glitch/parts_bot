@@ -33,7 +33,7 @@ def paginate(total_items: int, requested_page: int, page_size: int = PAGE_SIZE) 
     return Page(number=number, total_pages=total_pages, offset=(number - 1) * page_size)
 
 
-MAX_OFFERS_SHOWN = 8
+MAX_OFFERS_SHOWN = 6
 
 
 def money(value: Decimal | int, lang: str | None) -> str:
@@ -44,7 +44,12 @@ def money(value: Decimal | int, lang: str | None) -> str:
 
 
 def offer_lines(stock: Stock, lang: str | None) -> list[str]:
-    lines = [f"🏢 {stock.dealer.name}", f"💰 {money(stock.price, lang)}"]
+    lines = [f"🏢 {stock.dealer.name}"]
+    if stock.dealer.address:
+        lines.append(f"📌 {stock.dealer.address}")
+    if stock.dealer.phone:
+        lines.append(f"📞 {stock.dealer.phone}")
+    lines.append(f"💰 {money(stock.price, lang)}")
     if stock.quantity > 0:
         lines.append(i18n.t(lang, "in_stock", n=stock.quantity))
     elif stock.delivery_days:

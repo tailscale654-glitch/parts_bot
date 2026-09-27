@@ -6,6 +6,8 @@ from decimal import Decimal
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.utils.names import dealer_key
+
 SUPPORTED_LANGUAGES = ("ru", "en", "uz")
 
 
@@ -94,17 +96,23 @@ class Part(Base):
 
 
 class Dealer(Base):
-    """Дилер (точка продаж) в конкретном регионе."""
+    """Дилер. Регион, телефон и адрес берутся из справочника дилеров (если он загружен)."""
 
     __tablename__ = "dealers"
-    __table_args__ = (UniqueConstraint("region_id", "name", name="uq_dealers_region_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     region_id: Mapped[int] = mapped_column(ForeignKey("regions.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255))
+    # «ключ» названия для сопоставления: «OOO «ASIAMOTOR»» и «"Asia Motor" MChJ» → asiamotor
+    name_key: Mapped[str] = mapped_column(
+        String(255), unique=True, default=lambda ctx: dealer_key(ctx.get_current_parameters()["name"])
+    )
+    code: Mapped[str | None] = mapped_column(String(32))
     phone: Mapped[str | None] = mapped_column(String(32))
     address: Mapped[str | None] = mapped_column(String(512))
-    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # есть в последней выгрузке
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # «Активный» в справочнике
+    in_directory: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     region: Mapped[Region] = relationship(lazy="joined")
 

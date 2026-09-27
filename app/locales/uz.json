@@ -118,7 +118,7 @@
   "warn_skipped_status": "⏭ O‘tkazib yuborildi «{status}»: {n}",
   "warn_no_dealer": "⏭ Dilersiz: {n}",
   "warn_no_price": "⏭ Narxsiz: {n}",
-  "warn_default_region": "⚠️ {n} ta dilerning viloyati ko‘rsatilmagan — hozircha «Toshkent»da: {dealers}.\nViloyatlar app/services/import_mapping.py (DEALER_REGIONS) da belgilanadi.",
+  "warn_default_region": "⚠️ {n} ta diler ma’lumotnomada yo‘q — hozircha «Toshkent»da: {dealers}.\nUlarni dilerlar ma’lumotnomasiga qo‘shib yuklang (yoki app/services/import_mapping.py da ko‘rsating).",
   "warn_bad_row": "qator o‘tkazib yuborildi: nomi yoki soni yo‘q",
   "err_mapping_region": "import_mapping.py da noma’lum viloyat kodi «{code}»",
   "currency": "so‘m",
@@ -139,5 +139,9 @@
   "btn_checkout": "✅ Buyurtma berish",
   "cart_cleared": "Savat tozalandi.",
   "checkout_soon": "Buyurtma berish keyingi yangilanishda paydo bo‘ladi.",
-  "cart_limit_short": "⚠️ Bu dilerda boshqa qolmadi"
+  "cart_limit_short": "⚠️ Bu dilerda boshqa qolmadi",
+  "import_format_directory": "📇 Format: dilerlar ma’lumotnomasi",
+  "directory_preview": "Fayldagi dilerlar: {total}\nViloyatlar: {regions}\n\n➕ Yangi: {new}\n🔄 Yangilandi: {updated}\n⛔ Faol emas (xaridorlarga ko‘rsatilmaydi): {disabled}",
+  "directory_applied": "✅ Dilerlar ma’lumotnomasi yangilandi\n\n➕ Yangi: {new}\n🔄 Yangilandi: {updated}\n⛔ Faol emas: {disabled}\n\nViloyat, manzil va telefonlar ehtiyot qism kartalarida ko‘rinadi.",
+  "err_duplicate_dealer": "diler takrorlanadi ({other}-qatorda bor)"
 }

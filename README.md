@@ -170,6 +170,7 @@ INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, regions table + 
 INFO  [alembic.runtime.migration] Running upgrade 0002 -> 0003, catalog: models, nodes, parts
 INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, dealers and stocks (prices / quantities)
 INFO  [alembic.runtime.migration] Running upgrade 0004 -> 0005, cart items
+INFO  [alembic.runtime.migration] Running upgrade 0005 -> 0006, dealer directory: code, name_key, enabled, in_directory
 ... | INFO | jac_parts_bot | Bot @jac_parts_uz_bot started (long polling). Admins: 1
 ```
 
@@ -240,9 +241,19 @@ INFO  [alembic.runtime.migration] Running upgrade 0004 -> 0005, cart items
 | Кол-во | остаток; несколько строк одной детали у одного дилера складываются |
 | Статус | берутся только строки «У дилера»; бронь, реализованные, «в пути» и склад пропускаются |
 
-Настройки лежат в **`app/services/import_mapping.py`** — там можно без знания Python поменять:
+### Справочник дилеров
 
-- `DEALER_REGIONS` — **регион каждого дилера** (дилеры, которых там нет, попадают в Ташкент — бот предупредит списком);
+Файл со списком дилеров (колонки **Название, Код, Адрес, Район, Номер телефона, Статус**) загружается так же:
+`/admin` → **📥 Загрузить Excel**. Бот узнает формат («📇 Формат: справочник дилеров») и возьмёт из него
+**регион, адрес и телефон** каждого дилера. Дилеры со статусом «Неактивный» покупателям не показываются.
+
+Названия в справочнике и в складской выгрузке могут отличаться («OOO «ASIAMOTOR»» и «"Asia Motor" MChJ») —
+бот сравнивает их без ООО/MChJ/LLC/ИП, кавычек, пробелов и дефисов. Справочник достаточно загрузить один раз
+и потом — когда в нём что-то меняется. Порядок загрузки не важен.
+
+Настройки складской выгрузки лежат в **`app/services/import_mapping.py`** — там можно без знания Python поменять:
+
+- `DEALER_REGIONS` — регион для дилеров, которых **нет в справочнике** (остальные попадают в Ташкент — бот предупредит списком);
 - `MODEL_NAMES` — название модели для заводского кода (`"T8-P30BF": "JAC T8"`);
 - `CATEGORIES` — названия категорий на 3 языках;
 - `PRICE_COLUMN` — какую цену показывать.
@@ -413,7 +424,7 @@ jac-parts-bot/
 │   │   ├── database.py         # подключение к PostgreSQL
 │   │   ├── models.py           # таблицы users, regions, models, nodes, parts, dealers, stocks, cart_items
 │   │   └── repositories/       # users, regions, catalog, stocks, cart
-│   ├── services/               # localization.py, catalog.py, excel_import.py, excel_template.py,
+│   ├── services/               # localization.py, catalog.py, excel_import.py, excel_template.py, dealers.py,
 │   │                           # import_mapping.py (настройки складской выгрузки)
 │   ├── scripts/seed_demo.py    # демо-каталог
 │   └── locales/ru.json, en.json, uz.json   # все тексты бота
@@ -433,4 +444,4 @@ jac-parts-bot/
 docker compose run --rm --user root bot sh -c "pip install -q -r requirements-dev.txt && pytest -q"
 ```
 
-Ожидаемо: `55 passed`.
+Ожидаемо: `64 passed`.

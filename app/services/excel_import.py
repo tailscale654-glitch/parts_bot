@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -20,6 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarModel, Dealer, Node, Part, Region, Stock
 from app.services import import_mapping as mapping
+from app.services.dealers import dealer_key, find_region, is_directory, region_lookup, validate_directory
+
+# Файлы из веб-систем часто без стилей — openpyxl об этом предупреждает, это не ошибка
+warnings.filterwarnings("ignore", message="Workbook contains no default style")
 
 MAX_FILE_MB = 10
 MAX_ROWS = 50_000
@@ -103,16 +108,6 @@ def _to_int(text: str | None) -> int | None:
     return int(value)
 
 
-def _region_lookup(regions: list[Region]) -> dict[str, int]:
-    """Регион можно писать на любом языке или кодом: «Ташкент», «Tashkent», «tashkent_city»."""
-    lookup = {}
-    for r in regions:
-        for name in (r.code, r.name_ru, r.name_en, r.name_uz):
-            if name:
-                lookup[name.strip().lower()] = r.id
-    return lookup
-
-
 def read_excel(path: Path) -> pd.DataFrame:
     """Лист parts (или первый лист). Все ячейки читаем как текст — чтобы артикул 00123 не стал 123."""
     sheets = pd.ExcelFile(path, engine="openpyxl").sheet_names
@@ -141,7 +136,7 @@ def validate_file(path: Path, regions: list[Region]) -> tuple[list[ImportRow], l
     if len(df) > MAX_ROWS:
         return [], [ImportError_(0, "err_too_many_rows", {"n": len(df), "max": MAX_ROWS})]
 
-    region_ids = _region_lookup(regions)
+    region_ids = region_lookup(regions)
     rows: list[ImportRow] = []
     errors: list[ImportError_] = []
     seen_offer: dict[tuple, int] = {}  # (модель, артикул, регион, дилер) → строка
@@ -161,7 +156,7 @@ def validate_file(path: Path, regions: list[Region]) -> tuple[list[ImportRow], l
             if v[col] and len(v[col]) > limit:
                 row_errors.append(ImportError_(excel_row, "err_too_long", {"column": col, "max": limit}))
 
-        region_id = region_ids.get(v["region"].lower()) if v["region"] else None
+        region_id = find_region(v["region"], region_ids)
         if v["region"] and region_id is None:
             row_errors.append(ImportError_(excel_row, "err_region", {"value": v["region"]}))
 
@@ -177,7 +172,7 @@ def validate_file(path: Path, regions: list[Region]) -> tuple[list[ImportRow], l
 
         if not row_errors:
             model_key = v["model_ru"].lower()
-            offer = (model_key, v["part_number"].lower(), region_id, v["dealer"].lower())
+            offer = (model_key, v["part_number"].lower(), dealer_key(v["dealer"]))
             if offer in seen_offer:
                 row_errors.append(ImportError_(excel_row, "err_duplicate", {"other": seen_offer[offer]}))
             part_key = (model_key, v["part_number"].lower())
@@ -249,8 +244,12 @@ def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
     return result or [mapping.ALL_MODELS]
 
 
-def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int):
-    """Складская выгрузка → строки каталога. Неподходящие строки пропускаются с предупреждением."""
+def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int,
+                       known_dealers: dict[str, int] | None = None):
+    """Складская выгрузка → строки каталога. Неподходящие строки пропускаются с предупреждением.
+    known_dealers: ключ дилера → регион из справочника дилеров (он главнее import_mapping.py)."""
+    known_dealers = known_dealers or {}
+    mapped_regions = {dealer_key(name): code for name, code in mapping.DEALER_REGIONS.items()}
     errors: list[ImportError_] = []
     warnings: list[ImportError_] = []
     df = pd.read_excel(path, sheet_name=sheet, header=header_row, dtype=str, engine="openpyxl")
@@ -293,14 +292,19 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         if not price:
             no_price += 1
             continue
-        if dealer not in mapping.DEALER_REGIONS:
+        key_d = dealer_key(dealer)
+        if key_d in known_dealers:
+            region_id = known_dealers[key_d]
+        elif key_d in mapped_regions:
+            region_id = region_by_code[mapped_regions[key_d]]
+        else:
             default_region_dealers.add(dealer)
-        region_id = region_by_code[mapping.DEALER_REGIONS.get(dealer, mapping.DEFAULT_REGION)]
+            region_id = region_by_code[mapping.DEFAULT_REGION]
         node = mapping.CATEGORIES.get((v.get("Тип запчасти") or "").upper(), mapping.OTHER_CATEGORY)
         updated = pd.to_datetime(v.get("Дата обновления"), format="%d.%m.%Y %H:%M:%S", errors="coerce")
 
         for model in _model_names(v.get("Автомобильная марка")):
-            key = (model[0].lower(), v["Код запчасти"].lower(), dealer.lower())
+            key = (model[0].lower(), v["Код запчасти"].lower(), key_d)
             offer = offers.get(key)
             if offer is None:
                 offers[key] = {"row": excel_row, "region_id": region_id, "dealer": dealer, "model": model,
@@ -337,12 +341,15 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
     return rows, errors, warnings
 
 
-def validate_any(path: Path, regions: list[Region]):
-    """Определяем формат файла сами: наш шаблон или складская выгрузка.
+def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int] | None = None):
+    """Определяем формат файла сами: справочник дилеров, складская выгрузка или наш шаблон.
     Возвращает (строки, ошибки, предупреждения, формат)."""
+    if is_directory(path):
+        rows, errors = validate_directory(path, regions)
+        return rows, errors, [], "directory"
     found = _find_warehouse_header(path)
     if found:
-        rows, errors, warnings = validate_warehouse(path, regions, *found)
+        rows, errors, warnings = validate_warehouse(path, regions, *found, known_dealers=known_dealers)
         return rows, errors, warnings, "warehouse"
     rows, errors = validate_file(path, regions)
     return rows, errors, [], "template"
@@ -364,7 +371,7 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
     # Всё существующее загружаем одним запросом на таблицу — быстро даже для 50 000 строк
     models = {m.name_ru.lower(): m for m in (await session.scalars(select(CarModel))).unique()}
     nodes = {n.name_ru.lower(): n for n in (await session.scalars(select(Node))).unique()}
-    dealers = {(d.region_id, d.name.lower()): d for d in (await session.scalars(select(Dealer))).unique()}
+    dealers = {d.name_key: d for d in (await session.scalars(select(Dealer))).unique()}
 
     # 1. Модели, категории, дилеры
     for r in rows:
@@ -382,10 +389,12 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
         _set_names(node, r.node)
         node.active = True
 
-        key = (r.region_id, r.dealer.lower())
+        key = dealer_key(r.dealer)
         if key not in dealers:
-            dealers[key] = Dealer(region_id=r.region_id, name=r.dealer)
+            dealers[key] = Dealer(region_id=r.region_id, name=r.dealer, name_key=key)
             session.add(dealers[key])
+        elif not dealers[key].in_directory:
+            dealers[key].region_id = r.region_id  # регион из справочника дилеров не перезаписываем
         dealers[key].active = True
     await session.flush()  # получаем id новых записей
 
@@ -420,7 +429,7 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
     seen_stocks: set[tuple] = set()
     for r in rows:
         part = parts[(models[r.model["ru"].lower()].id, r.part_number.lower())]
-        dealer = dealers[(r.region_id, r.dealer.lower())]
+        dealer = dealers[dealer_key(r.dealer)]
         key = (part.id, dealer.id)
         stock = stocks.get(key)
         if stock is None:
@@ -439,7 +448,7 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
     for key, stock in stocks.items():
         if key not in seen_stocks:
             await session.delete(stock)
-    seen_dealers = {(r.region_id, r.dealer.lower()) for r in rows}
+    seen_dealers = {dealer_key(r.dealer) for r in rows}
     for key, dealer in dealers.items():
         if key not in seen_dealers:
             dealer.active = False
@@ -449,5 +458,5 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
     stats.nodes = len({r.node["ru"].lower() for r in rows})
     stats.parts = len(counted)
     stats.dealers = len(seen_dealers)
-    stats.regions = len({r.region_id for r in rows})
+    stats.regions = len({dealers[k].region_id for k in seen_dealers})
     return stats

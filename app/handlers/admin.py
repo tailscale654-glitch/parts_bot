@@ -7,10 +7,12 @@ from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database.models import User
+from app.database.models import Dealer, User
 from app.database.repositories.regions import RegionRepository
+from app.services.dealers import DirectoryStats, apply_directory
 from app.services.excel_import import MAX_FILE_MB, ImportError_, ImportStats, apply_import, validate_any
 from app.services.excel_template import build_template
 from app.services.localization import i18n
@@ -51,8 +53,22 @@ def errors_text(errors: list[ImportError_], lang: str) -> str:
     return "\n".join(lines)[:4000]  # лимит Telegram — 4096 символов
 
 
-def preview_text(stats: ImportStats, warnings: list[ImportError_], fmt: str, lang: str) -> str:
-    lines = [i18n.t(lang, f"import_format_{fmt}"), "", i18n.t(lang, "import_preview", **vars(stats))]
+async def known_dealers(session: AsyncSession) -> dict[str, int]:
+    """Дилеры из справочника: ключ названия → регион."""
+    rows = await session.execute(select(Dealer.name_key, Dealer.region_id).where(Dealer.in_directory.is_(True)))
+    return dict(rows.all())
+
+
+async def run_import(db: AsyncSession, rows, fmt: str) -> ImportStats | DirectoryStats:
+    return await (apply_directory(db, rows) if fmt == "directory" else apply_import(db, rows))
+
+
+def stats_text(key: str, stats, fmt: str, lang: str) -> str:
+    return i18n.t(lang, f"directory_{key}" if fmt == "directory" else f"import_{key}", **vars(stats))
+
+
+def preview_text(stats, warnings: list[ImportError_], fmt: str, lang: str) -> str:
+    lines = [i18n.t(lang, f"import_format_{fmt}"), "", stats_text("preview", stats, fmt, lang)]
     if warnings:
         lines += ["", i18n.t(lang, "import_warnings_title")]
         for w in warnings[:MAX_ERRORS_SHOWN]:
@@ -110,7 +126,7 @@ async def got_file(
     await bot.download(doc, destination=path)
 
     regions = await RegionRepository(session).list_active()
-    rows, errors, warnings, fmt = validate_any(path, regions)
+    rows, errors, warnings, fmt = validate_any(path, regions, await known_dealers(session))
     if errors:
         _remove(str(path))
         await state.set_state(ImportStates.waiting_file)
@@ -120,7 +136,7 @@ async def got_file(
     # Пробный прогон: считаем, что изменится, и откатываем — база не меняется
     async with session_factory() as dry:
         try:
-            stats = await apply_import(dry, rows)
+            stats = await run_import(dry, rows, fmt)
         finally:
             await dry.rollback()
 
@@ -143,7 +159,8 @@ async def apply(
         return
 
     regions = await RegionRepository(session).list_active()
-    rows, errors, _, _ = validate_any(Path(path), regions)  # проверяем ещё раз: регионы могли измениться
+    # проверяем ещё раз: регионы и справочник могли измениться
+    rows, errors, _, fmt = validate_any(Path(path), regions, await known_dealers(session))
     if errors:
         _remove(path)
         await callback.message.edit_text(errors_text(errors, lang))
@@ -151,7 +168,7 @@ async def apply(
 
     async with session_factory() as db:
         try:
-            stats = await apply_import(db, rows)
+            stats = await run_import(db, rows, fmt)
             await db.commit()  # всё или ничего: одна транзакция
         except Exception:
             await db.rollback()
@@ -161,7 +178,7 @@ async def apply(
         finally:
             _remove(path)
     logger.info("Excel import by %s: %s", callback.from_user.id, stats)
-    await callback.message.edit_text(i18n.t(lang, "import_applied", **vars(stats)))
+    await callback.message.edit_text(stats_text("applied", stats, fmt, lang))
 
 
 @router.callback_query(F.data.in_({"imp:apply", "imp:cancel"}))
