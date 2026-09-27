@@ -1,4 +1,4 @@
-# JAC Parts Bot — Этап 4
+# JAC Parts Bot — Этап 5
 
 Telegram-бот каталога запчастей JAC. Сейчас готово: запуск в Docker, база PostgreSQL,
 регистрация «Язык → Регион → Номер телефона», после которой бот сразу открывает каталог
@@ -6,7 +6,8 @@ Telegram-бот каталога запчастей JAC. Сейчас готов
 Внизу экрана — постоянное меню (как в EVOS): 🛍 Каталог · 🛒 Корзина · 📦 Мои заказы · 👤 Профиль · 📞 Менеджер.
 В профиле можно сменить номер, регион и язык. Если у детали есть фото — оно показывается в карточке.
 Администратор загружает каталог, цены и остатки из Excel прямо в Telegram (`/admin`).
-Показ цен и дилеров в карточке, корзина и заказы — на следующих этапах.
+В карточке детали — дилеры региона покупателя с ценой и наличием и кнопка «🛒 В корзину»;
+в корзине можно менять количество (не больше остатка). Оформление заказа — на следующем этапе.
 
 ---
 
@@ -168,6 +169,7 @@ INFO  [alembic.runtime.migration] Running upgrade  -> 0001, create users table
 INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, regions table + users.region_id
 INFO  [alembic.runtime.migration] Running upgrade 0002 -> 0003, catalog: models, nodes, parts
 INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, dealers and stocks (prices / quantities)
+INFO  [alembic.runtime.migration] Running upgrade 0004 -> 0005, cart items
 ... | INFO | jac_parts_bot | Bot @jac_parts_uz_bot started (long polling). Admins: 1
 ```
 
@@ -246,6 +248,14 @@ INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, dealers and stoc
 - `PRICE_COLUMN` — какую цену показывать.
 
 После правки: `git push` → на сервере `git pull && docker compose up -d --build` → загрузите файл заново.
+
+## Карточка детали и корзина
+
+- В карточке показываются **только дилеры региона покупателя**: сначала те, у кого деталь в наличии
+  (дешевле — выше), потом «🔴 Нет в наличии». Если в регионе детали нет — бот подскажет, есть ли она в других регионах.
+- Кнопка **🛒 Дилер · цена** есть только у дилеров с наличием. Каждое нажатие — +1 шт., но не больше остатка.
+- **🛒 Корзина** в нижнем меню: ➖ / ➕ / ✖️ для каждой позиции, 🗑 Очистить, итоговая сумма.
+  Если после новой загрузки Excel деталь закончилась — позиция помечается и не входит в сумму.
 
 ## Каталог и демо-данные
 
@@ -387,6 +397,7 @@ jac-parts-bot/
 │   │   ├── language.py         # выбор и смена языка
 │   │   ├── region.py           # выбор и смена региона
 │   │   ├── catalog.py          # каталог: модель → категория → деталь
+│   │   ├── cart.py             # корзина
 │   │   ├── phone.py            # номер телефона (регистрация и смена)
 │   │   ├── profile.py          # профиль
 │   │   ├── admin.py            # /admin: загрузка Excel
@@ -400,8 +411,8 @@ jac-parts-bot/
 │   ├── middlewares/db.py       # сессия БД + пользователь для каждого сообщения
 │   ├── database/
 │   │   ├── database.py         # подключение к PostgreSQL
-│   │   ├── models.py           # таблицы users, regions, models, nodes, parts, dealers, stocks
-│   │   └── repositories/       # users.py, regions.py, catalog.py
+│   │   ├── models.py           # таблицы users, regions, models, nodes, parts, dealers, stocks, cart_items
+│   │   └── repositories/       # users, regions, catalog, stocks, cart
 │   ├── services/               # localization.py, catalog.py, excel_import.py, excel_template.py,
 │   │                           # import_mapping.py (настройки складской выгрузки)
 │   ├── scripts/seed_demo.py    # демо-каталог
@@ -422,4 +433,4 @@ jac-parts-bot/
 docker compose run --rm --user root bot sh -c "pip install -q -r requirements-dev.txt && pytest -q"
 ```
 
-Ожидаемо: `49 passed`.
+Ожидаемо: `55 passed`.

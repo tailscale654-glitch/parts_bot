@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.database.repositories.catalog import CatalogRepository
+from app.database.repositories.stocks import StockRepository
 from app.keyboards.catalog import (
     CatalogCB,
     models_keyboard,
@@ -113,7 +114,12 @@ async def show_part(callback: CallbackQuery, callback_data: CatalogCB, user: Use
     if part is None:
         await _unavailable(callback, lang)
         return
-    await _show(callback, part_card_text(part, lang), part_card_keyboard(part, callback_data.page, lang), photo=part.photo)
+    stocks = StockRepository(session)
+    offers = await stocks.offers_in_region(part.id, user.region_id)  # только дилеры региона покупателя
+    elsewhere = 0 if offers else await stocks.regions_elsewhere(part.id, user.region_id)
+    text = part_card_text(part, lang, user.region, offers, elsewhere)
+    photo = part.photo if len(text) <= 1024 else None  # подпись к фото — не длиннее 1024 символов
+    await _show(callback, text, part_card_keyboard(part, callback_data.page, lang, offers), photo=photo)
 
 
 @router.callback_query(CatalogCB.filter(F.action == "noop"))

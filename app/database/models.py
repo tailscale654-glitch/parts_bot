@@ -124,3 +124,21 @@ class Stock(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    part: Mapped[Part] = relationship(lazy="joined")
+    dealer: Mapped[Dealer] = relationship(lazy="joined")
+
+
+class CartItem(Base):
+    """Позиция в корзине: конкретная деталь у конкретного дилера (stock) и количество."""
+
+    __tablename__ = "cart_items"
+    __table_args__ = (UniqueConstraint("user_id", "stock_id", name="uq_cart_user_stock"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id", ondelete="CASCADE"))
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    stock: Mapped[Stock] = relationship(lazy="joined")

@@ -1,8 +1,9 @@
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.database.models import CarModel, Node, Part
-from app.services.catalog import Page
+from app.database.models import CarModel, Node, Part, Stock
+from app.keyboards.cart import CartCB
+from app.services.catalog import MAX_OFFERS_SHOWN, Page, money
 from app.services.localization import i18n, localized_name
 
 
@@ -71,6 +72,15 @@ def parts_keyboard(model_id: int, node_id: int, parts: list[Part], page: Page, l
     return InlineKeyboardMarkup(inline_keyboard=rows + _back(lang, CatalogCB(action="nodes", model_id=model_id)))
 
 
-def part_card_keyboard(part: Part, page: int, lang: str) -> InlineKeyboardMarkup:
+def part_card_keyboard(part: Part, page: int, lang: str, offers: list[Stock] | None = None) -> InlineKeyboardMarkup:
+    """Кнопка «В корзину» — у каждого дилера, у которого деталь есть в наличии."""
+    rows = [
+        [InlineKeyboardButton(
+            text=i18n.t(lang, "btn_add_to_cart", dealer=s.dealer.name, price=money(s.price, lang)),
+            callback_data=CartCB(action="add", id=s.id).pack(),
+        )]
+        for s in (offers or [])[:MAX_OFFERS_SHOWN]
+        if s.quantity > 0
+    ]
     back = CatalogCB(action="parts", model_id=part.model_id, node_id=part.node_id, page=page)
-    return InlineKeyboardMarkup(inline_keyboard=_back(lang, back))
+    return InlineKeyboardMarkup(inline_keyboard=rows + _back(lang, back))
