@@ -83,3 +83,29 @@ def test_template_still_detected(tmp_path):
     regions = [Region(id=1, code="tashkent_city", name_ru="Ташкент"), Region(id=3, code="samarkand", name_ru="Самаркандская область")]
     rows, errors, warnings, fmt = validate_any(path, regions)
     assert fmt == "template" and errors == [] and len(rows) == 3
+
+
+def test_part_names_translated(tmp_path):
+    from app.services.part_names import translate
+    assert translate("ENGINE OIL FILTER ASSY.") == {"ru": "Масляный фильтр", "en": "ENGINE OIL FILTER ASSY.", "uz": "Moy filtri"}
+    # регистр, пробелы и китайские скобки не мешают
+    assert translate("left outer rearview mirror assy.（SILVER）")["ru"] == "Зеркало наружное левое (серебристое)"
+    assert translate("SOME NEW PART") == {"ru": "SOME NEW PART", "en": "SOME NEW PART", "uz": None}
+
+    path = make_export(tmp_path, [
+        row(1, "A1", "SPARK PLUG", "У дилера", "A", "—", 100, 200, "OOO «ASIAMOTOR»"),
+        row(1, "A2", "SOME NEW PART", "У дилера", "A", "—", 100, 200, "OOO «ASIAMOTOR»"),
+    ])
+    rows, errors, warnings, _ = validate_any(path, REGIONS)
+    names = {r.part_number: r.part_name for r in rows}
+    assert names["A1"]["ru"] == "Свеча зажигания" and names["A1"]["uz"] == "O‘t oldirish shami"
+    w = next(w for w in warnings if w.key == "warn_untranslated")
+    assert w.params == {"n": 1, "names": "SOME NEW PART"}
+
+
+def test_every_translation_has_ru_and_uz():
+    import json
+    from app.services.part_names import DICTIONARY
+    data = json.loads(DICTIONARY.read_text(encoding="utf-8"))
+    assert len(data) >= 246
+    assert all(v.get("ru") and v.get("uz") for v in data.values())

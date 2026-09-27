@@ -1,0 +1,986 @@
+{
+ "a/c filter element": {
+  "ru": "Фильтр салона (кондиционера)",
+  "uz": "Salon (konditsioner) filtri"
+ },
+ "abs controller": {
+  "ru": "Блок управления ABS",
+  "uz": "ABS boshqaruv bloki"
+ },
+ "after-sales maintenance kit of rear brake pad assembly": {
+  "ru": "Ремкомплект задних тормозных колодок",
+  "uz": "Orqa tormoz kolodkalari ta’mirlash to‘plami"
+ },
+ "air conditioner compressor belt": {
+  "ru": "Ремень компрессора кондиционера",
+  "uz": "Konditsioner kompressori tasmasi"
+ },
+ "air filter": {
+  "ru": "Воздушный фильтр",
+  "uz": "Havo filtri"
+ },
+ "air filter element": {
+  "ru": "Элемент воздушного фильтра",
+  "uz": "Havo filtri elementi"
+ },
+ "air filter(non-woven fabrics)": {
+  "ru": "Воздушный фильтр (нетканый материал)",
+  "uz": "Havo filtri (to‘qilmagan material)"
+ },
+ "anti-collision beam assembly": {
+  "ru": "Усилитель бампера",
+  "uz": "Bamper kuchaytirgichi"
+ },
+ "anti-collision beam assy": {
+  "ru": "Усилитель бампера",
+  "uz": "Bamper kuchaytirgichi"
+ },
+ "bare engine": {
+  "ru": "Двигатель (без навесного оборудования)",
+  "uz": "Dvigatel (qo‘shimcha jihozlarsiz)"
+ },
+ "bcm": {
+  "ru": "Блок управления кузовом (BCM)",
+  "uz": "Kuzov boshqaruv bloki (BCM)"
+ },
+ "bearing(gu79,gu51)": {
+  "ru": "Подшипник (GU79, GU51)",
+  "uz": "Podshipnik (GU79, GU51)"
+ },
+ "belt": {
+  "ru": "Ремень",
+  "uz": "Tasma"
+ },
+ "bonnet assembly": {
+  "ru": "Капот",
+  "uz": "Kapot"
+ },
+ "brake friction plate assembly": {
+  "ru": "Тормозные колодки",
+  "uz": "Tormoz kolodkalari"
+ },
+ "brake pad repair kit": {
+  "ru": "Ремкомплект тормозных колодок",
+  "uz": "Tormoz kolodkalari ta’mirlash to‘plami"
+ },
+ "brake shoe assy": {
+  "ru": "Тормозные колодки барабанные",
+  "uz": "Baraban tormoz kolodkalari"
+ },
+ "bsm": {
+  "ru": "Блок мониторинга слепых зон (BSM)",
+  "uz": "Ko‘r zonalarni kuzatish bloki (BSM)"
+ },
+ "bt obd diagnostic connector": {
+  "ru": "Диагностический адаптер OBD (Bluetooth)",
+  "uz": "OBD diagnostika adapteri (Bluetooth)"
+ },
+ "bumper left bracket": {
+  "ru": "Кронштейн бампера левый",
+  "uz": "Bamper kronshteyni, chap"
+ },
+ "bumper right bracket": {
+  "ru": "Кронштейн бампера правый",
+  "uz": "Bamper kronshteyni, o‘ng"
+ },
+ "camshaft position sensor": {
+  "ru": "Датчик положения распредвала",
+  "uz": "Taqsimlash vali holati datchigi"
+ },
+ "carbon canister subassembly": {
+  "ru": "Адсорбер",
+  "uz": "Adsorber"
+ },
+ "charcoal canister solenoid valve": {
+  "ru": "Клапан адсорбера",
+  "uz": "Adsorber klapani"
+ },
+ "clock spring": {
+  "ru": "Шлейф рулевой («улитка»)",
+  "uz": "Rul shleyfi («ulitka»)"
+ },
+ "clutch driven plate": {
+  "ru": "Диск сцепления",
+  "uz": "Ilashish diski"
+ },
+ "clutch driven plate assy": {
+  "ru": "Диск сцепления",
+  "uz": "Ilashish diski"
+ },
+ "clutch pressure plate": {
+  "ru": "Корзина сцепления",
+  "uz": "Ilashish savati"
+ },
+ "clutch pressure plate assy": {
+  "ru": "Корзина сцепления",
+  "uz": "Ilashish savati"
+ },
+ "compressor assy": {
+  "ru": "Компрессор кондиционера",
+  "uz": "Konditsioner kompressori"
+ },
+ "condenser assy": {
+  "ru": "Радиатор кондиционера (конденсатор)",
+  "uz": "Konditsioner radiatori (kondensator)"
+ },
+ "coolant temperature sensor": {
+  "ru": "Датчик температуры охлаждающей жидкости",
+  "uz": "Sovutish suyuqligi harorati datchigi"
+ },
+ "crankshaft position sensor": {
+  "ru": "Датчик положения коленвала",
+  "uz": "Tirsakli val holati datchigi"
+ },
+ "cross shaft": {
+  "ru": "Крестовина",
+  "uz": "Krestovina"
+ },
+ "cylinder head gasket assy": {
+  "ru": "Прокладка ГБЦ",
+  "uz": "Silindrlar kallagi qistirmasi"
+ },
+ "driven plate": {
+  "ru": "Диск сцепления",
+  "uz": "Ilashish diski"
+ },
+ "ecm": {
+  "ru": "Блок управления двигателем (ECM)",
+  "uz": "Dvigatel boshqaruv bloki (ECM)"
+ },
+ "ecu": {
+  "ru": "Блок управления двигателем (ECU)",
+  "uz": "Dvigatel boshqaruv bloki (ECU)"
+ },
+ "embryo of remote control key": {
+  "ru": "Заготовка ключа с пультом",
+  "uz": "Pultli kalit zagotovkasi"
+ },
+ "engine bonnet assy": {
+  "ru": "Капот",
+  "uz": "Kapot"
+ },
+ "engine oil filter assy": {
+  "ru": "Масляный фильтр",
+  "uz": "Moy filtri"
+ },
+ "engine oil filter element": {
+  "ru": "Элемент масляного фильтра",
+  "uz": "Moy filtri elementi"
+ },
+ "filter": {
+  "ru": "Фильтр",
+  "uz": "Filtr"
+ },
+ "filter element assy": {
+  "ru": "Фильтрующий элемент",
+  "uz": "Filtrlovchi element"
+ },
+ "filter screen": {
+  "ru": "Сетчатый фильтр",
+  "uz": "To‘rli filtr"
+ },
+ "friction pad maintenance kit": {
+  "ru": "Ремкомплект тормозных колодок",
+  "uz": "Tormoz kolodkalari ta’mirlash to‘plami"
+ },
+ "front anti-collision beam assy": {
+  "ru": "Усилитель переднего бампера",
+  "uz": "Old bamper kuchaytirgichi"
+ },
+ "front braking friction lining": {
+  "ru": "Передние тормозные колодки",
+  "uz": "Old tormoz kolodkalari"
+ },
+ "front bumper / without paint": {
+  "ru": "Передний бампер (без покраски)",
+  "uz": "Old bamper (bo‘yalmagan)"
+ },
+ "front bumper assy": {
+  "ru": "Передний бампер",
+  "uz": "Old bamper"
+ },
+ "front bumper body": {
+  "ru": "Передний бампер (корпус)",
+  "uz": "Old bamper (korpus)"
+ },
+ "front bumper left center trim": {
+  "ru": "Накладка переднего бампера центральная левая",
+  "uz": "Old bamper markaziy qoplamasi, chap"
+ },
+ "front bumper left drag hook trim": {
+  "ru": "Заглушка буксировочного крюка переднего бампера левая",
+  "uz": "Old bamper shatak ilgagi qopqog‘i, chap"
+ },
+ "front bumper left first upper decorative inner panel": {
+  "ru": "Декоративная панель переднего бампера левая верхняя №1",
+  "uz": "Old bamper bezak paneli, chap yuqori №1"
+ },
+ "front bumper left headlight trim tape": {
+  "ru": "Молдинг под левую фару",
+  "uz": "Chap fara ostidagi molding"
+ },
+ "front bumper left panel": {
+  "ru": "Панель переднего бампера левая",
+  "uz": "Old bamper paneli, chap"
+ },
+ "front bumper left second upper decorative inner panel": {
+  "ru": "Декоративная панель переднего бампера левая верхняя №2",
+  "uz": "Old bamper bezak paneli, chap yuqori №2"
+ },
+ "front bumper left side mounting bracket": {
+  "ru": "Кронштейн крепления переднего бампера боковой левый",
+  "uz": "Old bamper yon mahkamlash kronshteyni, chap"
+ },
+ "front bumper left support box": {
+  "ru": "Опора переднего бампера левая",
+  "uz": "Old bamper tayanchi, chap"
+ },
+ "front bumper license plate": {
+  "ru": "Площадка номерного знака переднего бампера",
+  "uz": "Old bamper raqam belgisi o‘rni"
+ },
+ "front bumper lower grille": {
+  "ru": "Нижняя решётка переднего бампера",
+  "uz": "Old bamper pastki panjarasi"
+ },
+ "front bumper lower guard": {
+  "ru": "Защита переднего бампера нижняя",
+  "uz": "Old bamper pastki himoyasi"
+ },
+ "front bumper lower left trim": {
+  "ru": "Накладка переднего бампера нижняя левая",
+  "uz": "Old bamper pastki qoplamasi, chap"
+ },
+ "front bumper lower right trim": {
+  "ru": "Накладка переднего бампера нижняя правая",
+  "uz": "Old bamper pastki qoplamasi, o‘ng"
+ },
+ "front bumper plate trim assembly": {
+  "ru": "Накладка переднего бампера",
+  "uz": "Old bamper qoplamasi"
+ },
+ "front bumper right center trim": {
+  "ru": "Накладка переднего бампера центральная правая",
+  "uz": "Old bamper markaziy qoplamasi, o‘ng"
+ },
+ "front bumper right drag hook trim": {
+  "ru": "Заглушка буксировочного крюка переднего бампера правая",
+  "uz": "Old bamper shatak ilgagi qopqog‘i, o‘ng"
+ },
+ "front bumper right first upper decorative inner panel": {
+  "ru": "Декоративная панель переднего бампера правая верхняя №1",
+  "uz": "Old bamper bezak paneli, o‘ng yuqori №1"
+ },
+ "front bumper right headlight trim tape": {
+  "ru": "Молдинг под правую фару",
+  "uz": "O‘ng fara ostidagi molding"
+ },
+ "front bumper right panel": {
+  "ru": "Панель переднего бампера правая",
+  "uz": "Old bamper paneli, o‘ng"
+ },
+ "front bumper right second upper decorative inner panel": {
+  "ru": "Декоративная панель переднего бампера правая верхняя №2",
+  "uz": "Old bamper bezak paneli, o‘ng yuqori №2"
+ },
+ "front bumper right side mounting bracket": {
+  "ru": "Кронштейн крепления переднего бампера боковой правый",
+  "uz": "Old bamper yon mahkamlash kronshteyni, o‘ng"
+ },
+ "front bumper right support box": {
+  "ru": "Опора переднего бампера правая",
+  "uz": "Old bamper tayanchi, o‘ng"
+ },
+ "front bumper trim": {
+  "ru": "Накладка переднего бампера",
+  "uz": "Old bamper qoplamasi"
+ },
+ "front bumper trim left mounting bracket": {
+  "ru": "Кронштейн накладки переднего бампера левый",
+  "uz": "Old bamper qoplamasi kronshteyni, chap"
+ },
+ "front bumper trim right mounting bracket": {
+  "ru": "Кронштейн накладки переднего бампера правый",
+  "uz": "Old bamper qoplamasi kronshteyni, o‘ng"
+ },
+ "front bumper upper cover": {
+  "ru": "Верхняя накладка переднего бампера",
+  "uz": "Old bamper yuqori qoplamasi"
+ },
+ "front bumper upper cover bracket1": {
+  "ru": "Кронштейн верхней накладки переднего бампера №1",
+  "uz": "Old bamper yuqori qoplamasi kronshteyni №1"
+ },
+ "front bumper upper cover bracket2": {
+  "ru": "Кронштейн верхней накладки переднего бампера №2",
+  "uz": "Old bamper yuqori qoplamasi kronshteyni №2"
+ },
+ "front bumper upper cover bracket3": {
+  "ru": "Кронштейн верхней накладки переднего бампера №3",
+  "uz": "Old bamper yuqori qoplamasi kronshteyni №3"
+ },
+ "front bumper upper trim": {
+  "ru": "Верхняя накладка переднего бампера",
+  "uz": "Old bamper yuqori qoplamasi"
+ },
+ "front end bracket assy": {
+  "ru": "Панель передка (рамка радиатора)",
+  "uz": "Old panel (radiator ramkasi)"
+ },
+ "front end gear train belt": {
+  "ru": "Ремень привода навесного оборудования",
+  "uz": "Qo‘shimcha jihozlar yuritma tasmasi"
+ },
+ "front friction pad assy": {
+  "ru": "Передние тормозные колодки",
+  "uz": "Old tormoz kolodkalari"
+ },
+ "front grille assy": {
+  "ru": "Решётка радиатора",
+  "uz": "Radiator panjarasi"
+ },
+ "front grille label": {
+  "ru": "Эмблема решётки радиатора",
+  "uz": "Radiator panjarasi emblemasi"
+ },
+ "front shock absorber assy": {
+  "ru": "Амортизатор передний",
+  "uz": "Old amortizator"
+ },
+ "front towing hook cover": {
+  "ru": "Заглушка буксировочного крюка передняя",
+  "uz": "Old shatak ilgagi qopqog‘i"
+ },
+ "front windshield assy": {
+  "ru": "Лобовое стекло",
+  "uz": "Old oyna"
+ },
+ "fuel supply pump assy": {
+  "ru": "Топливный насос",
+  "uz": "Yoqilg‘i nasosi"
+ },
+ "gasoline filter assembly(quick coupling)": {
+  "ru": "Топливный фильтр (быстросъёмный)",
+  "uz": "Benzin filtri (tez ulanadigan)"
+ },
+ "generator": {
+  "ru": "Генератор",
+  "uz": "Generator"
+ },
+ "generator assy": {
+  "ru": "Генератор",
+  "uz": "Generator"
+ },
+ "generator belt": {
+  "ru": "Ремень генератора",
+  "uz": "Generator tasmasi"
+ },
+ "high mounted brake lamp assy": {
+  "ru": "Дополнительный стоп-сигнал",
+  "uz": "Qo‘shimcha stop-signal"
+ },
+ "hydraulic release bearing": {
+  "ru": "Выжимной подшипник гидравлический",
+  "uz": "Gidravlik ajratish podshipnigi"
+ },
+ "ignition coil": {
+  "ru": "Катушка зажигания",
+  "uz": "O‘t oldirish g‘altagi"
+ },
+ "ignition switch assy": {
+  "ru": "Замок зажигания",
+  "uz": "O‘t oldirish qulfi"
+ },
+ "left cover plate": {
+  "ru": "Накладка левая",
+  "uz": "Qoplama, chap"
+ },
+ "left exhaust pipe trim": {
+  "ru": "Насадка глушителя левая",
+  "uz": "Glushitel uchligi, chap"
+ },
+ "left fender": {
+  "ru": "Крыло левое",
+  "uz": "Qanot, chap"
+ },
+ "left fog lamp trim assembly": {
+  "ru": "Накладка противотуманной фары левая",
+  "uz": "Tuman farasi qoplamasi, chap"
+ },
+ "left front combination lamp assembly": {
+  "ru": "Фара передняя левая",
+  "uz": "Old fara, chap"
+ },
+ "left front combination lamp assy": {
+  "ru": "Фара передняя левая",
+  "uz": "Old fara, chap"
+ },
+ "left front combined small lamp assembly": {
+  "ru": "Габаритный фонарь передний левый",
+  "uz": "Old gabarit chirog‘i, chap"
+ },
+ "left front door assy": {
+  "ru": "Дверь передняя левая",
+  "uz": "Old eshik, chap"
+ },
+ "left front door glass": {
+  "ru": "Стекло передней левой двери",
+  "uz": "Old chap eshik oynasi"
+ },
+ "left front door glass assy": {
+  "ru": "Стекло передней левой двери",
+  "uz": "Old chap eshik oynasi"
+ },
+ "left front fender": {
+  "ru": "Крыло переднее левое",
+  "uz": "Old qanot, chap"
+ },
+ "left front fog lamp assy": {
+  "ru": "Противотуманная фара передняя левая",
+  "uz": "Old tuman farasi, chap"
+ },
+ "left front mudguard": {
+  "ru": "Брызговик передний левый",
+  "uz": "Old loy qaytargich, chap"
+ },
+ "left front quarter window assy": {
+  "ru": "Форточка передняя левая",
+  "uz": "Old uchburchak oyna, chap"
+ },
+ "left front speed sensor assy": {
+  "ru": "Датчик ABS передний левый",
+  "uz": "Old ABS datchigi, chap"
+ },
+ "left front wheel cover assy": {
+  "ru": "Подкрылок передний левый",
+  "uz": "Old podkrilok, chap"
+ },
+ "left middle window glass assy": {
+  "ru": "Стекло среднее левое",
+  "uz": "O‘rta oyna, chap"
+ },
+ "left outer rearview mirror assy": {
+  "ru": "Зеркало наружное левое",
+  "uz": "Tashqi ko‘zgu, chap"
+ },
+ "left outer rearview mirror assy.(black)": {
+  "ru": "Зеркало наружное левое (чёрное)",
+  "uz": "Tashqi ko‘zgu, chap (qora)"
+ },
+ "left outer rearview mirror assy.(gray)": {
+  "ru": "Зеркало наружное левое (серое)",
+  "uz": "Tashqi ko‘zgu, chap (kulrang)"
+ },
+ "left outer rearview mirror assy.(silver)": {
+  "ru": "Зеркало наружное левое (серебристое)",
+  "uz": "Tashqi ko‘zgu, chap (kumushrang)"
+ },
+ "left outer rearview mirror assy.(white)": {
+  "ru": "Зеркало наружное левое (белое)",
+  "uz": "Tashqi ko‘zgu, chap (oq)"
+ },
+ "left quarter window assy": {
+  "ru": "Форточка левая",
+  "uz": "Uchburchak oyna, chap"
+ },
+ "left rear combination lamp": {
+  "ru": "Фонарь задний левый",
+  "uz": "Orqa chiroq, chap"
+ },
+ "left rear combination lamp assy": {
+  "ru": "Фонарь задний левый",
+  "uz": "Orqa chiroq, chap"
+ },
+ "left rear combined small lamp assembly": {
+  "ru": "Габаритный фонарь задний левый",
+  "uz": "Orqa gabarit chirog‘i, chap"
+ },
+ "left rear door assy": {
+  "ru": "Дверь задняя левая",
+  "uz": "Orqa eshik, chap"
+ },
+ "left rear door glass": {
+  "ru": "Стекло задней левой двери",
+  "uz": "Orqa chap eshik oynasi"
+ },
+ "left rear door glass assy": {
+  "ru": "Стекло задней левой двери",
+  "uz": "Orqa chap eshik oynasi"
+ },
+ "left rear speed sensor assy": {
+  "ru": "Датчик ABS задний левый",
+  "uz": "Orqa ABS datchigi, chap"
+ },
+ "left rear wheel cover": {
+  "ru": "Подкрылок задний левый",
+  "uz": "Orqa podkrilok, chap"
+ },
+ "left rear wheel cover assy": {
+  "ru": "Подкрылок задний левый",
+  "uz": "Orqa podkrilok, chap"
+ },
+ "left rear window glass assy": {
+  "ru": "Стекло заднее левое (боковое)",
+  "uz": "Orqa yon oyna, chap"
+ },
+ "left side sliding door assembly": {
+  "ru": "Сдвижная дверь левая",
+  "uz": "Surma eshik, chap"
+ },
+ "left side wall back combined lamp assembly": {
+  "ru": "Фонарь боковины задний левый",
+  "uz": "Yon devor orqa chirog‘i, chap"
+ },
+ "left side wall rear combined lamp assembly": {
+  "ru": "Фонарь боковины задний левый",
+  "uz": "Yon devor orqa chirog‘i, chap"
+ },
+ "left tail door assy": {
+  "ru": "Дверь задка левая",
+  "uz": "Orqa (yuk) eshigi, chap"
+ },
+ "left tail door assy.(electrophosis)": {
+  "ru": "Дверь задка левая (в грунте)",
+  "uz": "Orqa (yuk) eshigi, chap (gruntlangan)"
+ },
+ "left window glass": {
+  "ru": "Стекло боковое левое",
+  "uz": "Yon oyna, chap"
+ },
+ "left window glass assy": {
+  "ru": "Стекло боковое левое",
+  "uz": "Yon oyna, chap"
+ },
+ "lens of left outer rearview mirror": {
+  "ru": "Зеркальный элемент левого зеркала",
+  "uz": "Chap ko‘zgu oynasi"
+ },
+ "lens of right outer rearview mirror": {
+  "ru": "Зеркальный элемент правого зеркала",
+  "uz": "O‘ng ko‘zgu oynasi"
+ },
+ "license lamp assy": {
+  "ru": "Фонарь подсветки номера",
+  "uz": "Raqam yoritgichi"
+ },
+ "lower front bumper body": {
+  "ru": "Передний бампер нижняя часть",
+  "uz": "Old bamper pastki qismi"
+ },
+ "lower grille": {
+  "ru": "Нижняя решётка",
+  "uz": "Pastki panjara"
+ },
+ "lower grille left decoration strip": {
+  "ru": "Молдинг нижней решётки левый",
+  "uz": "Pastki panjara moldingi, chap"
+ },
+ "lower grille right decoration strip": {
+  "ru": "Молдинг нижней решётки правый",
+  "uz": "Pastki panjara moldingi, o‘ng"
+ },
+ "lower mounting bracket of front bumper": {
+  "ru": "Кронштейн переднего бампера нижний",
+  "uz": "Old bamper pastki kronshteyni"
+ },
+ "m116 front bumper assembly(with two radars)": {
+  "ru": "Передний бампер M116 (под 2 радара)",
+  "uz": "Old bamper M116 (2 ta radar uchun)"
+ },
+ "middle door assembly": {
+  "ru": "Средняя дверь",
+  "uz": "O‘rta eshik"
+ },
+ "middle door glass assy": {
+  "ru": "Стекло средней двери",
+  "uz": "O‘rta eshik oynasi"
+ },
+ "middle mounting bracket of front bumper": {
+  "ru": "Кронштейн переднего бампера средний",
+  "uz": "Old bamper o‘rta kronshteyni"
+ },
+ "middle window glass assy": {
+  "ru": "Стекло среднее",
+  "uz": "O‘rta oyna"
+ },
+ "mp5": {
+  "ru": "Мультимедиа (MP5)",
+  "uz": "Multimedia (MP5)"
+ },
+ "oil filter module": {
+  "ru": "Модуль масляного фильтра",
+  "uz": "Moy filtri moduli"
+ },
+ "out rearview mirror assembly(left)": {
+  "ru": "Зеркало наружное левое",
+  "uz": "Tashqi ko‘zgu, chap"
+ },
+ "panoramic parking front camera": {
+  "ru": "Камера кругового обзора передняя",
+  "uz": "Aylana ko‘rinish kamerasi, old"
+ },
+ "panoramic parking left camera": {
+  "ru": "Камера кругового обзора левая",
+  "uz": "Aylana ko‘rinish kamerasi, chap"
+ },
+ "panoramic parking rear camera": {
+  "ru": "Камера кругового обзора задняя",
+  "uz": "Aylana ko‘rinish kamerasi, orqa"
+ },
+ "panoramic parking right camera": {
+  "ru": "Камера кругового обзора правая",
+  "uz": "Aylana ko‘rinish kamerasi, o‘ng"
+ },
+ "pressure plate": {
+  "ru": "Корзина сцепления",
+  "uz": "Ilashish savati"
+ },
+ "radiator assy": {
+  "ru": "Радиатор охлаждения",
+  "uz": "Sovutish radiatori"
+ },
+ "radiator fan assy": {
+  "ru": "Вентилятор радиатора",
+  "uz": "Radiator ventilyatori"
+ },
+ "rear anti-collision beam assy": {
+  "ru": "Усилитель заднего бампера",
+  "uz": "Orqa bamper kuchaytirgichi"
+ },
+ "rear brake shoe assy": {
+  "ru": "Колодки тормозные задние барабанные",
+  "uz": "Orqa baraban tormoz kolodkalari"
+ },
+ "rear bumper assy": {
+  "ru": "Задний бампер",
+  "uz": "Orqa bamper"
+ },
+ "rear bumper body": {
+  "ru": "Задний бампер (корпус)",
+  "uz": "Orqa bamper (korpus)"
+ },
+ "rear bumper frame assy": {
+  "ru": "Каркас заднего бампера",
+  "uz": "Orqa bamper karkasi"
+ },
+ "rear bumper insurance assembly(with four radars) spare parts": {
+  "ru": "Задний бампер (под 4 радара)",
+  "uz": "Orqa bamper (4 ta radar uchun)"
+ },
+ "rear bumper left fixing bracket": {
+  "ru": "Кронштейн заднего бампера левый",
+  "uz": "Orqa bamper kronshteyni, chap"
+ },
+ "rear bumper left screw cover": {
+  "ru": "Заглушка заднего бампера левая",
+  "uz": "Orqa bamper qopqoqchasi, chap"
+ },
+ "rear bumper left trim panel assy": {
+  "ru": "Накладка заднего бампера левая",
+  "uz": "Orqa bamper qoplamasi, chap"
+ },
+ "rear bumper lower part": {
+  "ru": "Задний бампер нижняя часть",
+  "uz": "Orqa bamper pastki qismi"
+ },
+ "rear bumper right fixing bracket": {
+  "ru": "Кронштейн заднего бампера правый",
+  "uz": "Orqa bamper kronshteyni, o‘ng"
+ },
+ "rear bumper right screw cover": {
+  "ru": "Заглушка заднего бампера правая",
+  "uz": "Orqa bamper qopqoqchasi, o‘ng"
+ },
+ "rear bumper right trim panel assy": {
+  "ru": "Накладка заднего бампера правая",
+  "uz": "Orqa bamper qoplamasi, o‘ng"
+ },
+ "rear bumper trim": {
+  "ru": "Накладка заднего бампера",
+  "uz": "Orqa bamper qoplamasi"
+ },
+ "rear camera assy": {
+  "ru": "Камера заднего вида",
+  "uz": "Orqani ko‘rish kamerasi"
+ },
+ "rear foglight assembly": {
+  "ru": "Задний противотуманный фонарь",
+  "uz": "Orqa tuman chirog‘i"
+ },
+ "rear friction assembly maintenance kit": {
+  "ru": "Ремкомплект задних тормозных колодок",
+  "uz": "Orqa tormoz kolodkalari ta’mirlash to‘plami"
+ },
+ "rear friction disc assembly maintenance kit": {
+  "ru": "Ремкомплект задних тормозных колодок",
+  "uz": "Orqa tormoz kolodkalari ta’mirlash to‘plami"
+ },
+ "rear friction pad": {
+  "ru": "Задние тормозные колодки",
+  "uz": "Orqa tormoz kolodkalari"
+ },
+ "rear friction plate assembly(four)": {
+  "ru": "Задние тормозные колодки (4 шт.)",
+  "uz": "Orqa tormoz kolodkalari (4 dona)"
+ },
+ "rear leaf spring assy": {
+  "ru": "Рессора задняя",
+  "uz": "Orqa ressora"
+ },
+ "rear shock absorber assy": {
+  "ru": "Амортизатор задний",
+  "uz": "Orqa amortizator"
+ },
+ "rear sliding window assembly for left side wall": {
+  "ru": "Сдвижное стекло боковины заднее левое",
+  "uz": "Yon devor orqa surma oynasi, chap"
+ },
+ "rear tow hook cover": {
+  "ru": "Заглушка буксировочного крюка задняя",
+  "uz": "Orqa shatak ilgagi qopqog‘i"
+ },
+ "rear windshield assy": {
+  "ru": "Заднее стекло",
+  "uz": "Orqa oyna"
+ },
+ "release bearing": {
+  "ru": "Выжимной подшипник",
+  "uz": "Ajratish podshipnigi"
+ },
+ "reverse camera": {
+  "ru": "Камера заднего вида",
+  "uz": "Orqani ko‘rish kamerasi"
+ },
+ "reverse radar sensor assy": {
+  "ru": "Датчик парковки",
+  "uz": "Parkovka datchigi"
+ },
+ "reverse radar sensor assy.-black": {
+  "ru": "Датчик парковки (чёрный)",
+  "uz": "Parkovka datchigi (qora)"
+ },
+ "right cover plate": {
+  "ru": "Накладка правая",
+  "uz": "Qoplama, o‘ng"
+ },
+ "right exhaust pipe trim": {
+  "ru": "Насадка глушителя правая",
+  "uz": "Glushitel uchligi, o‘ng"
+ },
+ "right fender": {
+  "ru": "Крыло правое",
+  "uz": "Qanot, o‘ng"
+ },
+ "right fog lamp trim assembly": {
+  "ru": "Накладка противотуманной фары правая",
+  "uz": "Tuman farasi qoplamasi, o‘ng"
+ },
+ "right front combination lamp": {
+  "ru": "Фара передняя правая",
+  "uz": "Old fara, o‘ng"
+ },
+ "right front combination lamp assy": {
+  "ru": "Фара передняя правая",
+  "uz": "Old fara, o‘ng"
+ },
+ "right front combined small lamp assembly": {
+  "ru": "Габаритный фонарь передний правый",
+  "uz": "Old gabarit chirog‘i, o‘ng"
+ },
+ "right front door assy": {
+  "ru": "Дверь передняя правая",
+  "uz": "Old eshik, o‘ng"
+ },
+ "right front door glass": {
+  "ru": "Стекло передней правой двери",
+  "uz": "Old o‘ng eshik oynasi"
+ },
+ "right front door glass assy": {
+  "ru": "Стекло передней правой двери",
+  "uz": "Old o‘ng eshik oynasi"
+ },
+ "right front fender": {
+  "ru": "Крыло переднее правое",
+  "uz": "Old qanot, o‘ng"
+ },
+ "right front fog lamp assy": {
+  "ru": "Противотуманная фара передняя правая",
+  "uz": "Old tuman farasi, o‘ng"
+ },
+ "right front mudguard": {
+  "ru": "Брызговик передний правый",
+  "uz": "Old loy qaytargich, o‘ng"
+ },
+ "right front triangular window assembly": {
+  "ru": "Форточка передняя правая",
+  "uz": "Old uchburchak oyna, o‘ng"
+ },
+ "right front wheel cover": {
+  "ru": "Подкрылок передний правый",
+  "uz": "Old podkrilok, o‘ng"
+ },
+ "right front wheel cover assy": {
+  "ru": "Подкрылок передний правый",
+  "uz": "Old podkrilok, o‘ng"
+ },
+ "right front wheel speed sensor assy": {
+  "ru": "Датчик ABS передний правый",
+  "uz": "Old ABS datchigi, o‘ng"
+ },
+ "right middle slide door glass assy": {
+  "ru": "Стекло сдвижной двери правое",
+  "uz": "Surma eshik oynasi, o‘ng"
+ },
+ "right outer rearview mirror assy": {
+  "ru": "Зеркало наружное правое",
+  "uz": "Tashqi ko‘zgu, o‘ng"
+ },
+ "right outer rearview mirror assy.(black)": {
+  "ru": "Зеркало наружное правое (чёрное)",
+  "uz": "Tashqi ko‘zgu, o‘ng (qora)"
+ },
+ "right outer rearview mirror assy.(gray)": {
+  "ru": "Зеркало наружное правое (серое)",
+  "uz": "Tashqi ko‘zgu, o‘ng (kulrang)"
+ },
+ "right outer rearview mirror assy.(silver)": {
+  "ru": "Зеркало наружное правое (серебристое)",
+  "uz": "Tashqi ko‘zgu, o‘ng (kumushrang)"
+ },
+ "right outer rearview mirror assy.(white)": {
+  "ru": "Зеркало наружное правое (белое)",
+  "uz": "Tashqi ko‘zgu, o‘ng (oq)"
+ },
+ "right outer rearview mirror lamp": {
+  "ru": "Повторитель поворота в правом зеркале",
+  "uz": "O‘ng ko‘zgudagi burilish chirog‘i"
+ },
+ "right quarter window assy": {
+  "ru": "Форточка правая",
+  "uz": "Uchburchak oyna, o‘ng"
+ },
+ "right rear combination lamp assy": {
+  "ru": "Фонарь задний правый",
+  "uz": "Orqa chiroq, o‘ng"
+ },
+ "right rear combined small lamp assembly": {
+  "ru": "Габаритный фонарь задний правый",
+  "uz": "Orqa gabarit chirog‘i, o‘ng"
+ },
+ "right rear door assy": {
+  "ru": "Дверь задняя правая",
+  "uz": "Orqa eshik, o‘ng"
+ },
+ "right rear door glass": {
+  "ru": "Стекло задней правой двери",
+  "uz": "Orqa o‘ng eshik oynasi"
+ },
+ "right rear door glass assy": {
+  "ru": "Стекло задней правой двери",
+  "uz": "Orqa o‘ng eshik oynasi"
+ },
+ "right rear wheel cover": {
+  "ru": "Подкрылок задний правый",
+  "uz": "Orqa podkrilok, o‘ng"
+ },
+ "right rear wheel speed sensor assy": {
+  "ru": "Датчик ABS задний правый",
+  "uz": "Orqa ABS datchigi, o‘ng"
+ },
+ "right rear window glass assy": {
+  "ru": "Стекло заднее правое (боковое)",
+  "uz": "Orqa yon oyna, o‘ng"
+ },
+ "right side panel rear combination lamp assy": {
+  "ru": "Фонарь боковины задний правый",
+  "uz": "Yon devor orqa chirog‘i, o‘ng"
+ },
+ "right sliding door welding assembly": {
+  "ru": "Сдвижная дверь правая (кузовная)",
+  "uz": "Surma eshik, o‘ng (kuzov qismi)"
+ },
+ "right window glass": {
+  "ru": "Стекло боковое правое",
+  "uz": "Yon oyna, o‘ng"
+ },
+ "right window glass assy": {
+  "ru": "Стекло боковое правое",
+  "uz": "Yon oyna, o‘ng"
+ },
+ "slide door assy": {
+  "ru": "Сдвижная дверь",
+  "uz": "Surma eshik"
+ },
+ "spark plug": {
+  "ru": "Свеча зажигания",
+  "uz": "O‘t oldirish shami"
+ },
+ "spark plug assy": {
+  "ru": "Свеча зажигания",
+  "uz": "O‘t oldirish shami"
+ },
+ "sparking plug": {
+  "ru": "Свеча зажигания",
+  "uz": "O‘t oldirish shami"
+ },
+ "stage 1 toothed belt": {
+  "ru": "Зубчатый ремень 1-й ступени",
+  "uz": "1-bosqich tishli tasmasi"
+ },
+ "starter": {
+  "ru": "Стартер",
+  "uz": "Starter"
+ },
+ "starter assy": {
+  "ru": "Стартер",
+  "uz": "Starter"
+ },
+ "tail door assy": {
+  "ru": "Дверь багажника",
+  "uz": "Yukxona eshigi"
+ },
+ "thermostat assy": {
+  "ru": "Термостат",
+  "uz": "Termostat"
+ },
+ "timing belt": {
+  "ru": "Ремень ГРМ",
+  "uz": "GRM tasmasi"
+ },
+ "timing chain assembly": {
+  "ru": "Цепь ГРМ",
+  "uz": "GRM zanjiri"
+ },
+ "turbocharger": {
+  "ru": "Турбокомпрессор",
+  "uz": "Turbokompressor"
+ },
+ "upper front bumper body": {
+  "ru": "Передний бампер верхняя часть",
+  "uz": "Old bamper yuqori qismi"
+ },
+ "upper sheet of rear bumper": {
+  "ru": "Верхняя панель заднего бампера",
+  "uz": "Orqa bamper yuqori paneli"
+ },
+ "water pump": {
+  "ru": "Помпа (водяной насос)",
+  "uz": "Suv nasosi (pompa)"
+ },
+ "water pump assy": {
+  "ru": "Помпа (водяной насос)",
+  "uz": "Suv nasosi (pompa)"
+ },
+ "water pump belt": {
+  "ru": "Ремень помпы",
+  "uz": "Pompa tasmasi"
+ },
+ "water temperature sensor": {
+  "ru": "Датчик температуры охлаждающей жидкости",
+  "uz": "Sovutish suyuqligi harorati datchigi"
+ },
+ "windshield assembly": {
+  "ru": "Лобовое стекло",
+  "uz": "Old oyna"
+ }
+}

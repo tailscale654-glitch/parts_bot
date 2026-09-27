@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarModel, Dealer, Node, Part, Region, Stock
 from app.services import import_mapping as mapping
+from app.services.part_names import has_translation, translate
 from app.services.dealers import dealer_key, find_region, is_directory, region_lookup, validate_directory
 
 # Файлы из веб-систем часто без стилей — openpyxl об этом предупреждает, это не ошибка
@@ -266,6 +267,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
     no_price, no_dealer = 0, 0
     default_region_dealers: set[str] = set()
     unknown_models: set[str] = set()
+    untranslated: set[str] = set()
     offers: dict[tuple, dict] = {}  # (модель, артикул, дилер) → собранная строка
 
     data = df[df["Код запчасти"].map(_clean).notna()]  # итоговые строки внизу таблицы без артикула
@@ -301,6 +303,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         node = mapping.CATEGORIES.get((v.get("Тип запчасти") or "").upper(), mapping.OTHER_CATEGORY)
         updated = pd.to_datetime(v.get("Дата обновления"), format="%d.%m.%Y %H:%M:%S", errors="coerce")
 
+        if not has_translation(v["Название запчасти"]):
+            untranslated.add(v["Название запчасти"])
         known_names = set(mapping.MODEL_NAMES.values()) | {mapping.ALL_MODELS[0]}
         for model in _model_names(v.get("Автомобильная марка")):
             if model[0] not in known_names:
@@ -326,6 +330,11 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         warnings.append(ImportError_(0, "warn_default_region", {
             "n": len(default_region_dealers), "dealers": ", ".join(sorted(default_region_dealers)),
         }))
+    if untranslated:
+        sample = sorted(untranslated)[:10]
+        warnings.append(ImportError_(0, "warn_untranslated", {
+            "n": len(untranslated), "names": ", ".join(sample) + ("…" if len(untranslated) > 10 else ""),
+        }))
     if unknown_models:
         warnings.append(ImportError_(0, "warn_unknown_models", {"models": ", ".join(sorted(unknown_models))}))
     if not offers:
@@ -335,7 +344,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         ImportRow(
             row=o["row"], region_id=o["region_id"], dealer=o["dealer"],
             model=dict(zip(("ru", "en", "uz"), o["model"])), node=dict(zip(("ru", "en", "uz"), o["node"])),
-            part_name={"ru": o["name"], "en": o["name"], "uz": None},
+            part_name=translate(o["name"]),
             part_number=o["number"], price=o["price"], stock=o["qty"], delivery_days=None,
             description={"ru": None, "en": None, "uz": None}, photo=None,
         )
