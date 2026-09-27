@@ -84,3 +84,10 @@ def test_pagination_buttons():  # noqa
     nav = kb.inline_keyboard[0]
     assert [b.text for b in nav] == ["◀️", "2 / 3", "▶️"]
     assert CatalogCB.unpack(nav[2].callback_data).page == 3
+
+
+def test_duplicate_names_get_part_number():
+    parts = [Part(id=1, name_ru="FILTER", part_number="A1"), Part(id=2, name_ru="FILTER", part_number="B2"),
+             Part(id=3, name_ru="BELT", part_number="C3")]
+    kb = parts_keyboard(1, 2, parts, paginate(3, 1), "ru")
+    assert [row[0].text for row in kb.inline_keyboard[:3]] == ["FILTER · A1", "FILTER · B2", "BELT"]

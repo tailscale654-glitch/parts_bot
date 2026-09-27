@@ -45,13 +45,15 @@ def nodes_keyboard(model_id: int, nodes: list[Node], lang: str) -> InlineKeyboar
 
 
 def parts_keyboard(model_id: int, node_id: int, parts: list[Part], page: Page, lang: str) -> InlineKeyboardMarkup:
-    # Названия деталей длинные — по одной в ряд
+    # Названия деталей длинные — по одной в ряд.
+    # Если у разных артикулов одинаковое название — добавляем артикул, чтобы кнопки различались.
+    names = [localized_name(p, lang) for p in parts]
     rows = [
         [InlineKeyboardButton(
-            text=localized_name(p, lang),
+            text=f"{name} · {p.part_number}" if names.count(name) > 1 else name,
             callback_data=CatalogCB(action="part", part_id=p.id, page=page.number).pack(),
         )]
-        for p in parts
+        for p, name in zip(parts, names)
     ]
     if page.total_pages > 1:
         def page_btn(text: str, number: int) -> InlineKeyboardButton:

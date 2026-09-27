@@ -1,7 +1,9 @@
 """Таблицы базы данных."""
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from decimal import Decimal
+
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 SUPPORTED_LANGUAGES = ("ru", "en", "uz")
@@ -89,3 +91,36 @@ class Part(Base):
 
     model: Mapped[CarModel] = relationship(lazy="joined")
     node: Mapped[Node] = relationship(lazy="joined")
+
+
+class Dealer(Base):
+    """Дилер (точка продаж) в конкретном регионе."""
+
+    __tablename__ = "dealers"
+    __table_args__ = (UniqueConstraint("region_id", "name", name="uq_dealers_region_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    region_id: Mapped[int] = mapped_column(ForeignKey("regions.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(32))
+    address: Mapped[str | None] = mapped_column(String(512))
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+    region: Mapped[Region] = relationship(lazy="joined")
+
+
+class Stock(Base):
+    """Цена и остаток детали у конкретного дилера."""
+
+    __tablename__ = "stocks"
+    __table_args__ = (UniqueConstraint("part_id", "dealer_id", name="uq_stocks_part_dealer"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    part_id: Mapped[int] = mapped_column(ForeignKey("parts.id", ondelete="CASCADE"), index=True)
+    dealer_id: Mapped[int] = mapped_column(ForeignKey("dealers.id", ondelete="CASCADE"), index=True)
+    price: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    quantity: Mapped[int] = mapped_column(Integer, default=0)
+    delivery_days: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

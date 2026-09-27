@@ -7,7 +7,7 @@ from aiogram.types import ErrorEvent
 
 from app.config import load_settings
 from app.database.database import create_engine, create_session_factory
-from app.handlers import catalog, fallback, language, phone, profile, region, start
+from app.handlers import admin, catalog, fallback, language, phone, profile, region, start
 from app.middlewares.db import DbSessionMiddleware
 from app.services.localization import i18n
 
@@ -29,8 +29,10 @@ async def main() -> None:
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()
     dp["settings"] = settings
+    dp["session_factory"] = session_factory  # для импорта Excel (отдельная транзакция)
 
     dp.update.outer_middleware(DbSessionMiddleware(session_factory))
+    dp.include_router(admin.router)  # только для ADMIN_IDS
     dp.include_router(start.router)
     dp.include_router(language.router)
     dp.include_router(region.router)
