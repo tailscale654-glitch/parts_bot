@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import SUPPORTED_LANGUAGES, User
 from app.database.repositories.users import UserRepository
-from app.handlers.start import main_menu_text
+from app.handlers.start import main_menu_text, region_prompt
 from app.keyboards.language import language_keyboard
 from app.keyboards.main import main_menu_keyboard
 from app.services.localization import i18n
@@ -26,4 +26,9 @@ async def set_language(callback: CallbackQuery, user: User, session: AsyncSessio
         return
     await UserRepository(session).set_language(user, code)
     await callback.answer(i18n.t(code, "language_saved"))
+    if user.region_id is None:
+        # Первый запуск: после языка сразу просим выбрать регион
+        text, kb = await region_prompt(user, session)
+        await callback.message.edit_text(text, reply_markup=kb)
+        return
     await callback.message.edit_text(main_menu_text(user), reply_markup=main_menu_keyboard(code))

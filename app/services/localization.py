@@ -34,4 +34,10 @@ class Localization:
         return text.format(**kwargs) if kwargs else text
 
 
+def localized_name(obj, lang: str | None, field: str = "name") -> str:
+    """Название объекта из БД на нужном языке: name_en / name_uz, если пусто — name_ru."""
+    value = getattr(obj, f"{field}_{lang}", None) if lang else None
+    return value or getattr(obj, f"{field}_{DEFAULT_LANGUAGE}")
+
+
 i18n = Localization()

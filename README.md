@@ -1,8 +1,8 @@
-# JAC Parts Bot — Этап 1
+# JAC Parts Bot — Этап 2
 
 Telegram-бот каталога запчастей JAC. Сейчас готово: запуск в Docker, база PostgreSQL,
-команда `/start`, выбор языка (🇷🇺 / 🇬🇧 / 🇺🇿), сохранение языка и главное меню.
-Каталог, регионы и заказы — на следующих этапах (кнопки пока показывают «скоро появится»).
+команда `/start`, выбор языка (🇷🇺 / 🇬🇧 / 🇺🇿), выбор и смена региона, главное меню.
+Каталог и заказы — на следующих этапах (кнопки пока показывают «скоро появится»).
 
 ---
 
@@ -116,7 +116,8 @@ LOG_LEVEL=INFO
 
 - Несколько админов — через запятую: `ADMIN_IDS=123456789,987654321`.
 - `DATABASE_URL` оставьте пустым — бот соберёт его сам.
-- Пароль БД придумайте без символов `@ : / #` (они ломают адрес подключения). Сгенерировать можно так: `openssl rand -hex 16`.
+- Пароль БД может содержать любые символы. Сгенерировать надёжный можно так: `openssl rand -hex 16`.
+- ⚠️ Пароль запоминается базой при **первом** запуске. Если потом поменять его в `.env`, бот не сможет подключиться (`password authentication failed`).
 
 Сохранить в nano: `Ctrl+O`, `Enter`, выйти: `Ctrl+X`.
 
@@ -160,6 +161,7 @@ docker compose logs -f bot
 
 ```
 INFO  [alembic.runtime.migration] Running upgrade  -> 0001, create users table
+INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, regions table + users.region_id
 ... | INFO | jac_parts_bot | Bot @jac_parts_uz_bot started (long polling). Admins: 1
 ```
 
@@ -169,18 +171,38 @@ INFO  [alembic.runtime.migration] Running upgrade  -> 0001, create users table
 
 1. Откройте своего бота, нажмите **Start** (`/start`).
 2. Бот предложит 3 языка → выберите, например, **🇺🇿 O‘zbekcha**.
-3. Появится меню `🚗 JAC EHTIYOT QISMLARI` с кнопками на узбекском.
-4. Нажмите **🌐 Tilni o‘zgartirish** → **🇬🇧 English** — меню сразу станет английским.
-5. Снова отправьте `/start` — бот помнит язык и сразу показывает меню.
+3. Бот попросит выбрать регион → выберите, например, **Toshkent shahri**.
+4. Появится меню `🚗 JAC EHTIYOT QISMLARI` и строка `📍 Viloyat: Toshkent shahri`.
+5. Нажмите **🌐 Tilni o‘zgartirish** → **🇬🇧 English** — меню станет английским, регион сохранится.
+6. Нажмите **📍 Change region** → выберите другой регион — он обновится в меню.
+7. Снова отправьте `/start` — бот помнит язык и регион и сразу показывает меню.
 
 ---
+
+## Регионы
+
+Список регионов хранится в таблице `regions` (заполняется миграцией `0002`). Код менять не нужно.
+
+Посмотреть:
+
+```bash
+docker compose exec postgres psql -U jac_bot -d jac_parts -c "SELECT id, name_ru, active FROM regions ORDER BY sort_order;"
+```
+
+Скрыть регион из списка (например, id 12):
+
+```bash
+docker compose exec postgres psql -U jac_bot -d jac_parts -c "UPDATE regions SET active = false WHERE id = 12;"
+```
+
+Вернуть — то же самое с `active = true`. Бот подхватит изменения сразу, без перезапуска.
 
 ## Проверка PostgreSQL
 
 Посмотреть пользователей в базе:
 
 ```bash
-docker compose exec postgres psql -U jac_bot -d jac_parts -c "SELECT telegram_id, first_name, language FROM users;"
+docker compose exec postgres psql -U jac_bot -d jac_parts -c "SELECT telegram_id, first_name, language, region_id FROM users;"
 ```
 
 Вы должны увидеть себя и выбранный язык (`ru` / `en` / `uz`).
@@ -263,7 +285,7 @@ docker compose start bot
 
 ---
 
-## Структура проекта (этап 1)
+## Структура проекта
 
 ```
 jac-parts-bot/
@@ -272,15 +294,17 @@ jac-parts-bot/
 │   ├── config.py               # чтение .env
 │   ├── handlers/
 │   │   ├── start.py            # /start, главное меню
-│   │   └── language.py         # выбор и смена языка
+│   │   ├── language.py         # выбор и смена языка
+│   │   └── region.py           # выбор и смена региона
 │   ├── keyboards/
 │   │   ├── main.py             # кнопки главного меню
-│   │   └── language.py         # кнопки выбора языка
+│   │   ├── language.py         # кнопки выбора языка
+│   │   └── region.py           # кнопки выбора региона
 │   ├── middlewares/db.py       # сессия БД + пользователь для каждого сообщения
 │   ├── database/
 │   │   ├── database.py         # подключение к PostgreSQL
-│   │   ├── models.py           # таблица users
-│   │   └── repositories/users.py
+│   │   ├── models.py           # таблицы users, regions
+│   │   └── repositories/       # users.py, regions.py
 │   ├── services/localization.py
 │   └── locales/ru.json, en.json, uz.json   # все тексты бота
 ├── migrations/                 # Alembic: изменения структуры базы
@@ -299,4 +323,4 @@ jac-parts-bot/
 docker compose run --rm --user root bot sh -c "pip install -q -r requirements-dev.txt && pytest -q"
 ```
 
-Ожидаемо: `9 passed`.
+Ожидаемо: `15 passed`.

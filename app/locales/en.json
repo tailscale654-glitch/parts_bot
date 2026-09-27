@@ -12,5 +12,9 @@
   "btn_main_menu": "🏠 Main menu",
   "coming_soon": "🛠 This section is coming soon.",
   "contact_manager_text": "📞 Write to us and a manager will reply shortly.",
-  "error_generic": "⚠️ Something went wrong. Please try again or press /start."
+  "error_generic": "⚠️ Something went wrong. Please try again or press /start.",
+  "choose_region": "📍 Choose your region:",
+  "region_saved": "✅ Region saved: {region}",
+  "btn_back": "◀️ Back",
+  "region_unavailable": "⚠️ This region is unavailable. Please choose another one."
 }

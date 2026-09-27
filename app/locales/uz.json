@@ -12,5 +12,9 @@
   "btn_main_menu": "🏠 Bosh menyu",
   "coming_soon": "🛠 Bu bo‘lim tez orada paydo bo‘ladi.",
   "contact_manager_text": "📞 Bizga yozing, menejer tez orada javob beradi.",
-  "error_generic": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring yoki /start bosing."
+  "error_generic": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring yoki /start bosing.",
+  "choose_region": "📍 Viloyatni tanlang:",
+  "region_saved": "✅ Viloyat saqlandi: {region}",
+  "btn_back": "◀️ Orqaga",
+  "region_unavailable": "⚠️ Bu viloyat mavjud emas. Boshqasini tanlang."
 }

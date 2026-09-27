@@ -1,5 +1,6 @@
 """Настройки бота. Все секреты читаются только из .env / переменных окружения."""
 import os
+from urllib.parse import quote
 from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
@@ -20,11 +21,12 @@ def _build_database_url() -> str:
     url = os.getenv("DATABASE_URL", "").strip()
     if url:
         return url
-    user = os.getenv("POSTGRES_USER", "jac_bot")
-    password = os.getenv("POSTGRES_PASSWORD", "")
-    host = os.getenv("POSTGRES_HOST", "postgres")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    db = os.getenv("POSTGRES_DB", "jac_parts")
+    # quote() экранирует спецсимволы (@ : / # ! и др.), иначе пароль ломает адрес
+    user = quote(os.getenv("POSTGRES_USER", "jac_bot").strip(), safe="")
+    password = quote(os.getenv("POSTGRES_PASSWORD", "").strip(), safe="")
+    host = os.getenv("POSTGRES_HOST", "postgres").strip()
+    port = os.getenv("POSTGRES_PORT", "5432").strip()
+    db = os.getenv("POSTGRES_DB", "jac_parts").strip()
     return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
 
 
