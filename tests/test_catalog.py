@@ -68,9 +68,9 @@ async def test_part_card_localized_with_fallback(session):
     session.add(part)
     await session.commit()
     uz = part_card_text(part, "uz")
-    assert "ОПОРА ДВИГАТЕЛЯ" in uz and "Uzel: Dvigatel" in uz and "Artikul: 101001" in uz
+    assert "ОПОРА ДВИГАТЕЛЯ" in uz and "Kategoriya: Dvigatel" in uz and "Artikul: 101001" in uz
     en = part_card_text(part, "en")
-    assert "ENGINE MOUNT" in en and "System: Engine" in en
+    assert "ENGINE MOUNT" in en and "Category: Engine" in en
 
 
 def test_callback_data_fits_telegram_limit():
@@ -78,7 +78,7 @@ def test_callback_data_fits_telegram_limit():
     assert len(data.encode()) <= 64
 
 
-def test_pagination_buttons():
+def test_pagination_buttons():  # noqa
     parts = []
     kb = parts_keyboard(1, 2, parts, paginate(20, 2), "ru")
     nav = kb.inline_keyboard[0]

@@ -13,35 +13,68 @@ from app.keyboards.catalog import (
     part_card_keyboard,
     parts_keyboard,
 )
-from app.keyboards.main import back_to_menu_keyboard
+from app.keyboards.phone import phone_keyboard
 from app.services.catalog import PAGE_SIZE, paginate, part_card_text
 from app.services.localization import i18n, localized_name
 
 router = Router(name="catalog")
 
 
-async def _show(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup) -> None:
+async def _show(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None, photo: str | None = None) -> None:
+    """Показать экран каталога на месте старого сообщения.
+    Текст меняем через edit; если нужно фото (или было фото) — удаляем и отправляем заново,
+    потому что Telegram не умеет превращать текстовое сообщение в фото и обратно."""
+    message = callback.message
+    await callback.answer()
+    if photo:
+        try:
+            await message.answer_photo(photo, caption=text[:1024], reply_markup=kb)
+            await _safe_delete(message)
+            return
+        except TelegramBadRequest:
+            pass  # битая ссылка на фото — показываем карточку без фото
+    if photo or message.photo:
+        await message.answer(text, reply_markup=kb)
+        await _safe_delete(message)
+        return
     try:
-        await callback.message.edit_text(text, reply_markup=kb)
+        await message.edit_text(text, reply_markup=kb)
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e):  # повторное нажатие той же кнопки — не ошибка
             raise
-    await callback.answer()
+
+
+async def _safe_delete(message) -> None:
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass  # сообщение уже удалено или слишком старое (>48 ч)
 
 
 async def _unavailable(callback: CallbackQuery, lang: str) -> None:
     await callback.answer(i18n.t(lang, "item_unavailable"), show_alert=True)
 
 
-@router.callback_query(F.data == "menu:catalog")
-@router.callback_query(CatalogCB.filter(F.action == "models"))
-async def show_models(callback: CallbackQuery, user: User, session: AsyncSession) -> None:
+async def models_view(user: User, session: AsyncSession) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Первый экран каталога — список моделей."""
     lang = user.language
     models = await CatalogRepository(session).list_models(lang)
     if not models:
-        await _show(callback, i18n.t(lang, "catalog_empty"), back_to_menu_keyboard(lang))
+        return i18n.t(lang, "catalog_empty"), None
+    return i18n.t(lang, "choose_model"), models_keyboard(models, lang)
+
+
+@router.callback_query(F.data == "menu:catalog")
+@router.callback_query(CatalogCB.filter(F.action == "models"))
+async def show_models(callback: CallbackQuery, user: User, session: AsyncSession) -> None:
+    if not user.phone:  # каталог — только после регистрации с номером телефона
+        await callback.answer()
+        await callback.message.answer(
+            i18n.t(user.language, "ask_phone"), reply_markup=phone_keyboard(user.language)
+        )
         return
-    await _show(callback, i18n.t(lang, "choose_model"), models_keyboard(models, lang))
+    text, kb = await models_view(user, session)
+    await _show(callback, text, kb)
 
 
 @router.callback_query(CatalogCB.filter(F.action == "nodes"))
@@ -80,7 +113,7 @@ async def show_part(callback: CallbackQuery, callback_data: CatalogCB, user: Use
     if part is None:
         await _unavailable(callback, lang)
         return
-    await _show(callback, part_card_text(part, lang), part_card_keyboard(part, callback_data.page, lang))
+    await _show(callback, part_card_text(part, lang), part_card_keyboard(part, callback_data.page, lang), photo=part.photo)
 
 
 @router.callback_query(CatalogCB.filter(F.action == "noop"))

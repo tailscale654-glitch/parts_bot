@@ -43,3 +43,8 @@ class UserRepository:
         user.region = region
         await self.session.commit()
         return user
+
+    async def set_phone(self, user: User, phone: str) -> User:
+        user.phone = phone
+        await self.session.commit()
+        return user

@@ -10,5 +10,5 @@ def region_keyboard(regions: list[Region], lang: str, with_back: bool = False) -
         for r in regions
     ]
     if with_back:  # при смене региона можно вернуться в меню, не выбирая
-        rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_back"), callback_data="menu:home")])
+        rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_back"), callback_data="profile:show")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

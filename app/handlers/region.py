@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.database.repositories.regions import RegionRepository
 from app.database.repositories.users import UserRepository
-from app.handlers.start import main_menu_text, region_prompt
-from app.keyboards.main import main_menu_keyboard
+from app.handlers.start import profile_view, region_prompt
+from app.keyboards.phone import phone_keyboard
 from app.services.localization import i18n, localized_name
 
 router = Router(name="region")
@@ -27,5 +27,12 @@ async def set_region(callback: CallbackQuery, user: User, session: AsyncSession)
         await callback.answer(i18n.t(user.language, "region_unavailable"), show_alert=True)
         return
     await UserRepository(session).set_region(user, region)
-    await callback.answer(i18n.t(user.language, "region_saved", region=localized_name(region, user.language)))
-    await callback.message.edit_text(main_menu_text(user), reply_markup=main_menu_keyboard(user.language))
+    saved = i18n.t(user.language, "region_saved", region=localized_name(region, user.language))
+    await callback.answer()
+    if not user.phone:
+        # Регистрация: после региона просим телефон (кнопка «Отправить номер»)
+        await callback.message.edit_text(saved)
+        await callback.message.answer(i18n.t(user.language, "ask_phone"), reply_markup=phone_keyboard(user.language))
+        return
+    text, kb = profile_view(user)  # регион меняют из профиля — туда и возвращаемся
+    await callback.message.edit_text(f"{saved}\n\n{text}", reply_markup=kb)

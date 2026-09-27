@@ -15,9 +15,9 @@ def test_all_locales_have_same_keys():
 
 
 def test_translation_per_language():
-    assert i18n.t("ru", "btn_catalog") == "🚗 Каталог"
-    assert i18n.t("en", "btn_catalog") == "🚗 Catalog"
-    assert i18n.t("uz", "btn_catalog") == "🚗 Katalog"
+    assert i18n.t("ru", "btn_catalog") == "🛍 Каталог"
+    assert i18n.t("en", "btn_catalog") == "🛍 Catalog"
+    assert i18n.t("uz", "btn_catalog") == "🛍 Katalog"
 
 
 def test_fallback_to_russian(tmp_path):
