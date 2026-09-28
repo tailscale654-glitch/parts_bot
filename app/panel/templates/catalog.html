@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Каталог — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Каталог</h1>
+<div class="kpis">
+  <div class="kpi"><div class="l">Деталей в боте</div><div class="v">{{ summary.parts_active }}</div><div class="s">скрыто: {{ summary.parts_hidden }}</div></div>
+  <div class="kpi"><div class="l">Предложений в наличии</div><div class="v">{{ summary.offers_in_stock }}</div><div class="s">у {{ summary.dealers_with_stock }} дилеров</div></div>
+  <div class="kpi"><div class="l">Без перевода</div><div class="v">{{ untranslated }}</div>
+    <div class="s">{% if untranslated %}<a href="/catalog?show=untranslated">перевести →</a>{% else %}всё переведено{% endif %}</div></div>
+</div>
+<div class="tabs">
+  {% for key, label in [('', 'В боте'), ('untranslated', 'Без перевода'), ('hidden', 'Скрытые'), ('all', 'Все')] %}
+  <a class="{{ 'on' if show == key }}" href="/catalog?{{ urlencode(dict(query, show=key, page=1)) }}">{{ label }}</a>
+  {% endfor %}
+</div>
+<form class="filters" method="get" action="/catalog">
+  <input type="hidden" name="show" value="{{ show }}">
+  <label>Поиск<input name="q" value="{{ q }}" placeholder="артикул или название (RU/UZ/EN)" size="32"></label>
+  <label>Модель<select name="model_id"><option value="">Все</option>
+    {% for m in models %}<option value="{{ m.id }}" {{ 'selected' if model_id == m.id }}>{{ m.name_ru }}</option>{% endfor %}</select></label>
+  <label>Категория<select name="node_id"><option value="">Все</option>
+    {% for n in nodes %}<option value="{{ n.id }}" {{ 'selected' if node_id == n.id }}>{{ n.name_ru }}</option>{% endfor %}</select></label>
+  <button class="btn primary">Найти</button>
+  <a class="btn" href="/catalog?show={{ show }}">Сбросить</a>
+</form>
+<p class="muted">Найдено: {{ total }}</p>
+{% set back = '/catalog?' ~ urlencode(dict(query, page=page.number)) %}
+<div class="tablewrap"><table>
+  <tr><th>Артикул</th><th>Название (RU)</th><th>Название (UZ)</th><th>Модель</th><th>Категория</th><th class="num">Дилеров</th><th class="num">Штук</th><th class="num">Цена от</th></tr>
+  {% for x in lines %}{% set p = x.part %}
+  <tr>
+    <td><a href="/catalog/{{ p.id }}?{{ urlencode({'back': back}) }}">{{ p.part_number }}</a>{% if not p.active %}<br><span class="st">скрыта</span>{% endif %}</td>
+    <td>{{ p.name_ru }}{% if p.name_en and p.name_en != p.name_ru %}<br><span class="muted">{{ p.name_en }}</span>{% endif %}</td>
+    <td>{{ p.name_uz or '—' }}</td>
+    <td>{{ p.model.name_ru }}</td>
+    <td>{{ p.node.name_ru }}</td>
+    <td class="num">{{ x.offers }}</td>
+    <td class="num">{{ x.quantity }}</td>
+    <td class="num">{{ money(x.min_price) if x.min_price is not none else '—' }}</td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">Ничего не найдено.</td></tr>{% endfor %}
+</table></div>
+{% if page.total_pages > 1 %}
+<div class="pager">
+  {% if page.has_prev %}<a class="btn small" href="/catalog?{{ urlencode(dict(query, page=page.number - 1)) }}">◀ Назад</a>{% endif %}
+  <span class="muted">страница {{ page.number }} из {{ page.total_pages }}</span>
+  {% if page.has_next %}<a class="btn small" href="/catalog?{{ urlencode(dict(query, page=page.number + 1)) }}">Вперёд ▶</a>{% endif %}
+</div>
+{% endif %}
+<p class="muted">Цены и остатки меняются только загрузкой Excel («📥 Загрузка Excel»). Здесь можно исправить названия на русском и узбекском.</p>
+{% endblock %}

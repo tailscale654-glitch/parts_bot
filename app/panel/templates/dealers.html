@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Дилеры — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Дилеры</h1>
+<form class="filters" method="get" action="/dealers">
+  <label>Поиск<input name="q" value="{{ q }}" placeholder="название, код, телефон, адрес" size="30"></label>
+  <label>Регион<select name="region_id"><option value="">Все</option>
+    {% for r in regions %}<option value="{{ r.id }}" {{ 'selected' if region_id == r.id }}>{{ localized(r) }}</option>{% endfor %}</select></label>
+  <label>Показать<select name="state">
+    <option value="">Все</option><option value="on" {{ 'selected' if state == 'on' }}>Работают</option>
+    <option value="off" {{ 'selected' if state == 'off' }}>Выключены / нет в выгрузке</option></select></label>
+  <button class="btn primary">Найти</button>
+  <a class="btn" href="/dealers">Сбросить</a>
+</form>
+<p class="muted">Найдено: {{ lines|length }}</p>
+<div class="tablewrap"><table>
+  <tr><th>Дилер</th><th>Регион</th><th>Телефон</th><th>Состояние</th><th class="num">В наличии</th><th class="num">Заказы</th><th class="num">Открытые</th><th class="num">Сотрудники</th></tr>
+  {% for x in lines %}{% set d = x.dealer %}
+  <tr>
+    <td><a href="/dealers/{{ d.id }}">{{ d.name }}</a>{% if d.code %}<br><span class="muted">код {{ d.code }}</span>{% endif %}</td>
+    <td>{{ localized(d.region) }}</td>
+    <td>{{ d.phone or '—' }}</td>
+    <td>{% if not d.enabled %}<span class="st st-CANCELLED">выключен</span>
+        {% elif not d.active %}<span class="st">нет в выгрузке</span>
+        {% else %}<span class="st st-COMPLETED">работает</span>{% endif %}</td>
+    <td class="num">{{ x.offers }}</td>
+    <td class="num">{{ x.orders }}</td>
+    <td class="num">{% if x.open_orders %}<a href="/orders?tab=work&dealer_id={{ d.id }}"><b>{{ x.open_orders }}</b></a>{% else %}0{% endif %}</td>
+    <td class="num">{{ x.staff if x.staff else '⚠️ 0' }}</td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">Ничего не найдено.</td></tr>{% endfor %}
+</table></div>
+<p class="muted">⚠️ 0 сотрудников — заказы этого дилера получают только администраторы. Откройте дилера и создайте приглашение.</p>
+{% endblock %}

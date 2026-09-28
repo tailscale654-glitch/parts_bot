@@ -244,7 +244,7 @@ def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
 
 
 def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int,
-                       known_dealers: dict[str, int] | None = None):
+                       known_dealers: dict[str, int] | None = None, translations: dict | None = None):
     """Складская выгрузка → строки каталога. Неподходящие строки пропускаются с предупреждением.
     known_dealers: ключ дилера → регион из справочника дилеров (он главнее import_mapping.py)."""
     known_dealers = known_dealers or {}
@@ -304,7 +304,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         node = mapping.CATEGORIES.get((v.get("Тип запчасти") or "").upper(), mapping.OTHER_CATEGORY)
         updated = pd.to_datetime(v.get("Дата обновления"), format="%d.%m.%Y %H:%M:%S", errors="coerce")
 
-        if not has_translation(v["Название запчасти"]):
+        if not has_translation(v["Название запчасти"], translations):
             untranslated.add(v["Название запчасти"])
         known_names = set(mapping.MODEL_NAMES.values()) | {mapping.ALL_MODELS[0]}
         for model in _model_names(v.get("Автомобильная марка")):
@@ -345,7 +345,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         ImportRow(
             row=o["row"], region_id=o["region_id"], dealer=o["dealer"],
             model=dict(zip(("ru", "en", "uz"), o["model"])), node=dict(zip(("ru", "en", "uz"), o["node"])),
-            part_name=translate(o["name"]),
+            part_name=translate(o["name"], translations),
             part_number=o["number"], price=o["price"], stock=o["qty"], delivery_days=None,
             description={"ru": None, "en": None, "uz": None}, photo=None,
         )
@@ -354,7 +354,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
     return rows, errors, warnings
 
 
-def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int] | None = None):
+def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int] | None = None,
+                 translations: dict | None = None):
     """Определяем формат файла сами: справочник дилеров, складская выгрузка или наш шаблон.
     Возвращает (строки, ошибки, предупреждения, формат)."""
     if is_directory(path):
@@ -362,7 +363,8 @@ def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int
         return rows, errors, [], "directory"
     found = _find_warehouse_header(path)
     if found:
-        rows, errors, warnings = validate_warehouse(path, regions, *found, known_dealers=known_dealers)
+        rows, errors, warnings = validate_warehouse(path, regions, *found, known_dealers=known_dealers,
+                                                    translations=translations)
         return rows, errors, warnings, "warehouse"
     rows, errors = validate_file(path, regions)
     return rows, errors, [], "template"

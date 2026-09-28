@@ -7,13 +7,13 @@ from aiogram import Bot, F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database.models import Dealer, User
-from app.database.repositories.regions import RegionRepository
-from app.services.dealers import DirectoryStats, apply_directory
-from app.services.excel_import import MAX_FILE_MB, ImportError_, ImportStats, apply_import, validate_any
+from app.database.models import User
+from app.services.excel_import import MAX_FILE_MB
+from app.services.import_flow import (  # noqa: F401 — known_dealers и др. раньше жили здесь
+    dry_run, errors_text, known_dealers, preview_text, run_import, stats_text, validate_path,
+)
 from app.services.excel_template import build_template
 from app.services.localization import i18n
 from app.states.admin import ImportStates
@@ -25,7 +25,6 @@ router.message.filter(IsAdmin())
 router.callback_query.filter(IsAdmin())
 
 IMPORT_DIR = Path(tempfile.gettempdir()) / "jac_imports"
-MAX_ERRORS_SHOWN = 20
 
 
 def confirm_keyboard(lang: str) -> InlineKeyboardMarkup:
@@ -33,42 +32,6 @@ def confirm_keyboard(lang: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=i18n.t(lang, "btn_apply"), callback_data="imp:apply"),
         InlineKeyboardButton(text=i18n.t(lang, "btn_cancel"), callback_data="imp:cancel"),
     ]])
-
-
-def errors_text(errors: list[ImportError_], lang: str) -> str:
-    lines = [i18n.t(lang, "import_failed_title"), ""]
-    for e in errors[:MAX_ERRORS_SHOWN]:
-        text = i18n.t(lang, e.key, **e.params)
-        lines.append(i18n.t(lang, "import_row", row=e.row, error=text) if e.row else f"• {text}")
-    if len(errors) > MAX_ERRORS_SHOWN:
-        lines.append(i18n.t(lang, "import_more_errors", n=len(errors) - MAX_ERRORS_SHOWN))
-    lines += ["", i18n.t(lang, "import_fix_hint")]
-    return "\n".join(lines)[:4000]  # лимит Telegram — 4096 символов
-
-
-async def known_dealers(session: AsyncSession) -> dict[str, int]:
-    """Дилеры из справочника: ключ названия → регион."""
-    rows = await session.execute(select(Dealer.name_key, Dealer.region_id).where(Dealer.in_directory.is_(True)))
-    return dict(rows.all())
-
-
-async def run_import(db: AsyncSession, rows, fmt: str) -> ImportStats | DirectoryStats:
-    return await (apply_directory(db, rows) if fmt == "directory" else apply_import(db, rows))
-
-
-def stats_text(key: str, stats, fmt: str, lang: str) -> str:
-    return i18n.t(lang, f"directory_{key}" if fmt == "directory" else f"import_{key}", **vars(stats))
-
-
-def preview_text(stats, warnings: list[ImportError_], fmt: str, lang: str) -> str:
-    lines = [i18n.t(lang, f"import_format_{fmt}"), "", stats_text("preview", stats, fmt, lang)]
-    if warnings:
-        lines += ["", i18n.t(lang, "import_warnings_title")]
-        for w in warnings[:MAX_ERRORS_SHOWN]:
-            text = i18n.t(lang, w.key, **w.params)
-            lines.append(i18n.t(lang, "import_row", row=w.row, error=text) if w.row else text)
-    lines += ["", i18n.t(lang, "import_confirm_question")]
-    return "\n".join(lines)[:4000]
 
 
 def _remove(path: str | None) -> None:
@@ -121,20 +84,14 @@ async def got_file(
     path = IMPORT_DIR / f"{message.from_user.id}.xlsx"
     await bot.download(doc, destination=path)
 
-    regions = await RegionRepository(session).list_active()
-    rows, errors, warnings, fmt = validate_any(path, regions, await known_dealers(session))
+    rows, errors, warnings, fmt = await validate_path(session, path)
     if errors:
         _remove(str(path))
         await state.set_state(ImportStates.waiting_file)
         await status.edit_text(errors_text(errors, lang))
         return
 
-    # Пробный прогон: считаем, что изменится, и откатываем — база не меняется
-    async with session_factory() as dry:
-        try:
-            stats = await run_import(dry, rows, fmt)
-        finally:
-            await dry.rollback()
+    stats = await dry_run(session_factory, rows, fmt)  # пробный прогон — база не меняется
 
     await state.set_state(ImportStates.confirm)
     await state.update_data(path=str(path))
@@ -154,9 +111,8 @@ async def apply(
         await callback.message.edit_text(i18n.t(lang, "import_expired"))
         return
 
-    regions = await RegionRepository(session).list_active()
     # проверяем ещё раз: регионы и справочник могли измениться
-    rows, errors, _, fmt = validate_any(Path(path), regions, await known_dealers(session))
+    rows, errors, _, fmt = await validate_path(session, Path(path))
     if errors:
         _remove(path)
         await callback.message.edit_text(errors_text(errors, lang))

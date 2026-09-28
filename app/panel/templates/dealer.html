@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ dealer.name }} — {{ brand }}{% endblock %}
+{% block content %}
+<p><a href="/dealers">← Все дилеры</a></p>
+<h1>{{ dealer.name }}</h1>
+<div class="kpis">
+  <div class="kpi"><div class="l">Состояние</div><div class="v">{% if not dealer.enabled %}⛔ Выключен{% elif not dealer.active %}Нет в выгрузке{% else %}✅ Работает{% endif %}</div>
+    <div class="s">{{ 'детали видны клиентам' if dealer.enabled and dealer.active else 'детали скрыты из бота' }}</div></div>
+  <div class="kpi"><div class="l">В наличии</div><div class="v">{{ line.offers if line else 0 }}</div><div class="s">позиций</div></div>
+  <div class="kpi"><div class="l">Заказы</div><div class="v">{{ counts['all'] }}</div><div class="s">новых {{ counts['new'] }} · в работе {{ counts['work'] }}</div></div>
+  <div class="kpi"><div class="l">Сотрудники в боте</div><div class="v">{{ staff|length }}</div><div class="s">получают заказы</div></div>
+</div>
+
+<div class="grid2">
+<div>
+  <div class="card"><b>Данные дилера</b>
+  {% if can('dealers.edit') %}
+    <form method="post" action="/dealers/{{ dealer.id }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Регион<select name="region_id">{% for r in regions %}<option value="{{ r.id }}" {{ 'selected' if dealer.region_id == r.id }}>{{ localized(r) }}</option>{% endfor %}</select></label>
+      <label>Телефон<input name="phone" value="{{ dealer.phone or '' }}" placeholder="+998 ..."></label>
+      <label>Адрес<input name="address" value="{{ dealer.address or '' }}"></label>
+      <div><button class="btn primary">Сохранить</button></div>
+    </form>
+    {% if dealer.in_directory %}<p class="muted">Дилер есть в справочнике дилеров: при следующей загрузке справочника телефон, адрес и регион снова возьмутся из файла.</p>{% endif %}
+  {% else %}
+    <p>Регион: {{ localized(dealer.region) }}<br>Телефон: {{ dealer.phone or '—' }}<br>Адрес: {{ dealer.address or '—' }}</p>
+  {% endif %}
+  {% if dealer.code %}<p class="muted">Код: {{ dealer.code }}</p>{% endif %}
+  </div>
+
+  <h2>Последние заказы</h2>
+  <div class="tablewrap"><table>
+    <tr><th>№</th><th>Дата</th><th>Статус</th><th>Клиент</th><th class="num">Сумма</th></tr>
+    {% for o in recent %}
+    <tr><td><a href="/orders/{{ o.id }}">{{ o.id }}</a></td><td>{{ fmt_date(o.created_at) }}</td>
+      <td><span class="st st-{{ o.status }}">{{ status_text(o.status) }}</span></td>
+      <td>{{ person_name(o.user) }}</td><td class="num">{{ money(o.total_amount) }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Заказов пока нет.</td></tr>{% endfor %}
+  </table></div>
+  {% if counts['all'] > recent|length %}<p><a href="/orders?dealer_id={{ dealer.id }}">Все заказы дилера →</a></p>{% endif %}
+</div>
+
+<div>
+  {% if can('dealers.edit') %}
+  <div class="card"><b>Включить / выключить</b>
+    <p class="muted">Выключенный дилер не показывается клиентам, новые заказы к нему не приходят. Уже открытые заказы остаются.</p>
+    <form method="post" action="/dealers/{{ dealer.id }}/enabled"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="enabled" value="{{ '0' if dealer.enabled else '1' }}">
+      <button class="btn {{ 'danger' if dealer.enabled }}">{{ '⛔ Выключить' if dealer.enabled else '✅ Включить' }}</button></form>
+  </div>
+  {% endif %}
+
+  <div class="card"><b>Сотрудники дилера в боте</b>
+    <p class="muted">Получают заказы этого дилера в Telegram, принимают их и переписываются с клиентами.</p>
+    {% for s in staff %}
+      <div class="person">{{ person_name(s.user) }}{% if s.user.phone %} · {{ s.user.phone }}{% endif %}
+        {% if can('dealers.edit') %}
+        <form method="post" action="/dealers/{{ dealer.id }}/staff/{{ s.id }}/remove" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn small danger">Убрать</button></form>{% endif %}
+      </div>
+    {% else %}<p>Пока никого — заказы получают только администраторы.</p>{% endfor %}
+    {% if can('dealers.edit') %}
+    <form method="post" action="/dealers/{{ dealer.id }}/invite" style="margin-top:10px"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn primary">➕ Ссылка-приглашение</button></form>
+    {% if invite_link %}
+    <div class="flash" style="margin-top:10px">Отправьте ссылку сотруднику дилера. Одноразовая, действует 7 дней.
+      <div class="copy" style="margin-top:6px"><input id="link" value="{{ invite_link }}" readonly>
+      <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('link').value);this.textContent='Скопировано'">Копировать</button></div>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+</div>
+{% endblock %}

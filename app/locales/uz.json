@@ -144,7 +144,7 @@
   "directory_applied": "✅ Dilerlar ma’lumotnomasi yangilandi\n\n➕ Yangi: {new}\n🔄 Yangilandi: {updated}\n⛔ Faol emas: {disabled}\n\nViloyat, manzil va telefonlar ehtiyot qism kartalarida ko‘rinadi.",
   "err_duplicate_dealer": "diler takrorlanadi ({other}-qatorda bor)",
   "warn_unknown_models": "⚠️ Noma’lum model kodlari (o‘zgarishsiz ko‘rsatiladi): {models}.\nNomlar app/services/import_mapping.py (MODEL_NAMES) da belgilanadi.",
-  "warn_untranslated": "🌐 Rus/o‘zbek tiliga tarjimasiz ({n}): {names}.\nUlar inglizcha ko‘rsatiladi. Tarjimalar app/data/part_names.json da.",
+  "warn_untranslated": "🌐 Rus/o‘zbek tiliga tarjimasiz ({n}): {names}.\nUlar inglizcha ko‘rsatiladi. Veb-panelda tarjima qilish mumkin: «Katalog» → «Tarjimasiz».",
   "status_NEW": "🟡 Yangi — tasdiqlash kutilmoqda",
   "status_CONFIRMED": "🔵 Tasdiqlangan",
   "status_READY": "🟠 Topshirishga tayyor",
@@ -311,5 +311,7 @@
   "web_ask_admin": "Sizda veb-panelga kirish yo‘q. Administratordan taklif so‘rang.",
   "panel_invite_ok": "✅ Siz JAC Motors Parts veb-paneliga qo‘shildingiz.",
   "admin_panel_joined": "🔔 {name} veb-panelga qo‘shildi. Rol: {role}.",
-  "panel_disabled_notice": "Veb-panelga kirishingiz administrator tomonidan o‘chirildi."
+  "panel_disabled_notice": "Veb-panelga kirishingiz administrator tomonidan o‘chirildi.",
+  "user_blocked": "⛔ Botdan foydalanish cheklangan. Agar bu xato bo‘lsa, JAC Motors bilan bog‘laning.",
+  "direct_message_header": "✉️ JAC Motors’dan xabar:"
 }

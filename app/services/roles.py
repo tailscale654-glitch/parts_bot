@@ -8,18 +8,20 @@ ROLES = {
 }
 ROLE_HINTS = {
     "admin": "всё, включая сотрудников и роли",
-    "manager": "заказы, дилеры, клиенты",
+    "manager": "заказы, дилеры, клиенты, каталог и загрузка Excel",
     "operator": "заказы: принять, отменить, ответить клиенту",
     "viewer": "только просмотр и статистика",
 }
 
+VIEW = {"orders.view", "dealers.view", "clients.view", "catalog.view"}
+MANAGE = VIEW | {"orders.edit", "dealers.edit", "clients.edit", "catalog.edit", "upload", "stats"}
+
 # Права: что можно делать
 PERMISSIONS = {
-    "admin": {"orders.view", "orders.edit", "dealers.view", "dealers.edit", "clients.view", "clients.edit",
-              "stats", "staff"},
-    "manager": {"orders.view", "orders.edit", "dealers.view", "dealers.edit", "clients.view", "clients.edit", "stats"},
-    "operator": {"orders.view", "orders.edit", "clients.view"},
-    "viewer": {"orders.view", "dealers.view", "clients.view", "stats"},
+    "admin": MANAGE | {"staff"},
+    "manager": MANAGE,
+    "operator": {"orders.view", "orders.edit", "clients.view", "catalog.view"},
+    "viewer": VIEW | {"stats"},
 }
 
 

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Загрузка Excel — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Загрузка Excel</h1>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+{% if step == 'choose' %}
+<div class="card">
+  <p>Подходит любой из трёх файлов — формат определится сам:</p>
+  <ul>
+    <li><b>Складская выгрузка</b> (остатки и цены у дилеров) — это <b>полный прайс</b>: детали, которых нет в файле, скроются из бота;</li>
+    <li><b>Справочник дилеров</b> (регион, телефон, адрес);</li>
+    <li><b>Шаблон бота</b> (скачать: /admin в боте → «Шаблон»).</li>
+  </ul>
+  <form method="post" action="/upload" enctype="multipart/form-data" class="filters">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Файл .xlsx (до {{ max_mb }} МБ)<input type="file" name="file" accept=".xlsx" required></label>
+    <button class="btn primary" onclick="this.textContent='⏳ Проверяю…'">Проверить</button>
+  </form>
+  <p class="muted">Сначала покажу, что изменится. База меняется только после кнопки «Применить».</p>
+</div>
+
+{% elif step == 'preview' %}
+<div class="card">
+  <p class="muted">Файл: {{ filename }}</p>
+  <pre class="report">{{ text }}</pre>
+  <form method="post" action="/upload/apply" class="row-actions" style="margin-top:14px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="token" value="{{ token }}">
+    <button class="btn primary" name="action" value="apply" onclick="this.textContent='⏳ Применяю…'">✅ Применить</button>
+    <button class="btn" name="action" value="cancel">Отмена</button>
+  </form>
+</div>
+
+{% elif step == 'errors' %}
+<div class="error"><pre class="report">{{ text }}</pre></div>
+<a class="btn" href="/upload">Загрузить другой файл</a>
+
+{% elif step == 'done' %}
+<div class="flash"><pre class="report">{{ text }}</pre></div>
+<a class="btn" href="/catalog">Открыть каталог</a> <a class="btn" href="/upload">Загрузить ещё</a>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Клиенты — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Клиенты</h1>
+<div class="tabs">
+  {% for key, label in [('', 'С телефоном'), ('buyers', 'С заказами'), ('blocked', 'Заблокированные'), ('all', 'Все, кто нажал /start')] %}
+  <a class="{{ 'on' if who == key }}" href="/clients?{{ urlencode(dict(query, who=key)) }}">{{ label }}</a>
+  {% endfor %}
+</div>
+<form class="filters" method="get" action="/clients">
+  <input type="hidden" name="who" value="{{ who }}">
+  <label>Поиск<input name="q" value="{{ q }}" placeholder="имя, @username, телефон" size="30"></label>
+  <button class="btn primary">Найти</button>
+  <a class="btn" href="/clients?who={{ who }}">Сбросить</a>
+</form>
+<p class="muted">Найдено: {{ total }}</p>
+<div class="tablewrap"><table>
+  <tr><th>Клиент</th><th>Телефон</th><th>Регион</th><th>Язык</th><th class="num">Заказов</th><th class="num">Сумма</th><th>Последний заказ</th><th>С нами с</th></tr>
+  {% for x in lines %}{% set u = x.user %}
+  <tr>
+    <td><a href="/clients/{{ u.id }}">{{ person_name(u) }}</a>{% if u.blocked %} <span class="st st-CANCELLED">заблокирован</span>{% endif %}
+      {% if u.username %}<br><span class="muted">@{{ u.username }}</span>{% endif %}</td>
+    <td>{{ u.phone or '—' }}</td>
+    <td>{{ localized(u.region) if u.region else '—' }}</td>
+    <td>{{ (u.language or '—')|upper }}</td>
+    <td class="num">{{ x.orders }}</td>
+    <td class="num">{{ money(x.spent) if x.orders else '—' }}</td>
+    <td>{{ fmt_date(x.last_order_at) if x.last_order_at else '—' }}</td>
+    <td>{{ fmt_date(u.created_at) }}</td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">Ничего не найдено.</td></tr>{% endfor %}
+</table></div>
+{% if page.total_pages > 1 %}
+<div class="pager">
+  {% if page.has_prev %}<a class="btn small" href="/clients?{{ urlencode(dict(query, page=page.number - 1)) }}">◀ Назад</a>{% endif %}
+  <span class="muted">страница {{ page.number }} из {{ page.total_pages }}</span>
+  {% if page.has_next %}<a class="btn small" href="/clients?{{ urlencode(dict(query, page=page.number + 1)) }}">Вперёд ▶</a>{% endif %}
+</div>
+{% endif %}
+<p class="muted">Сумма — без отменённых заказов.</p>
+{% endblock %}

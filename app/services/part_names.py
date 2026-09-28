@@ -1,8 +1,10 @@
 """Переводы названий деталей (в складской выгрузке они только на английском).
 
 Словарь: app/data/part_names.json — «английское название» → {"ru": ..., "uz": ...}.
+Поверх словаря — переводы из веб-панели (таблица part_translations, «Каталог → перевести»):
+они главнее JSON и не теряются при новой загрузке. Их передают сюда как overrides:
+{ключ названия: {"ru": ..., "uz": ...}}.
 Новое название без перевода покажется по-английски, а бот при загрузке предупредит.
-Чтобы добавить перевод — допишите строку в JSON по образцу и загрузите выгрузку заново.
 """
 import json
 from functools import lru_cache
@@ -21,11 +23,22 @@ def _dictionary() -> dict[str, dict[str, str]]:
         return {part_name_key(k): v for k, v in json.load(f).items()}
 
 
-def translate(english: str) -> dict[str, str | None]:
+Overrides = dict[str, dict[str, str | None]]
+
+
+def _lookup(english: str, overrides: Overrides | None) -> dict[str, str | None]:
+    key = part_name_key(english)
+    base = _dictionary().get(key, {})
+    extra = (overrides or {}).get(key, {})
+    return {lang: extra.get(lang) or base.get(lang) for lang in ("ru", "uz")}
+
+
+def translate(english: str, overrides: Overrides | None = None) -> dict[str, str | None]:
     """→ {"ru": ..., "en": ..., "uz": ...}. Без перевода ru = английское название (uz покажет его же)."""
-    tr = _dictionary().get(part_name_key(english), {})
-    return {"ru": tr.get("ru") or english, "en": english, "uz": tr.get("uz")}
+    tr = _lookup(english, overrides)
+    return {"ru": tr["ru"] or english, "en": english, "uz": tr["uz"]}
 
 
-def has_translation(english: str) -> bool:
-    return part_name_key(english) in _dictionary()
+def has_translation(english: str, overrides: Overrides | None = None) -> bool:
+    tr = _lookup(english, overrides)
+    return bool(tr["ru"] or tr["uz"])

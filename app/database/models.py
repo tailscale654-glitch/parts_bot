@@ -39,6 +39,8 @@ class User(Base):
     # None = пользователь ещё не выбрал язык / регион
     language: Mapped[str | None] = mapped_column(String(2))
     region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.id", ondelete="SET NULL"))
+    # заблокирован в веб-панели: бот ему не отвечает (кроме администраторов из ADMIN_IDS)
+    blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -272,3 +274,20 @@ class PanelInvite(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+
+class PartTranslation(Base):
+    """Перевод названия детали, заданный в веб-панели. Главнее словаря app/data/part_names.json
+    и сохраняется при следующих загрузках складской выгрузки."""
+
+    __tablename__ = "part_translations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), unique=True)  # part_name_key(name_en)
+    name_en: Mapped[str] = mapped_column(String(255))
+    name_ru: Mapped[str | None] = mapped_column(String(255))
+    name_uz: Mapped[str | None] = mapped_column(String(255))
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

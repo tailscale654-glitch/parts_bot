@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ part.part_number }} — {{ brand }}{% endblock %}
+{% block content %}
+<p><a href="{{ back_url if back_url.startswith('/catalog') else '/catalog' }}">← Каталог</a></p>
+<h1>{{ part.name_ru }} <span class="muted">· {{ part.part_number }}</span></h1>
+<p>{{ part.model.name_ru }} · {{ part.node.name_ru }} · {% if part.active %}<span class="st st-COMPLETED">в боте</span>{% else %}<span class="st">скрыта — нет в последнем файле</span>{% endif %}</p>
+<div class="grid2">
+<div>
+  <h2>У дилеров</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Дилер</th><th>Регион</th><th class="num">Цена</th><th class="num">Остаток</th><th class="num">В заказах</th><th>Обновлено</th></tr>
+    {% for o in offers %}{% set s = o.stock %}
+    <tr><td><a href="/dealers/{{ s.dealer.id }}">{{ s.dealer.name }}</a>{% if not (s.dealer.enabled and s.dealer.active) %} <span class="st">скрыт</span>{% endif %}</td>
+      <td>{{ localized(s.dealer.region) }}</td><td class="num">{{ money(s.price) }}</td>
+      <td class="num">{{ s.quantity if s.quantity else 'нет' }}</td><td class="num">{{ o.reserved or '' }}</td>
+      <td>{{ fmt_date(s.updated_at) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="muted">Ни у одного дилера.</td></tr>{% endfor %}
+  </table></div>
+  <p class="muted">«Остаток» — уже без штук в незакрытых заказах бота («В заказах»).</p>
+</div>
+<div>
+  <div class="card"><b>Название на языках</b>
+    {% if part.name_en %}<p class="muted">Английское (из выгрузки): <b>{{ part.name_en }}</b></p>{% endif %}
+    {% if can('catalog.edit') %}
+    <form method="post" action="/catalog/{{ part.id }}/translation" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>🇷🇺 Русский<input name="name_ru" value="{{ part.name_ru if part.name_ru != part.name_en else '' }}" placeholder="{{ part.name_en or '' }}" maxlength="255"></label>
+      <label>🇺🇿 Узбекский<input name="name_uz" value="{{ part.name_uz or '' }}" maxlength="255"></label>
+      <div><button class="btn primary">Сохранить</button>
+        {% if 'untranslated' in back_url %}<button class="btn" name="next_untranslated" value="1">Сохранить и следующую →</button>{% endif %}</div>
+    </form>
+    <p class="muted">{% if part.name_en %}Перевод применится ко всем деталям с этим английским названием ({{ same }} шт.) и сохранится при следующих загрузках Excel.{% if tr %} Последний раз изменён {{ fmt_date(tr.updated_at) }}.{% endif %}
+      {% else %}Название из шаблона бота: при следующей загрузке шаблона возьмётся из файла.{% endif %}
+      Пустое поле — клиенты увидят английское название.</p>
+    {% else %}
+    <p>🇷🇺 {{ part.name_ru }}<br>🇺🇿 {{ part.name_uz or '—' }}</p>
+    {% endif %}
+  </div>
+</div>
+</div>
+{% endblock %}

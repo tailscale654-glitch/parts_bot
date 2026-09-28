@@ -18,7 +18,7 @@ from urllib.parse import urlencode
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,15 +27,18 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import Settings, load_settings
 from app.database.database import create_engine, create_session_factory
-from app.database.models import OrderMessage, WebUser
+from app.database.models import Dealer, DealerStaff, OrderMessage, Part, Region, User, WebUser
 from app.database.repositories.admin import ORDER_FILTERS, AdminRepository
 from app.database.repositories.orders import TRANSITIONS, OrderRepository
 from app.database.repositories.panel import OrderFilters, PanelRepository
+from app.database.repositories.staff import StaffRepository
 from app.database.repositories.stats import StatsRepository, period_start
 from app.database.repositories.web_users import WebUserRepository
 from app.keyboards.orders import reply_keyboard
 from app.services import orders as orders_service
+from app.services import import_flow
 from app.services.catalog import money, paginate
+from app.services.excel_import import MAX_FILE_MB
 from app.services.localization import i18n, localized_name
 from app.services.notify import notify_status_change, person_name, send
 from app.services.orders import fmt_date, status_text
@@ -47,6 +50,7 @@ HERE = Path(__file__).resolve().parent
 LANG = "ru"  # язык панели
 BRAND = os.getenv("PANEL_NAME", "JAC Motors Parts")  # название в шапке, на входе и во вкладке браузера
 PAGE = 50
+UPLOAD_DIR = Path(os.getenv("PANEL_UPLOAD_DIR", "/tmp/jac_imports"))  # файлы до «Применить»
 STATUS_ORDER = ["CONFIRMED", "READY", "COMPLETED", "CANCELLED"]
 
 templates = Jinja2Templates(directory=HERE / "templates")
@@ -184,6 +188,26 @@ def parse_date(value: str | None) -> date | None:
 
 def parse_int(value: str | None) -> int | None:
     return int(value) if value and value.isdigit() else None
+
+
+async def bot_username(request: Request) -> str | None:
+    """Имя бота для ссылок-приглашений: BOT_USERNAME из .env, иначе спрашиваем у Telegram."""
+    username = os.getenv("BOT_USERNAME", "").lstrip("@")
+    if username:
+        return username
+    try:
+        return (await request.app.state.bot.me()).username
+    except TelegramAPIError as e:
+        logger.warning("Cannot get bot username: %s", e)
+        return None
+
+
+NO_BOT_NAME = ("Не удалось связаться с Telegram, чтобы узнать имя бота. "
+               "Проверьте интернет на сервере или укажите BOT_USERNAME в .env.")
+
+
+def upload_path(token: str) -> Path:
+    return UPLOAD_DIR / f"web_{token}.xlsx"
 
 
 # ---------- страницы ----------
@@ -339,14 +363,9 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         check_csrf(request, csrf)
         if role not in ROLES:
             raise HTTPException(400, "Неизвестная роль.")
-        username = os.getenv("BOT_USERNAME", "").lstrip("@")
+        username = await bot_username(request)
         if not username:
-            try:
-                username = (await request.app.state.bot.me()).username
-            except TelegramAPIError as e:
-                logger.warning("Cannot get bot username: %s", e)
-                return back("/staff", "Не удалось связаться с Telegram, чтобы узнать имя бота. "
-                                      "Проверьте интернет на сервере или укажите BOT_USERNAME в .env.")
+            return back("/staff", NO_BOT_NAME)
         token = await WebUserRepository(session).create_invite(role, web.user)
         link = f"https://t.me/{username}?start=staff_{token}"
         logger.info("Panel %s created invite for role %s", web.login, role)
@@ -400,6 +419,260 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             login=login, password=password, role=ROLES[person.role]), parse_mode="HTML")
         return back("/staff", "Новый пароль отправлен сотруднику в Telegram." if ok
                     else "Не удалось отправить: сотрудник заблокировал бота.")
+
+    # --- дилеры ---
+
+    @app.get("/dealers", response_class=HTMLResponse)
+    async def dealers(request: Request, web: WebUser = Depends(require("dealers.view")),
+                      session: AsyncSession = Depends(get_session)):
+        p, repo = request.query_params, PanelRepository(session)
+        q, region_id, state = (p.get("q") or "")[:100], parse_int(p.get("region_id")), p.get("state", "")
+        return render(request, "dealers.html", web, lines=await repo.dealer_lines(q, region_id, state),
+                      regions=await repo.regions(), q=q, region_id=region_id, state=state)
+
+    async def _dealer(session: AsyncSession, dealer_id: int) -> Dealer:
+        dealer = await session.get(Dealer, dealer_id)
+        if dealer is None:
+            raise HTTPException(404, "Дилер не найден.")
+        return dealer
+
+    @app.get("/dealers/{dealer_id}", response_class=HTMLResponse)
+    async def dealer_page(dealer_id: int, request: Request, web: WebUser = Depends(require("dealers.view")),
+                          session: AsyncSession = Depends(get_session)):
+        dealer = await _dealer(session, dealer_id)
+        repo = PanelRepository(session)
+        line = next((x for x in await repo.dealer_lines() if x.dealer.id == dealer.id), None)
+        recent, _ = await PanelRepository(session).orders(OrderFilters(dealer_id=dealer.id), orders_service.TIMEZONE, 0, 10)
+        return render(request, "dealer.html", web, dealer=dealer, line=line, regions=await repo.regions(),
+                      staff=await StaffRepository(session).staff_of(dealer.id), recent=recent,
+                      counts=await AdminRepository(session).order_counts(dealer_id=dealer.id),
+                      invite_link=request.query_params.get("link"))
+
+    @app.post("/dealers/{dealer_id}")
+    async def dealer_save(dealer_id: int, request: Request, phone: str = Form(""), address: str = Form(""),
+                          region_id: int = Form(...), csrf: str = Form(""),
+                          web: WebUser = Depends(require("dealers.edit")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        dealer = await _dealer(session, dealer_id)
+        if await session.get(Region, region_id) is None:
+            raise HTTPException(400, "Неизвестный регион.")
+        dealer.phone, dealer.address = phone.strip()[:32] or None, address.strip()[:512] or None
+        dealer.region_id = region_id
+        await session.commit()
+        logger.info("Panel %s edited dealer %s", web.login, dealer.id)
+        return back(f"/dealers/{dealer.id}", "Сохранено. Клиенты увидят новые данные сразу.")
+
+    @app.post("/dealers/{dealer_id}/enabled")
+    async def dealer_enabled(dealer_id: int, request: Request, enabled: str = Form(...), csrf: str = Form(""),
+                             web: WebUser = Depends(require("dealers.edit")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        dealer = await _dealer(session, dealer_id)
+        dealer.enabled = enabled == "1"
+        await session.commit()
+        logger.info("Panel %s set dealer %s enabled=%s", web.login, dealer.id, dealer.enabled)
+        return back(f"/dealers/{dealer.id}", "Дилер включён: его детали снова видны клиентам." if dealer.enabled
+                    else "Дилер выключен: его детали скрыты из бота. Открытые заказы остаются.")
+
+    @app.post("/dealers/{dealer_id}/invite")
+    async def dealer_invite(dealer_id: int, request: Request, csrf: str = Form(""),
+                            web: WebUser = Depends(require("dealers.edit")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        dealer = await _dealer(session, dealer_id)
+        username = await bot_username(request)
+        if not username:
+            return back(f"/dealers/{dealer.id}", NO_BOT_NAME)
+        token = await StaffRepository(session).create_invite(dealer.id)
+        logger.info("Panel %s created dealer invite for %s", web.login, dealer.id)
+        link = f"https://t.me/{username}?start=dealer_{token}"
+        return RedirectResponse(f"/dealers/{dealer.id}?{urlencode({'link': link})}", status_code=303)
+
+    @app.post("/dealers/{dealer_id}/staff/{staff_id}/remove")
+    async def dealer_staff_remove(dealer_id: int, staff_id: int, request: Request, csrf: str = Form(""),
+                                  web: WebUser = Depends(require("dealers.edit")),
+                                  session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        staff = await session.get(DealerStaff, staff_id)
+        if staff is None or staff.dealer_id != dealer_id:
+            raise HTTPException(404, "Сотрудник дилера не найден.")
+        name = person_name(staff.user)
+        await StaffRepository(session).remove(staff_id)
+        logger.info("Panel %s removed dealer staff %s from %s", web.login, staff_id, dealer_id)
+        return back(f"/dealers/{dealer_id}", f"{name} больше не получает заказы этого дилера.")
+
+    # --- клиенты ---
+
+    @app.get("/clients", response_class=HTMLResponse)
+    async def clients(request: Request, web: WebUser = Depends(require("clients.view")),
+                      session: AsyncSession = Depends(get_session)):
+        p, repo = request.query_params, PanelRepository(session)
+        q, who = (p.get("q") or "")[:100], p.get("who", "")
+        _, total = await repo.client_lines(q, who, 0, 1)
+        page = paginate(total, parse_int(p.get("page")) or 1, PAGE)
+        lines, total = await repo.client_lines(q, who, page.offset, PAGE)
+        query = {k: v for k, v in {"q": q, "who": who}.items() if v}
+        return render(request, "clients.html", web, lines=lines, total=total, page=page, q=q, who=who,
+                      query=query, urlencode=urlencode)
+
+    async def _client(session: AsyncSession, user_id: int) -> User:
+        user = await session.get(User, user_id)
+        if user is None:
+            raise HTTPException(404, "Клиент не найден.")
+        return user
+
+    @app.get("/clients/{user_id}", response_class=HTMLResponse)
+    async def client_page(user_id: int, request: Request, web: WebUser = Depends(require("clients.view")),
+                          session: AsyncSession = Depends(get_session)):
+        client = await _client(session, user_id)
+        lines, _ = await PanelRepository(session).client_lines(who="all", user_id=client.id)
+        orders_, total = await AdminRepository(session).orders_page("all", 0, 100, user_id=client.id)
+        staff_dealer_id = await StaffRepository(session).dealer_id_for(client)
+        staff_dealer = await session.get(Dealer, staff_dealer_id) if staff_dealer_id else None
+        line = lines[0] if lines else None
+        return render(request, "client.html", web, client=client, line=line, orders=orders_, total=total,
+                      staff_dealer=staff_dealer, is_admin=client.telegram_id in request.app.state.settings.admin_ids)
+
+    @app.post("/clients/{user_id}/message")
+    async def client_message(user_id: int, request: Request, text: str = Form(""), csrf: str = Form(""),
+                             web: WebUser = Depends(require("clients.edit")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        client = await _client(session, user_id)
+        text = text.strip()[:3500]
+        if not text:
+            return RedirectResponse(f"/clients/{client.id}", status_code=303)
+        header = i18n.t(client.language, "direct_message_header")
+        ok = await send(request.app.state.bot, client.telegram_id, f"{header}\n\n{text}")
+        logger.info("Panel %s messaged user %s (ok=%s)", web.login, client.id, ok)
+        return back(f"/clients/{client.id}", "Сообщение отправлено в Telegram." if ok
+                    else "Не удалось доставить: клиент заблокировал бота или ни разу его не запускал.")
+
+    @app.post("/clients/{user_id}/blocked")
+    async def client_blocked(user_id: int, request: Request, blocked: str = Form(...), csrf: str = Form(""),
+                             web: WebUser = Depends(require("clients.edit")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        client = await _client(session, user_id)
+        if client.telegram_id in request.app.state.settings.admin_ids:
+            raise HTTPException(400, "Это администратор из ADMIN_IDS (.env) — его заблокировать нельзя.")
+        if client.id == web.user.id:
+            raise HTTPException(400, "Нельзя заблокировать самого себя.")
+        await PanelRepository(session).set_blocked(client, blocked == "1")
+        logger.info("Panel %s set user %s blocked=%s", web.login, client.id, client.blocked)
+        return back(f"/clients/{client.id}", "Клиент заблокирован: бот больше не будет ему отвечать." if client.blocked
+                    else "Клиент разблокирован.")
+
+    # --- каталог ---
+
+    @app.get("/catalog", response_class=HTMLResponse)
+    async def catalog(request: Request, web: WebUser = Depends(require("catalog.view")),
+                      session: AsyncSession = Depends(get_session)):
+        p, repo = request.query_params, PanelRepository(session)
+        q, show = (p.get("q") or "")[:100], p.get("show", "")
+        model_id, node_id = parse_int(p.get("model_id")), parse_int(p.get("node_id"))
+        _, total = await repo.part_lines(q, model_id, node_id, show, 0, 1)
+        page = paginate(total, parse_int(p.get("page")) or 1, PAGE)
+        lines, total = await repo.part_lines(q, model_id, node_id, show, page.offset, PAGE)
+        query = {k: v for k, v in {"q": q, "show": show, "model_id": model_id or "", "node_id": node_id or ""}.items() if v}
+        return render(request, "catalog.html", web, lines=lines, total=total, page=page, q=q, show=show,
+                      model_id=model_id, node_id=node_id, models=await repo.models(), nodes=await repo.nodes(),
+                      summary=await AdminRepository(session).catalog_summary(),
+                      untranslated=await repo.untranslated_count(), query=query, urlencode=urlencode)
+
+    async def _part(session: AsyncSession, part_id: int) -> Part:
+        part = await session.get(Part, part_id)
+        if part is None:
+            raise HTTPException(404, "Деталь не найдена.")
+        return part
+
+    @app.get("/catalog/{part_id}", response_class=HTMLResponse)
+    async def part_page(part_id: int, request: Request, web: WebUser = Depends(require("catalog.view")),
+                        session: AsyncSession = Depends(get_session)):
+        part, repo = await _part(session, part_id), PanelRepository(session)
+        return render(request, "part.html", web, part=part, offers=await repo.part_offers(part.id),
+                      same=await repo.same_name_parts(part), tr=await repo.translation_for(part),
+                      back_url=request.query_params.get("back") or "/catalog")
+
+    @app.post("/catalog/{part_id}/translation")
+    async def part_translation(part_id: int, request: Request, name_ru: str = Form(""), name_uz: str = Form(""),
+                               csrf: str = Form(""), next_untranslated: str = Form(""),
+                               web: WebUser = Depends(require("catalog.edit")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        part, repo = await _part(session, part_id), PanelRepository(session)
+        changed = await repo.save_translation(part, name_ru, name_uz, web.user)
+        logger.info("Panel %s translated part %s (%d parts)", web.login, part.id, changed)
+        flash = f"Перевод сохранён ({changed} дет.). В боте — сразу, и сохранится при следующих загрузках Excel."
+        if next_untranslated:
+            lines, _ = await repo.part_lines(show="untranslated", limit=1)
+            if lines:
+                return back(f"/catalog/{lines[0].part.id}?back=/catalog?show=untranslated", flash)
+            return back("/catalog?show=untranslated", flash + " Непереведённых больше нет 🎉")
+        return back(f"/catalog/{part.id}", flash)
+
+    # --- загрузка Excel ---
+
+    @app.get("/upload", response_class=HTMLResponse)
+    async def upload_page(request: Request, web: WebUser = Depends(require("upload"))):
+        return render(request, "upload.html", web, step="choose", max_mb=MAX_FILE_MB)
+
+    @app.post("/upload", response_class=HTMLResponse)
+    async def upload_check(request: Request, file: UploadFile = File(...), csrf: str = Form(""),
+                           web: WebUser = Depends(require("upload")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        _drop_upload(request)
+        if not (file.filename or "").lower().endswith(".xlsx"):
+            return render(request, "upload.html", web, step="choose", max_mb=MAX_FILE_MB,
+                          error="Нужен файл Excel с расширением .xlsx")
+        data = await file.read(MAX_FILE_MB * 1024 * 1024 + 1)
+        if len(data) > MAX_FILE_MB * 1024 * 1024:
+            return render(request, "upload.html", web, step="choose", max_mb=MAX_FILE_MB,
+                          error=f"Файл больше {MAX_FILE_MB} МБ.")
+        token = secrets.token_hex(8)
+        path = upload_path(token)
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        rows, errors, warnings, fmt = await import_flow.validate_path(session, path)
+        if errors:
+            path.unlink(missing_ok=True)
+            return render(request, "upload.html", web, step="errors", max_mb=MAX_FILE_MB, filename=file.filename,
+                          text=import_flow.errors_text(errors, LANG))
+        stats = await import_flow.dry_run(request.app.state.session_factory, rows, fmt)
+        await session.refresh(web)  # если пробный прогон шёл в этой же сессии (тесты) — данные после отката
+        request.session["upload"] = token
+        return render(request, "upload.html", web, step="preview", max_mb=MAX_FILE_MB, filename=file.filename,
+                      token=token, text=import_flow.preview_text(stats, warnings, fmt, LANG, question=False))
+
+    def _drop_upload(request: Request) -> None:
+        token = request.session.pop("upload", None)
+        if token:
+            upload_path(token).unlink(missing_ok=True)
+
+    @app.post("/upload/apply", response_class=HTMLResponse)
+    async def upload_apply(request: Request, token: str = Form(""), action: str = Form("apply"), csrf: str = Form(""),
+                           web: WebUser = Depends(require("upload")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        if not token or token != request.session.get("upload") or not upload_path(token).exists():
+            return back("/upload", "Файл не найден (устарел или уже применён) — загрузите его заново.")
+        path = upload_path(token)
+        if action != "apply":
+            _drop_upload(request)
+            return back("/upload", "Загрузка отменена. База не изменена.")
+        try:
+            rows, errors, _, fmt = await import_flow.validate_path(session, path)  # ещё раз: база могла измениться
+            if errors:
+                return render(request, "upload.html", web, step="errors", max_mb=MAX_FILE_MB,
+                              text=import_flow.errors_text(errors, LANG))
+            async with request.app.state.session_factory() as db:
+                try:
+                    stats = await import_flow.run_import(db, rows, fmt)
+                    await db.commit()  # всё или ничего
+                except Exception:
+                    await db.rollback()
+                    logger.exception("Panel import failed, rolled back")
+                    return render(request, "upload.html", web, step="errors", max_mb=MAX_FILE_MB,
+                                  text=i18n.t(LANG, "import_db_error"))
+        finally:
+            _drop_upload(request)
+        logger.info("Panel import by %s: %s", web.login, stats)
+        return render(request, "upload.html", web, step="done", max_mb=MAX_FILE_MB,
+                      text=import_flow.stats_text("applied", stats, fmt, LANG))
 
     @app.get("/health")
     async def health():
