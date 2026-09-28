@@ -16,6 +16,8 @@ from app.keyboards.language import language_keyboard
 from app.keyboards.main import main_reply_keyboard, menu_action, profile_keyboard
 from app.keyboards.phone import phone_keyboard
 from app.keyboards.region import region_keyboard
+from app.services import bot_settings
+from app.services.bot_settings import contact_view
 from app.services.localization import i18n, localized_name
 
 router = Router(name="start")
@@ -111,8 +113,9 @@ async def menu_button(message: Message, user: User, session: AsyncSession, staff
     elif action == "btn_profile":
         text, kb = profile_view(user)
         await message.answer(text, reply_markup=kb)
-    elif action == "btn_manager":
-        await message.answer(i18n.t(lang, "contact_manager_text"))
+    elif action == "btn_manager":  # контакты задаются в веб-панели: ⚙️ Настройки
+        text, kb = contact_view(await bot_settings.load(session), lang)
+        await message.answer(text, reply_markup=kb)
     elif action == "btn_cancel":
         await send_main_menu(message, user, session, prefix=i18n.t(lang, "cancelled"))
     elif action == "btn_dealer_orders":

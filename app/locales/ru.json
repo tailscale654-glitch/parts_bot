@@ -313,5 +313,10 @@
   "admin_panel_joined": "🔔 {name} добавлен в веб-панель. Роль: {role}.",
   "panel_disabled_notice": "Ваш доступ к веб-панели отключён администратором.",
   "user_blocked": "⛔ Доступ к боту ограничен. Если это ошибка — свяжитесь с JAC Motors.",
-  "direct_message_header": "✉️ Сообщение от JAC Motors:"
+  "direct_message_header": "✉️ Сообщение от JAC Motors:",
+  "contact_card_title": "📞 Связь с JAC Motors",
+  "contact_phone_label": "Телефон",
+  "contact_hours_label": "Часы работы",
+  "contact_address_label": "Адрес",
+  "contact_write_btn": "✍️ Написать менеджеру"
 }

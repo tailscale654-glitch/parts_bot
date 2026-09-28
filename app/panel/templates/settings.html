@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Настройки — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Настройки</h1>
+<div class="grid2">
+<div class="card"><b>📞 Контакты для кнопки «Менеджер» в боте</b>
+  <form method="post" action="/settings/contacts" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for key, label in fields.items() %}
+    <label>{{ label }}<input name="{{ key }}" value="{{ values.get(key, '') }}" maxlength="300"
+      placeholder="{{ {'contact_phone': '+998 71 200 00 00', 'contact_telegram': '@jac_manager', 'contact_hours': 'Пн–Сб 9:00–18:00', 'contact_address': 'г. Ташкент, …'}.get(key, '') }}"></label>
+    {% endfor %}
+    <div><button class="btn primary">Сохранить</button></div>
+  </form>
+  <p class="muted">Пустые поля не показываются. Если указан Telegram — под сообщением появится кнопка «Написать менеджеру».</p>
+</div>
+<div class="card"><b>Так увидит клиент</b>
+  <pre class="report" style="margin-top:10px;background:#f9fafb;padding:12px;border-radius:8px">{{ preview }}</pre>
+</div>
+</div>
+
+<h2 id="regions">🗺 Регионы</h2>
+<p class="muted">Клиент выбирает регион при регистрации. Скрытый регион не показывается в списке, но уже выбравшие его клиенты и дилеры остаются.
+«Порядок» — чем меньше число, тем выше в списке.</p>
+<div class="tablewrap"><table>
+  <tr><th>Порядок</th><th>Русский</th><th>Узбекский</th><th>English</th><th>Показывать</th><th class="num">Клиентов</th><th class="num">Дилеров</th><th></th></tr>
+  {% for r in regions %}
+  <tr>{% set f = 'rg' ~ r.id %}
+    <td><input form="{{ f }}" name="sort_order" value="{{ r.sort_order }}" size="3"></td>
+    <td><input form="{{ f }}" name="name_ru" value="{{ r.name_ru }}" required></td>
+    <td><input form="{{ f }}" name="name_uz" value="{{ r.name_uz or '' }}"></td>
+    <td><input form="{{ f }}" name="name_en" value="{{ r.name_en or '' }}"></td>
+    <td><input form="{{ f }}" type="checkbox" name="active" value="1" {{ 'checked' if r.active }}></td>
+    <td class="num">{{ users.get(r.id, 0) }}</td><td class="num">{{ dealers.get(r.id, 0) }}</td>
+    <td><form id="{{ f }}" method="post" action="/settings/regions/{{ r.id }}"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn small">Сохранить</button></form></td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

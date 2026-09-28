@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Рассылка — {{ brand }}{% endblock %}
+{% block head %}{% if sending %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block content %}
+<h1>Рассылка клиентам</h1>
+<div class="grid2">
+<div class="card">
+  <form method="get" action="/broadcast" class="filters" id="aud">
+    <input type="hidden" name="text" id="text_keep">
+    <label>Регион клиента<select name="region_id"><option value="">Все регионы</option>
+      {% for r in regions %}<option value="{{ r.id }}" {{ 'selected' if aud.region_id == r.id }}>{{ localized(r) }}</option>{% endfor %}</select></label>
+    <label>Язык<select name="language"><option value="">Все</option>
+      {% for k, v in [('ru', 'Русский'), ('uz', 'Узбекский'), ('en', 'Английский')] %}<option value="{{ k }}" {{ 'selected' if aud.language == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Кому<select name="buyers"><option value="">Всем зарегистрированным</option>
+      <option value="1" {{ 'selected' if aud.buyers_only }}>Только тем, кто делал заказ</option></select></label>
+    <button class="btn" onclick="document.getElementById('text_keep').value=document.getElementById('text').value">Посчитать</button>
+  </form>
+  <p>Получателей: <b>{{ count }}</b> <span class="muted">(с телефоном, не заблокированы)</span></p>
+
+  <form method="post" action="/broadcast" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="region_id" value="{{ aud.region_id or '' }}">
+    <input type="hidden" name="language" value="{{ aud.language }}">
+    <input type="hidden" name="buyers" value="{{ '1' if aud.buyers_only else '' }}">
+    <label>Текст (придёт от бота как обычное сообщение)
+      <textarea name="text" id="text" rows="7" maxlength="4000" required>{{ text }}</textarea></label>
+    <div class="row-actions">
+      <button class="btn" formaction="/broadcast/test">📨 Отправить себе для проверки</button>
+    </div>
+    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--text);font-size:14px">
+      <input type="checkbox" name="confirm" value="1"> Я проверил текст — отправить {{ count }} клиентам</label>
+    <div><button class="btn primary" {{ 'disabled' if not count or sending }}>📣 Запустить рассылку</button></div>
+  </form>
+</div>
+<div class="card"><b>Как это работает</b>
+  <ul class="muted">
+    <li>Пишите на том языке, который выбрали в фильтре «Язык» (или на двух языках сразу).</li>
+    <li>Сначала отправьте себе — проверьте, как выглядит.</li>
+    <li>Сообщения уходят по очереди, ~1000 в минуту. Прогресс — ниже, страница обновляется сама.</li>
+    <li>Не присылайте рассылки слишком часто: клиенты могут заблокировать бота.</li>
+  </ul>
+</div>
+</div>
+
+<h2>История</h2>
+<div class="tablewrap"><table>
+  <tr><th>Дата</th><th>Кто</th><th>Кому</th><th>Текст</th><th>Статус</th><th class="num">Доставлено</th><th class="num">Не доставлено</th></tr>
+  {% for b in history %}
+  <tr><td>{{ fmt_date(b.created_at) }}</td><td>{{ person_name(b.author) if b.author else '—' }}</td>
+    <td>{{ b.audience }}</td><td style="max-width:360px">{{ b.text[:200] }}{% if b.text|length > 200 %}…{% endif %}</td>
+    <td>{% if b.status == 'sending' %}⏳ идёт
+      <div class="progress"><div style="width:{{ (100 * (b.sent + b.failed) / b.total) if b.total else 0 }}%"></div></div>
+      <span class="muted">{{ b.sent + b.failed }} из {{ b.total }}</span>
+      {% elif b.status == 'done' %}✅ готово{% else %}⚠️ прервана{% endif %}</td>
+    <td class="num">{{ b.sent }}</td><td class="num">{{ b.failed }}</td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Рассылок ещё не было.</td></tr>{% endfor %}
+</table></div>
+<p class="muted">«Не доставлено» — клиент заблокировал бота или удалил аккаунт.</p>
+{% endblock %}

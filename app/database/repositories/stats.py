@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -39,15 +39,27 @@ class Stats:
     active_clients: int = 0  # сделали хотя бы один заказ за период
 
 
+@dataclass
+class Day:
+    day: date
+    orders: int = 0  # все заказы, включая отменённые
+    revenue: Decimal = Decimal(0)  # без отменённых
+
+
 class StatsRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.until: datetime | None = None  # конец периода (не включая); None — до сейчас
 
-    @staticmethod
-    def _since(query, column, since: datetime | None):
-        return query.where(column >= since) if since is not None else query
+    def _since(self, query, column, since: datetime | None):
+        if since is not None:
+            query = query.where(column >= since)
+        if self.until is not None:
+            query = query.where(column < self.until)
+        return query
 
-    async def collect(self, since: datetime | None) -> Stats:
+    async def collect(self, since: datetime | None, until: datetime | None = None) -> Stats:
+        self.until = until
         s = Stats()
         valid = Order.status != "CANCELLED"
 
@@ -104,3 +116,26 @@ class StatsRepository:
         total = await self.session.scalar(select(func.count()).select_from(query.subquery()))
         result = await self.session.scalars(query.order_by(Order.id.desc()).offset(offset).limit(limit))
         return list(result.unique()), total
+
+    async def daily(self, since: datetime | None, until: datetime | None, tz: ZoneInfo) -> list[Day]:
+        """Заказы и выручка по дням (по местному времени), без пропусков дней."""
+        self.until = until
+        rows = (await self.session.execute(self._since(
+            select(Order.created_at, Order.total_amount, Order.status), Order.created_at, since))).all()
+        if not rows and since is None:
+            return []
+        days: dict[date, Day] = {}
+        for created, total, status in rows:
+            created = created if created.tzinfo else created.replace(tzinfo=timezone.utc)
+            d = days.setdefault(created.astimezone(tz).date(), Day(created.astimezone(tz).date()))
+            d.orders += 1
+            if status != "CANCELLED":
+                d.revenue += Decimal(total)
+        first = since.astimezone(tz).date() if since is not None else min(days)
+        last = ((until - timedelta(seconds=1)).astimezone(tz).date() if until is not None
+                else datetime.now(timezone.utc).astimezone(tz).date())
+        result, day = [], first
+        while day <= last and len(result) < 400:  # не больше ~года столбиков
+            result.append(days.get(day, Day(day)))
+            day += timedelta(days=1)
+        return result

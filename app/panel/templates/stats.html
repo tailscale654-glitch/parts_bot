@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Статистика — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Статистика</h1>
+<div class="tabs">
+  {% for key, label in periods %}<a class="{{ 'on' if period == key }}" href="/stats?period={{ key }}">{{ label }}</a>{% endfor %}
+</div>
+<form class="filters" method="get" action="/stats">
+  <label>С<input type="date" name="date_from" value="{{ date_from or '' }}"></label>
+  <label>По<input type="date" name="date_to" value="{{ date_to or '' }}"></label>
+  <button class="btn primary">Показать</button>
+  {% if can('orders.view') %}<a class="btn" href="/orders?{{ export_q }}">🧾 Заказы за период</a>
+  <a class="btn" href="/orders/export?{{ export_q }}">📥 Excel</a>{% endif %}
+</form>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">Заказов</div><div class="v">{{ st.orders }}</div>
+    <div class="s">отменено: {{ st.by_status.get('CANCELLED', 0) }}</div></div>
+  <div class="kpi"><div class="l">Сумма заказов</div><div class="v">{{ money(st.revenue) }}</div><div class="s">без отменённых</div></div>
+  <div class="kpi"><div class="l">Выдано клиентам</div><div class="v">{{ money(st.completed_sum) }}</div>
+    <div class="s">заказов: {{ st.by_status.get('COMPLETED', 0) }}</div></div>
+  <div class="kpi"><div class="l">Средний чек</div><div class="v">{{ money(st.avg_check) }}</div></div>
+  <div class="kpi"><div class="l">Клиенты</div><div class="v">{{ st.active_clients }}</div>
+    <div class="s">сделали заказ · новых регистраций: {{ st.new_clients }}</div></div>
+</div>
+
+<div class="card"><b>Заказы по дням</b>{{ orders_chart }}</div>
+<div class="card"><b>Сумма заказов по дням</b> <span class="muted">(без отменённых)</span>{{ revenue_chart }}</div>
+<p class="muted">Наведите на столбик, чтобы увидеть точное значение.</p>
+
+<div class="grid2">
+<div>
+  <h2>🏢 Дилеры (топ-10 по сумме)</h2>
+  <div class="card bars">
+    {% for name, n, total in st.by_dealer %}
+    <div class="row"><span>{{ name }}</span>
+      <div class="track"><div class="val" style="width:{{ (100 * total / max_dealer) if max_dealer else 0 }}%"></div></div>
+      <span class="num">{{ money(total) }} · {{ n }} зак.</span></div>
+    {% else %}<span class="muted">Нет заказов за период.</span>{% endfor %}
+  </div>
+  <h2>📦 Топ деталей (по количеству)</h2>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Деталь</th><th>Артикул</th><th class="num">Штук</th></tr>
+    {% for name, number, qty in st.top_parts %}
+    <tr><td>{{ loop.index }}</td><td>{{ name }}</td><td class="muted">{{ number }}</td><td class="num">{{ qty }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">Нет заказов за период.</td></tr>{% endfor %}
+  </table></div>
+</div>
+<div>
+  <h2>🗺 Регионы дилеров</h2>
+  <div class="card bars">
+    {% for region, n, total in st.by_region %}
+    <div class="row"><span>{{ localized(region) }}</span>
+      <div class="track"><div class="val" style="width:{{ (100 * total / max_region) if max_region else 0 }}%"></div></div>
+      <span class="num">{{ money(total) }} · {{ n }}</span></div>
+    {% else %}<span class="muted">Нет заказов за период.</span>{% endfor %}
+  </div>
+  <h2>Статусы</h2>
+  <div class="card">
+    {% for status in ['NEW', 'CONFIRMED', 'READY', 'COMPLETED', 'CANCELLED'] %}
+    <div class="person"><span class="st st-{{ status }}">{{ status_text(status) }}</span><b>{{ st.by_status.get(status, 0) }}</b></div>
+    {% endfor %}
+  </div>
+</div>
+</div>
+{% endblock %}

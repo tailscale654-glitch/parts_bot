@@ -6,13 +6,15 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
 import secrets
 import time
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dtime
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -22,12 +24,23 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import Settings, load_settings
 from app.database.database import create_engine, create_session_factory
-from app.database.models import Dealer, DealerStaff, OrderMessage, Part, Region, User, WebUser
+from app.database.models import (
+    AuditLog,
+    Broadcast,
+    Dealer,
+    DealerStaff,
+    OrderMessage,
+    Part,
+    Region,
+    User,
+    WebUser,
+)
 from app.database.repositories.admin import ORDER_FILTERS, AdminRepository
 from app.database.repositories.orders import TRANSITIONS, OrderRepository
 from app.database.repositories.panel import OrderFilters, PanelRepository
@@ -35,8 +48,10 @@ from app.database.repositories.staff import StaffRepository
 from app.database.repositories.stats import StatsRepository, period_start
 from app.database.repositories.web_users import WebUserRepository
 from app.keyboards.orders import reply_keyboard
+from app.panel.charts import bar_chart
+from app.services import audit, bot_settings, import_flow
+from app.services import broadcast as broadcast_service
 from app.services import orders as orders_service
-from app.services import import_flow
 from app.services.catalog import money, paginate
 from app.services.excel_import import MAX_FILE_MB
 from app.services.localization import i18n, localized_name
@@ -78,7 +93,14 @@ async def lifespan(app: FastAPI):
         app.state.session_factory = create_session_factory(engine)
     if getattr(app.state, "bot", None) is None:
         app.state.bot = Bot(token=settings.bot_token)  # только для отправки уведомлений, без polling
+    try:
+        async with app.state.session_factory() as session:
+            await broadcast_service.mark_interrupted(session)  # рассылки, оборванные перезапуском
+    except Exception:  # база ещё не готова — не мешаем запуску
+        logger.exception("Cannot check unfinished broadcasts")
     yield
+    for task in list(app.state.tasks):
+        task.cancel()
     await app.state.bot.session.close()
     if engine is not None:
         await engine.dispose()
@@ -89,6 +111,7 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     logging.basicConfig(level=settings.log_level, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
     app = FastAPI(title=BRAND, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings, app.state.session_factory, app.state.bot = settings, session_factory, bot
+    app.state.tasks = set()  # фоновые рассылки
     # Ключ подписи cookie: WEB_SECRET из .env, иначе выводится из токена бота (не меняется между перезапусками)
     secret = os.getenv("WEB_SECRET") or hashlib.sha256(f"panel:{settings.bot_token}".encode()).hexdigest()
     app.add_middleware(SessionMiddleware, secret_key=secret, session_cookie="jac_panel",
@@ -253,6 +276,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         request.session.clear()
         request.session.update(wid=web.id, ver=web.session_version)
         logger.info("Panel login: %s (%s) from %s", web.login, web.role, key)
+        await audit.log(session, web, "login", details=f"с адреса {key}")
         return RedirectResponse(next if next.startswith("/") and not next.startswith("//") else "/", status_code=303)
 
     @app.post("/logout")
@@ -325,6 +349,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         await notify_status_change(request.app.state.bot, request.app.state.settings, session, order,
                                    actor=web.user, role="admin")
         logger.info("Panel %s set order %s → %s", web.login, order.id, order.status)
+        await audit.log(session, web, "order.status", f"заказ №{order.id}", status_text(order.status, LANG).split(" —")[0])
         return back(f"/orders/{order_id}", f"Статус: {status_text(order.status, LANG).split(' —')[0]}. "
                                            "Клиент и дилер получили уведомление.")
 
@@ -344,6 +369,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
                         reply_keyboard("dealer", order.id, client.language))
         session.add(OrderMessage(order_id=order.id, sender_id=web.user.id, to_side="client", text=text))
         await session.commit()
+        await audit.log(session, web, "order.message", f"заказ №{order.id}", text[:300])
         return back(f"/orders/{order_id}", "Сообщение отправлено клиенту в Telegram." if ok
                     else "Не удалось доставить: клиент заблокировал бота.")
 
@@ -369,6 +395,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         token = await WebUserRepository(session).create_invite(role, web.user)
         link = f"https://t.me/{username}?start=staff_{token}"
         logger.info("Panel %s created invite for role %s", web.login, role)
+        await audit.log(session, web, "staff.invite", details=f"роль: {ROLES[role]}")
         return RedirectResponse(f"/staff?{urlencode({'link': link, 'role': role})}", status_code=303)
 
     async def _person(session: AsyncSession, person_id: int, me: WebUser, admin_ids: set[int]) -> WebUser:
@@ -390,6 +417,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             raise HTTPException(400, "Неизвестная роль.")
         await WebUserRepository(session).set_role(person, role)
         logger.info("Panel %s set role of %s → %s", web.login, person.login, role)
+        await audit.log(session, web, "staff.role", person.login, ROLES[role])
         return back("/staff", f"{person_name(person.user)}: роль «{ROLES[role]}».")
 
     @app.post("/staff/{person_id}/active")
@@ -403,6 +431,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             await send(request.app.state.bot, person.user.telegram_id,
                        i18n.t(person.user.language, "panel_disabled_notice"))
         logger.info("Panel %s %s %s", web.login, "enabled" if enable else "disabled", person.login)
+        await audit.log(session, web, "staff.active", person.login, "включён" if enable else "отключён")
         return back("/staff", f"{person_name(person.user)}: доступ {'включён' if enable else 'отключён'}.")
 
     @app.post("/staff/{person_id}/password")
@@ -417,6 +446,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         ok = await send(request.app.state.bot, person.user.telegram_id, i18n.t(
             lang, "web_password", url=settings.web_url or i18n.t(lang, "web_url_missing"),
             login=login, password=password, role=ROLES[person.role]), parse_mode="HTML")
+        await audit.log(session, web, "staff.password", person.login)
         return back("/staff", "Новый пароль отправлен сотруднику в Telegram." if ok
                     else "Не удалось отправить: сотрудник заблокировал бота.")
 
@@ -460,6 +490,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         dealer.region_id = region_id
         await session.commit()
         logger.info("Panel %s edited dealer %s", web.login, dealer.id)
+        await audit.log(session, web, "dealer.edit", dealer.name, f"тел. {dealer.phone or '—'}; адрес: {dealer.address or '—'}; регион id {dealer.region_id}")
         return back(f"/dealers/{dealer.id}", "Сохранено. Клиенты увидят новые данные сразу.")
 
     @app.post("/dealers/{dealer_id}/enabled")
@@ -470,6 +501,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         dealer.enabled = enabled == "1"
         await session.commit()
         logger.info("Panel %s set dealer %s enabled=%s", web.login, dealer.id, dealer.enabled)
+        await audit.log(session, web, "dealer.enabled", dealer.name, "включён" if dealer.enabled else "выключен")
         return back(f"/dealers/{dealer.id}", "Дилер включён: его детали снова видны клиентам." if dealer.enabled
                     else "Дилер выключен: его детали скрыты из бота. Открытые заказы остаются.")
 
@@ -483,6 +515,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             return back(f"/dealers/{dealer.id}", NO_BOT_NAME)
         token = await StaffRepository(session).create_invite(dealer.id)
         logger.info("Panel %s created dealer invite for %s", web.login, dealer.id)
+        await audit.log(session, web, "dealer.invite", dealer.name)
         link = f"https://t.me/{username}?start=dealer_{token}"
         return RedirectResponse(f"/dealers/{dealer.id}?{urlencode({'link': link})}", status_code=303)
 
@@ -497,6 +530,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         name = person_name(staff.user)
         await StaffRepository(session).remove(staff_id)
         logger.info("Panel %s removed dealer staff %s from %s", web.login, staff_id, dealer_id)
+        await audit.log(session, web, "dealer.staff_remove", f"дилер id {dealer_id}", name)
         return back(f"/dealers/{dealer_id}", f"{name} больше не получает заказы этого дилера.")
 
     # --- клиенты ---
@@ -542,6 +576,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         header = i18n.t(client.language, "direct_message_header")
         ok = await send(request.app.state.bot, client.telegram_id, f"{header}\n\n{text}")
         logger.info("Panel %s messaged user %s (ok=%s)", web.login, client.id, ok)
+        await audit.log(session, web, "client.message", person_name(client), text[:300])
         return back(f"/clients/{client.id}", "Сообщение отправлено в Telegram." if ok
                     else "Не удалось доставить: клиент заблокировал бота или ни разу его не запускал.")
 
@@ -556,6 +591,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             raise HTTPException(400, "Нельзя заблокировать самого себя.")
         await PanelRepository(session).set_blocked(client, blocked == "1")
         logger.info("Panel %s set user %s blocked=%s", web.login, client.id, client.blocked)
+        await audit.log(session, web, "client.blocked", person_name(client), "заблокирован" if client.blocked else "разблокирован")
         return back(f"/clients/{client.id}", "Клиент заблокирован: бот больше не будет ему отвечать." if client.blocked
                     else "Клиент разблокирован.")
 
@@ -598,6 +634,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         part, repo = await _part(session, part_id), PanelRepository(session)
         changed = await repo.save_translation(part, name_ru, name_uz, web.user)
         logger.info("Panel %s translated part %s (%d parts)", web.login, part.id, changed)
+        await audit.log(session, web, "part.translation", part.part_number, f"RU: {name_ru or '—'}; UZ: {name_uz or '—'} ({changed} дет.)")
         flash = f"Перевод сохранён ({changed} дет.). В боте — сразу, и сохранится при следующих загрузках Excel."
         if next_untranslated:
             lines, _ = await repo.part_lines(show="untranslated", limit=1)
@@ -671,8 +708,172 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         finally:
             _drop_upload(request)
         logger.info("Panel import by %s: %s", web.login, stats)
+        await audit.log(session, web, "upload.apply", import_flow.stats_text("applied", stats, fmt, LANG).split("\n")[0], str(vars(stats)))
         return render(request, "upload.html", web, step="done", max_mb=MAX_FILE_MB,
                       text=import_flow.stats_text("applied", stats, fmt, LANG))
+
+    # --- статистика ---
+
+    STAT_PERIODS = [("today", "Сегодня"), ("7", "7 дней"), ("30", "30 дней"), ("90", "90 дней"), ("all", "Всё время")]
+
+    @app.get("/stats", response_class=HTMLResponse)
+    async def stats_page(request: Request, web: WebUser = Depends(require("stats")),
+                         session: AsyncSession = Depends(get_session)):
+        p, tz = request.query_params, orders_service.TIMEZONE
+        date_from, date_to = parse_date(p.get("date_from")), parse_date(p.get("date_to"))
+        period = p.get("period", "30")
+        if date_from or date_to:
+            period = "custom"
+            since = datetime.combine(date_from, dtime.min, tzinfo=tz).astimezone(timezone.utc) if date_from else None
+            until = (datetime.combine(date_to + timedelta(days=1), dtime.min, tzinfo=tz).astimezone(timezone.utc)
+                     if date_to else None)
+        else:
+            period = period if period in dict(STAT_PERIODS) else "30"
+            since = (period_start("30", tz) - timedelta(days=60) if period == "90" else period_start(period, tz))
+            until = None
+        repo = StatsRepository(session)
+        st = await repo.collect(since, until)
+        days = await repo.daily(since, until, tz)
+        many = len(days) > 45
+        orders_chart = bar_chart([(d.day.strftime("%d.%m"), d.orders, f"{d.day:%d.%m.%Y}: {d.orders} заказ(ов)")
+                                  for d in days])
+        revenue_chart = bar_chart([(d.day.strftime("%d.%m"), d.revenue, f"{d.day:%d.%m.%Y}: {money(d.revenue, LANG)}")
+                                   for d in days])
+        # период для ссылки «заказы за период» и выгрузки в Excel
+        first = since.astimezone(tz).date().isoformat() if since else ""
+        last = (until - timedelta(seconds=1)).astimezone(tz).date().isoformat() if until else ""
+        export_q = urlencode({k: v for k, v in {"date_from": first, "date_to": last}.items() if v})
+        return render(request, "stats.html", web, st=st, periods=STAT_PERIODS, period=period, date_from=date_from,
+                      date_to=date_to, orders_chart=orders_chart, revenue_chart=revenue_chart, many=many,
+                      export_q=export_q, max_region=max([t for _, _, t in st.by_region], default=0),
+                      max_dealer=max([t for _, _, t in st.by_dealer], default=0))
+
+    # --- рассылка ---
+
+    def read_audience(region_id: str | None, language: str | None, buyers: str | None):
+        return broadcast_service.Audience(region_id=parse_int(region_id),
+                                          language=language if language in ("ru", "uz", "en") else "",
+                                          buyers_only=buyers == "1")
+
+    @app.get("/broadcast", response_class=HTMLResponse)
+    async def broadcast_page(request: Request, web: WebUser = Depends(require("broadcast")),
+                             session: AsyncSession = Depends(get_session)):
+        p = request.query_params
+        aud = read_audience(p.get("region_id"), p.get("language"), p.get("buyers"))
+        history = list((await session.scalars(select(Broadcast).order_by(Broadcast.id.desc()).limit(20))).unique())
+        return render(request, "broadcast.html", web, aud=aud, count=await aud.count(session),
+                      regions=await PanelRepository(session).regions(), history=history,
+                      text=p.get("text", ""), sending=any(b.status == "sending" for b in history))
+
+    @app.post("/broadcast/test")
+    async def broadcast_test(request: Request, text: str = Form(""), csrf: str = Form(""),
+                             web: WebUser = Depends(require("broadcast"))):
+        check_csrf(request, csrf)
+        text = text.strip()[:4000]
+        if not text:
+            return back("/broadcast", "Напишите текст сообщения.")
+        ok = await send(request.app.state.bot, web.user.telegram_id, text)
+        return back(f"/broadcast?{urlencode({'text': text})}", "Пробное сообщение отправлено вам в Telegram."
+                    if ok else "Не удалось отправить вам сообщение — откройте бота и нажмите /start.")
+
+    @app.post("/broadcast")
+    async def broadcast_send(request: Request, text: str = Form(""), region_id: str = Form(""),
+                             language: str = Form(""), buyers: str = Form(""), confirm: str = Form(""),
+                             csrf: str = Form(""), web: WebUser = Depends(require("broadcast")),
+                             session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        text = text.strip()[:4000]
+        aud = read_audience(region_id, language, buyers)
+        query = urlencode({"text": text, "region_id": region_id, "language": language, "buyers": buyers})
+        if not text:
+            return back(f"/broadcast?{query}", "Напишите текст сообщения.")
+        if confirm != "1":
+            return back(f"/broadcast?{query}", "Поставьте галочку «Я проверил текст», чтобы отправить.")
+        if await session.scalar(select(func.count(Broadcast.id)).where(Broadcast.status == "sending")):
+            return back(f"/broadcast?{query}", "Предыдущая рассылка ещё идёт — дождитесь её окончания.")
+        chat_ids = await aud.telegram_ids(session)
+        if not chat_ids:
+            return back(f"/broadcast?{query}", "Под выбранные условия не подходит ни один клиент.")
+        described = await aud.describe(session)
+        b = Broadcast(text=text, audience=described, created_by=web.user.id, total=len(chat_ids))
+        session.add(b)
+        await session.commit()
+        await audit.log(session, web, "broadcast", f"{described}: {len(chat_ids)} чел.", text[:300])
+        task = asyncio.create_task(broadcast_service.run(
+            b.id, chat_ids, text, request.app.state.bot, request.app.state.session_factory))
+        request.app.state.tasks.add(task)
+        task.add_done_callback(request.app.state.tasks.discard)
+        return back("/broadcast", f"Рассылка запущена: {len(chat_ids)} получателей. "
+                                  f"Это займёт около {max(1, round(len(chat_ids) * broadcast_service.DELAY / 60 + 0.5))} мин.")
+
+    # --- настройки ---
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request, web: WebUser = Depends(require("settings")),
+                            session: AsyncSession = Depends(get_session)):
+        values = await bot_settings.load(session)
+        preview, _ = bot_settings.contact_view(values, LANG)
+        regions = list(await session.scalars(select(Region).order_by(Region.sort_order, Region.id)))
+        users = dict((await session.execute(
+            select(User.region_id, func.count(User.id)).where(User.region_id.is_not(None))
+            .group_by(User.region_id))).all())
+        dealers = dict((await session.execute(
+            select(Dealer.region_id, func.count(Dealer.id)).group_by(Dealer.region_id))).all())
+        return render(request, "settings.html", web, values=values, fields=bot_settings.CONTACT_FIELDS,
+                      preview=preview, regions=regions, users=users, dealers=dealers)
+
+    @app.post("/settings/contacts")
+    async def settings_contacts(request: Request, web: WebUser = Depends(require("settings")),
+                                session: AsyncSession = Depends(get_session)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        values = {k: str(form.get(k, "")).strip()[:300] for k in bot_settings.CONTACT_FIELDS}
+        if values["contact_telegram"] and not bot_settings.telegram_username(values["contact_telegram"]):
+            return back("/settings", "Telegram указан неверно: нужен @username (буквы, цифры, _; от 4 символов).")
+        await bot_settings.save(session, values)
+        await audit.log(session, web, "settings.contacts", details="; ".join(f"{k}={v}" for k, v in values.items() if v))
+        return back("/settings", "Сохранено. Кнопка «📞 Менеджер» в боте уже показывает новые контакты.")
+
+    @app.post("/settings/regions/{region_id}")
+    async def settings_region(region_id: int, request: Request, name_ru: str = Form(""), name_uz: str = Form(""),
+                              name_en: str = Form(""), sort_order: str = Form("0"), active: str = Form(""),
+                              csrf: str = Form(""), web: WebUser = Depends(require("settings")),
+                              session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        region = await session.get(Region, region_id)
+        if region is None:
+            raise HTTPException(404, "Регион не найден.")
+        if not name_ru.strip():
+            return back("/settings#regions", "Название на русском обязательно.")
+        region.name_ru, region.name_uz, region.name_en = name_ru.strip()[:128], name_uz.strip()[:128] or None, \
+            name_en.strip()[:128] or None
+        region.sort_order = int(sort_order) if sort_order.lstrip("-").isdigit() else region.sort_order
+        region.active = active == "1"
+        await session.commit()
+        await audit.log(session, web, "region.edit", region.name_ru,
+                        f"UZ: {region.name_uz or '—'}; EN: {region.name_en or '—'}; порядок {region.sort_order}; "
+                        f"{'показывается' if region.active else 'скрыт'}")
+        return back("/settings#regions", f"Регион «{region.name_ru}» сохранён.")
+
+    # --- журнал действий ---
+
+    @app.get("/audit", response_class=HTMLResponse)
+    async def audit_page(request: Request, web: WebUser = Depends(require("audit")),
+                         session: AsyncSession = Depends(get_session)):
+        p = request.query_params
+        login_f, action_f = (p.get("login") or "")[:64], p.get("action", "")
+        query = select(AuditLog)
+        if login_f:
+            query = query.where(AuditLog.login == login_f)
+        if action_f in audit.ACTIONS:
+            query = query.where(AuditLog.action == action_f)
+        total = await session.scalar(select(func.count()).select_from(query.subquery()))
+        page = paginate(total, parse_int(p.get("page")) or 1, 100)
+        rows = list(await session.scalars(query.order_by(AuditLog.id.desc()).offset(page.offset).limit(100)))
+        logins = list(await session.scalars(select(AuditLog.login).distinct().order_by(AuditLog.login)))
+        q = {k: v for k, v in {"login": login_f, "action": action_f}.items() if v}
+        return render(request, "audit.html", web, rows=rows, total=total, page=page, logins=logins,
+                      login_f=login_f, action_f=action_f, actions=audit.ACTIONS, query=q, urlencode=urlencode)
 
     @app.get("/health")
     async def health():

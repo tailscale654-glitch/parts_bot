@@ -4,6 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}{{ brand }}{% endblock %}</title>
 <link rel="stylesheet" href="/static/panel.css">
+{% block head %}{% endblock %}
 </head>
 <body>
 <div class="layout">
@@ -11,11 +12,15 @@
     <div class="brand">{{ brand_html | safe }}</div>
     <a href="/" class="{{ 'on' if path == '/' }}">📊 Главная</a>
     <a href="/orders" class="{{ 'on' if path.startswith('/orders') }}">🧾 Заказы</a>
+    {% if can('stats') %}<a href="/stats" class="{{ 'on' if path.startswith('/stats') }}">📈 Статистика</a>{% endif %}
     {% if can('dealers.view') %}<a href="/dealers" class="{{ 'on' if path.startswith('/dealers') }}">🏢 Дилеры</a>{% endif %}
     {% if can('clients.view') %}<a href="/clients" class="{{ 'on' if path.startswith('/clients') }}">👥 Клиенты</a>{% endif %}
     {% if can('catalog.view') %}<a href="/catalog" class="{{ 'on' if path.startswith('/catalog') }}">📦 Каталог</a>{% endif %}
     {% if can('upload') %}<a href="/upload" class="{{ 'on' if path.startswith('/upload') }}">📥 Загрузка Excel</a>{% endif %}
+    {% if can('broadcast') %}<a href="/broadcast" class="{{ 'on' if path.startswith('/broadcast') }}">📣 Рассылка</a>{% endif %}
+    {% if can('settings') %}<a href="/settings" class="{{ 'on' if path.startswith('/settings') }}">⚙️ Настройки</a>{% endif %}
     {% if can('staff') %}<a href="/staff" class="{{ 'on' if path.startswith('/staff') }}">🔐 Сотрудники</a>{% endif %}
+    {% if can('audit') %}<a href="/audit" class="{{ 'on' if path.startswith('/audit') }}">📝 Журнал</a>{% endif %}
     {% if me %}
     <div class="me">{{ person_name(me.user) }}<br>{{ ROLES[role] }} · {{ me.login }}
       <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Выйти</button></form>

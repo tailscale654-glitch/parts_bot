@@ -313,5 +313,10 @@
   "admin_panel_joined": "🔔 {name} veb-panelga qo‘shildi. Rol: {role}.",
   "panel_disabled_notice": "Veb-panelga kirishingiz administrator tomonidan o‘chirildi.",
   "user_blocked": "⛔ Botdan foydalanish cheklangan. Agar bu xato bo‘lsa, JAC Motors bilan bog‘laning.",
-  "direct_message_header": "✉️ JAC Motors’dan xabar:"
+  "direct_message_header": "✉️ JAC Motors’dan xabar:",
+  "contact_card_title": "📞 JAC Motors bilan aloqa",
+  "contact_phone_label": "Telefon",
+  "contact_hours_label": "Ish vaqti",
+  "contact_address_label": "Manzil",
+  "contact_write_btn": "✍️ Menejerga yozish"
 }
