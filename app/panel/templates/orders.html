@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Заказы — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Заказы</h1>
+<div class="tabs">
+  {% for key, label in tabs %}
+  {% set q = dict(query, tab=key) %}
+  <a class="{{ 'on' if f.tab == key }}" href="/orders?{{ urlencode(q) }}">{{ label }} ({{ counts[key] }})</a>
+  {% endfor %}
+</div>
+<form class="filters" method="get" action="/orders">
+  <input type="hidden" name="tab" value="{{ f.tab }}">
+  <label>Поиск<input name="q" value="{{ f.q }}" placeholder="№, телефон, имя, артикул, деталь" size="30"></label>
+  <label>Дилер<select name="dealer_id"><option value="">Все</option>
+    {% for d in dealers %}<option value="{{ d.id }}" {{ 'selected' if f.dealer_id == d.id }}>{{ d.name }}</option>{% endfor %}</select></label>
+  <label>Регион дилера<select name="region_id"><option value="">Все</option>
+    {% for r in regions %}<option value="{{ r.id }}" {{ 'selected' if f.region_id == r.id }}>{{ localized(r) }}</option>{% endfor %}</select></label>
+  <label>С<input type="date" name="date_from" value="{{ f.date_from or '' }}"></label>
+  <label>По<input type="date" name="date_to" value="{{ f.date_to or '' }}"></label>
+  <button class="btn primary">Найти</button>
+  <a class="btn" href="/orders?tab={{ f.tab }}">Сбросить</a>
+  <a class="btn" href="/orders/export?{{ urlencode(query) }}">📥 Excel</a>
+</form>
+<p class="muted">Найдено: {{ total }}</p>
+{% if orders %}
+<div class="tablewrap"><table>
+  <tr><th>№</th><th>Дата</th><th>Статус</th><th>Клиент</th><th>Дилер</th><th>Состав</th><th class="num">Сумма</th></tr>
+  {% for o in orders %}
+  <tr>
+    <td><a href="/orders/{{ o.id }}">{{ o.id }}</a></td>
+    <td>{{ fmt_date(o.created_at) }}</td>
+    <td><span class="st st-{{ o.status }}">{{ status_text(o.status) }}</span></td>
+    <td>{{ person_name(o.user) }}<br><span class="muted">{{ o.user.phone }}</span></td>
+    <td>{{ o.dealer.name }}<br><span class="muted">{{ localized(o.dealer.region) }}</span></td>
+    <td>{% for i in o.items %}{{ localized(i) }} <span class="muted">({{ i.part_number }})</span> × {{ i.quantity }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+    <td class="num">{{ money(o.total_amount) }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% if page.total_pages > 1 %}
+<div class="pager">
+  {% if page.has_prev %}<a class="btn small" href="/orders?{{ urlencode(dict(query, page=page.number - 1)) }}">◀ Назад</a>{% endif %}
+  <span class="muted">страница {{ page.number }} из {{ page.total_pages }}</span>
+  {% if page.has_next %}<a class="btn small" href="/orders?{{ urlencode(dict(query, page=page.number + 1)) }}">Вперёд ▶</a>{% endif %}
+</div>
+{% endif %}
+{% else %}<div class="card muted">Ничего не найдено.</div>{% endif %}
+{% endblock %}

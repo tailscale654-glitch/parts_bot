@@ -298,5 +298,18 @@
   "btn_adm_backup": "💾 Oxirgi backup",
   "backup_caption": "💾 Baza zaxira nusxasi, {date} ({size}).\n\nUni serverdan alohida saqlang. Qanday tiklash — README, «Восстановление из backup» bo‘limi.",
   "backup_none": "⚠️ Hozircha zaxira nusxalar yo‘q. backup konteynerini tekshiring: docker compose logs backup",
-  "backup_too_big": "⚠️ Nusxa 50 MB dan katta — Telegram uni yubormaydi. Serverdan yuklab oling: ~/parts_bot/backups"
+  "backup_too_big": "⚠️ Nusxa 50 MB dan katta — Telegram uni yubormaydi. Serverdan yuklab oling: ~/parts_bot/backups",
+  "btn_adm_web": "🌐 Veb-panel",
+  "web_info": "🌐 VEB-PANEL\n\nManzil: {url}\nLogin: {login}\nRol: {role}\n\nFaqat kompaniyaning lokal tarmog‘ida ochiladi. Parolni unutdingizmi — «🔑 Yangi parol» tugmasini bosing.",
+  "web_no_access": "🌐 VEB-PANEL\n\nManzil: {url}\n\nSizda hali kirish yo‘q — «🔑 Parol olish» tugmasini bosing.",
+  "btn_web_password": "🔑 Parol olish",
+  "btn_web_new_password": "🔑 Yangi parol",
+  "btn_web_disable": "⛔ Kirishimni o‘chirish",
+  "web_password": "🔑 Veb-panelga kirish\n\nManzil: {url}\nLogin: <code>{login}</code>\nParol: <code>{password}</code>\nRol: {role}\n\nFaqat kompaniyaning lokal tarmog‘ida ochiladi. Parol bir marta ko‘rsatiladi — saqlab qo‘ying va bu xabarni o‘chiring. Oldingi parol endi ishlamaydi.",
+  "web_disabled": "Veb-panelga kirish o‘chirildi. Barcha sessiyalar tugatildi.",
+  "web_url_missing": "belgilanmagan (.env dagi WEB_URL)",
+  "web_ask_admin": "Sizda veb-panelga kirish yo‘q. Administratordan taklif so‘rang.",
+  "panel_invite_ok": "✅ Siz JAC Motors Parts veb-paneliga qo‘shildingiz.",
+  "admin_panel_joined": "🔔 {name} veb-panelga qo‘shildi. Rol: {role}.",
+  "panel_disabled_notice": "Veb-panelga kirishingiz administrator tomonidan o‘chirildi."
 }

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{{ brand }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/panel.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="side">
+    <div class="brand">{{ brand_html | safe }}</div>
+    <a href="/" class="{{ 'on' if path == '/' }}">📊 Главная</a>
+    <a href="/orders" class="{{ 'on' if path.startswith('/orders') }}">🧾 Заказы</a>
+    {% if can('staff') %}<a href="/staff" class="{{ 'on' if path.startswith('/staff') }}">🔐 Сотрудники</a>{% endif %}
+    <div class="soon">Скоро: дилеры, клиенты, каталог, загрузка файлов</div>
+    {% if me %}
+    <div class="me">{{ person_name(me.user) }}<br>{{ ROLES[role] }} · {{ me.login }}
+      <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Выйти</button></form>
+    </div>
+    {% endif %}
+  </nav>
+  <main>
+    {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

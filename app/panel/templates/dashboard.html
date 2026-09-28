@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Главная</h1>
+<div class="kpis">
+  <div class="kpi"><div class="l">🟡 Новые заказы</div><div class="v">{{ counts.new }}</div><div class="s"><a href="/orders?tab=new">ждут подтверждения →</a></div></div>
+  <div class="kpi"><div class="l">🔄 В работе</div><div class="v">{{ counts.work }}</div><div class="s"><a href="/orders?tab=work">подтверждены / готовы →</a></div></div>
+  {% for key, label in [('today','Сегодня'),('7','7 дней'),('30','30 дней')] %}
+  {% set s = periods[key] %}
+  <div class="kpi"><div class="l">{{ label }}</div><div class="v">{{ money(s.revenue) }}</div>
+    <div class="s">заказов: {{ s.orders }} · средний чек {{ money(s.avg_check) }}</div></div>
+  {% endfor %}
+</div>
+
+<div class="grid2">
+  <div>
+    <h2>🟡 Новые заказы</h2>
+    {% if new_orders %}
+    <div class="tablewrap"><table>
+      <tr><th>№</th><th>Дата</th><th>Клиент</th><th>Дилер</th><th>Состав</th><th class="num">Сумма</th></tr>
+      {% for o in new_orders %}
+      <tr><td><a href="/orders/{{ o.id }}">{{ o.id }}</a></td><td>{{ fmt_date(o.created_at) }}</td>
+        <td>{{ person_name(o.user) }}<br><span class="muted">{{ o.user.phone }}</span></td><td>{{ o.dealer.name }}</td>
+        <td>{% for i in o.items %}{{ localized(i) }} × {{ i.quantity }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        <td class="num">{{ money(o.total_amount) }}</td></tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<div class="card muted">Новых заказов нет 👍</div>{% endif %}
+  </div>
+  <div>
+    <h2>📦 Топ деталей · 30 дней</h2>
+    <div class="card">{% for name, number, qty in top.top_parts %}<div>{{ loop.index }}. {{ name }} <span class="muted">({{ number }})</span> — {{ qty }} шт.</div>{% else %}<span class="muted">Пока нет заказов</span>{% endfor %}</div>
+    <h2>🏢 Топ дилеров · 30 дней</h2>
+    <div class="card">{% for name, n, total in top.by_dealer %}<div>{{ loop.index }}. {{ name }} — {{ n }} · {{ money(total) }}</div>{% else %}<span class="muted">Пока нет заказов</span>{% endfor %}</div>
+  </div>
+</div>
+{% endblock %}

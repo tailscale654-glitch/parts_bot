@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Вход — {{ brand }}</title><link rel="stylesheet" href="/static/panel.css"></head>
+<body>
+<form class="login" method="post" action="/login">
+  <h1>{{ brand }}</h1><p class="muted" style="text-align:center;margin-top:-8px">панель управления</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+  <label>Логин<input name="login" autocomplete="username" autofocus required></label>
+  <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+  <button class="btn primary">Войти</button>
+  <div class="hint">Логин и пароль присылает бот: команда <b>/panel</b>.<br>Нет доступа — попросите администратора прислать приглашение.</div>
+</form>
+</body></html>

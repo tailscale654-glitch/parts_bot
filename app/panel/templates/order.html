@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Заказ №{{ order.id }} — {{ brand }}{% endblock %}
+{% block content %}
+<p><a href="/orders">← Все заказы</a></p>
+<h1>Заказ №{{ order.id }} <span class="st st-{{ order.status }}">{{ status_text(order.status) }}</span></h1>
+<div class="grid2">
+  <div>
+    <div class="tablewrap"><table>
+      <tr><th>Деталь</th><th>Артикул</th><th>Модель · категория</th><th class="num">Кол-во</th><th class="num">Цена</th><th class="num">Сумма</th></tr>
+      {% for i in order.items %}
+      <tr><td>{{ localized(i) }}</td><td>{{ i.part_number }}</td><td>{{ i.model_name }} · {{ i.node_name }}</td>
+        <td class="num">{{ i.quantity }}</td><td class="num">{{ money(i.price) }}</td><td class="num">{{ money(i.total) }}</td></tr>
+      {% endfor %}
+      <tr><td colspan="5"><b>Итого</b></td><td class="num"><b>{{ money(order.total_amount) }}</b></td></tr>
+    </table></div>
+
+    {% if can('orders.edit') and allowed %}
+    <div class="card" style="margin-top:16px"><b>Сменить статус</b><br><br>
+      {% for s in allowed %}
+      <form class="inline" method="post" action="/orders/{{ order.id }}/status"
+            {% if s == 'CANCELLED' %}onsubmit="return confirm('Отменить заказ №{{ order.id }}? Детали вернутся в остаток дилера.')"{% endif %}>
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="status" value="{{ s }}">
+        <button class="btn {{ 'danger' if s == 'CANCELLED' else 'primary' if loop.first else '' }}">{{ status_text(s) }}</button>
+      </form>
+      {% endfor %}
+      <div class="muted" style="margin-top:8px">Клиент и сотрудники дилера получат уведомление в Telegram.</div>
+    </div>
+    {% endif %}
+
+    <h2>💬 Переписка</h2>
+    {% for m, sender in messages %}
+    <div class="msg {{ m.to_side }}"><div class="h">{{ fmt_date(m.created_at) }} · {{ person_name(sender) if sender else '—' }}
+      → {{ 'клиенту' if m.to_side == 'client' else 'дилеру' }}</div>{{ m.text or '📎 фото / файл' }}</div>
+    {% else %}<p class="muted">Сообщений пока нет.</p>{% endfor %}
+    {% if can('orders.edit') and order.status != 'CANCELLED' %}
+    <form method="post" action="/orders/{{ order.id }}/message" class="card">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="muted">Написать клиенту (придёт в Telegram от имени дилера «{{ order.dealer.name }}»)</label>
+      <textarea name="text" maxlength="3500" required></textarea><br><br>
+      <button class="btn primary">Отправить</button>
+    </form>
+    {% endif %}
+  </div>
+  <div>
+    <div class="card"><b>👤 Клиент</b><br>{{ person_name(order.user) }}{% if order.user.username %} · @{{ order.user.username }}{% endif %}<br>
+      📞 {{ order.user.phone or '—' }}<br>📍 {{ localized(order.user.region) }}</div>
+    <div class="card"><b>🏢 Дилер</b><br>{{ order.dealer.name }}<br>📍 {{ localized(order.dealer.region) }}<br>
+      📌 {{ order.dealer.address or '—' }}<br>📞 {{ order.dealer.phone or '—' }}</div>
+    <div class="card muted">Создан: {{ fmt_date(order.created_at) }}<br>Изменён: {{ fmt_date(order.updated_at) }}</div>
+  </div>
+</div>
+{% endblock %}

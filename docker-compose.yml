@@ -35,6 +35,20 @@ services:
       - ./backups:/bot/backups:ro  # чтобы админ мог получить последнюю копию в Telegram
     logging: *logging
 
+  web:
+    # Веб-панель: тот же образ, что и бот, другая команда запуска. Только локальная сеть.
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["uvicorn", "--factory", "app.panel.server:create_app", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      # WEB_BIND — IP сервера в локальной сети (например 192.168.1.10), чтобы панель слушала только её
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
   backup:
     image: postgres:16-alpine
     restart: unless-stopped

@@ -239,3 +239,36 @@ class OrderMessage(Base):
     to_side: Mapped[str] = mapped_column(String(8))  # client | dealer
     text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WebUser(Base):
+    """Вход в веб-панель. Логин и пароль выдаёт бот администратору (в Telegram)."""
+
+    __tablename__ = "web_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    login: Mapped[str] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(16), default="viewer", server_default="viewer")  # см. services/roles.py
+    # меняется при каждом новом пароле — старые входы (cookie) перестают работать
+    session_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(lazy="joined")
+
+
+class PanelInvite(Base):
+    """Приглашение сотрудника в веб-панель с ролью (одноразовое, 7 дней)."""
+
+    __tablename__ = "panel_invites"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(32), unique=True)
+    role: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))

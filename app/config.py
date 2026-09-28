@@ -37,6 +37,7 @@ class Settings:
     database_url: str = field(repr=False)
     default_language: str = "ru"
     timezone: str = "Asia/Tashkent"  # время заказов показываем по Ташкенту
+    web_url: str = ""  # адрес веб-панели в локальной сети, например http://192.168.1.10:8080
     log_level: str = "INFO"
 
 
@@ -50,4 +51,5 @@ def load_settings() -> Settings:
         database_url=_build_database_url(),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         timezone=os.getenv("TIMEZONE", "Asia/Tashkent"),
+        web_url=os.getenv("WEB_URL", "").strip(),
     )

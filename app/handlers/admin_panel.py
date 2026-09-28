@@ -1,9 +1,9 @@
 """Админ-панель: заказы, дилеры, каталог, клиенты. Только для ADMIN_IDS."""
+from pathlib import Path
+
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from pathlib import Path
-
 from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,8 @@ from app.keyboards.admin import AdminCB, admin_menu_keyboard, btn, menu_button, 
 from app.keyboards.orders import admin_order_keyboard
 from app.services.catalog import money, paginate
 from app.services.localization import i18n, localized_name
-from app.services.notify import person_name, send
 from app.services import orders as orders_service
+from app.services.notify import person_name, send
 from app.services.orders import fmt_date, order_text, status_text
 from app.services.stats import export_filename, orders_excel, orders_with_items_text, stats_text
 from app.states.admin import AdminStates

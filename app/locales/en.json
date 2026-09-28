@@ -298,5 +298,18 @@
   "btn_adm_backup": "💾 Latest backup",
   "backup_caption": "💾 Database backup from {date} ({size}).\n\nKeep it outside the server. How to restore — see README, “Restore from backup”.",
   "backup_none": "⚠️ No backups yet. Check the backup container: docker compose logs backup",
-  "backup_too_big": "⚠️ The backup is larger than 50 MB — Telegram won't send it. Download it from the server: ~/parts_bot/backups"
+  "backup_too_big": "⚠️ The backup is larger than 50 MB — Telegram won't send it. Download it from the server: ~/parts_bot/backups",
+  "btn_adm_web": "🌐 Web panel",
+  "web_info": "🌐 WEB PANEL\n\nAddress: {url}\nLogin: {login}\nRole: {role}\n\nAvailable only in the company's local network. Forgot the password — tap “🔑 New password”.",
+  "web_no_access": "🌐 WEB PANEL\n\nAddress: {url}\n\nYou have no access yet — tap “🔑 Get password”.",
+  "btn_web_password": "🔑 Get password",
+  "btn_web_new_password": "🔑 New password",
+  "btn_web_disable": "⛔ Disable my access",
+  "web_password": "🔑 Web panel access\n\nAddress: {url}\nLogin: <code>{login}</code>\nPassword: <code>{password}</code>\nRole: {role}\n\nAvailable only in the company's local network. The password is shown once — save it and delete this message. The previous password no longer works.",
+  "web_disabled": "Web panel access disabled. All sessions ended.",
+  "web_url_missing": "not set (WEB_URL in .env)",
+  "web_ask_admin": "You have no access to the web panel. Ask the administrator for an invitation.",
+  "panel_invite_ok": "✅ You have been added to the JAC Motors Parts web panel.",
+  "admin_panel_joined": "🔔 {name} was added to the web panel. Role: {role}.",
+  "panel_disabled_notice": "Your web panel access was disabled by the administrator."
 }

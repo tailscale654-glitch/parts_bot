@@ -23,11 +23,12 @@ def person_name(user: User) -> str:
     return " ".join(filter(None, [user.first_name, user.last_name])) or (f"@{user.username}" if user.username else "—")
 
 
-async def send(bot: Bot, chat_id: int, text: str, kb: InlineKeyboardMarkup | None = None) -> bool:
+async def send(bot: Bot, chat_id: int, text: str, kb: InlineKeyboardMarkup | None = None,
+               parse_mode: str | None = None) -> bool:
     """Отправить, не падая, если человек не запускал бота или заблокировал его."""
     for attempt in range(2):
         try:
-            await bot.send_message(chat_id, text, reply_markup=kb)
+            await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=parse_mode)
             return True
         except TelegramRetryAfter as e:  # Telegram просит подождать (много сообщений подряд)
             if attempt:

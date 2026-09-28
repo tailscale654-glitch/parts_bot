@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Сотрудники — {{ brand }}{% endblock %}
+{% block content %}
+<h1>Сотрудники и роли</h1>
+
+<div class="card">
+  <b>➕ Добавить сотрудника</b>
+  <p class="muted">Выберите роль → получите ссылку → отправьте её сотруднику в Telegram. Открыв ссылку, он сразу получит логин и пароль от бота. Ссылка одноразовая, действует 7 дней.</p>
+  <form method="post" action="/staff/invite" class="filters">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Роль<select name="role">{% for key, name in ROLES.items() %}<option value="{{ key }}" {{ 'selected' if key == 'operator' }}>{{ name }} — {{ ROLE_HINTS[key] }}</option>{% endfor %}</select></label>
+    <button class="btn primary">Создать приглашение</button>
+  </form>
+  {% if invite_link %}
+  <div class="flash">Приглашение для роли «{{ ROLES.get(invite_role, invite_role) }}»:
+    <div class="copy" style="margin-top:6px"><input id="link" value="{{ invite_link }}" readonly>
+    <button class="btn" type="button" onclick="navigator.clipboard.writeText(document.getElementById('link').value);this.textContent='Скопировано'">Копировать</button></div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card"><b>Роли</b>
+  {% for key, name in ROLES.items() %}<div><b>{{ name }}</b> — <span class="muted">{{ ROLE_HINTS[key] }}</span></div>{% endfor %}
+</div>
+
+<div class="tablewrap"><table>
+  <tr><th>Сотрудник</th><th>Логин</th><th>Роль</th><th>Доступ</th><th>Последний вход</th><th>Действия</th></tr>
+  {% for p in people %}
+  {% set fixed = p.user.telegram_id in admin_ids %}
+  <tr>
+    <td>{{ person_name(p.user) }}{% if p.user.username %}<br><span class="muted">@{{ p.user.username }}</span>{% endif %}</td>
+    <td>{{ p.login }}</td>
+    <td>{% if fixed %}{{ ROLES['admin'] }} <span class="muted">(ADMIN_IDS)</span>
+      {% elif p.id == me.id %}{{ ROLES[p.role] }} <span class="muted">(вы)</span>
+      {% else %}
+      <form method="post" action="/staff/{{ p.id }}/role" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <select name="role" onchange="this.form.submit()">{% for key, name in ROLES.items() %}<option value="{{ key }}" {{ 'selected' if p.role == key }}>{{ name }}</option>{% endfor %}</select>
+      </form>{% endif %}</td>
+    <td>{{ '✅ включён' if p.active else '⛔ отключён' }}</td>
+    <td>{{ fmt_date(p.last_login_at) if p.last_login_at else '—' }}</td>
+    <td class="row-actions">{% if not fixed and p.id != me.id %}
+      <form method="post" action="/staff/{{ p.id }}/password"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small">🔑 Новый пароль в Telegram</button></form>
+      <form method="post" action="/staff/{{ p.id }}/active"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="active" value="{{ '0' if p.active else '1' }}">
+        <button class="btn small {{ 'danger' if p.active }}">{{ 'Отключить' if p.active else 'Включить' }}</button></form>
+    {% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="6" class="muted">Пока никого нет.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}
