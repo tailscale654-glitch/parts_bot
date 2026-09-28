@@ -37,7 +37,7 @@ class Settings:
     database_url: str = field(repr=False)
     default_language: str = "ru"
     timezone: str = "Asia/Tashkent"  # время заказов показываем по Ташкенту
-    web_url: str = ""  # адрес веб-панели в локальной сети, например http://192.168.1.10:8080
+    web_url: str = ""  # адрес веб-панели в локальной сети, например http://192.168.1.10
     log_level: str = "INFO"
 
 

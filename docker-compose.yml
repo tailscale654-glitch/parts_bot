@@ -43,7 +43,7 @@ services:
     command: ["uvicorn", "--factory", "app.panel.server:create_app", "--host", "0.0.0.0", "--port", "8080"]
     ports:
       # WEB_BIND — IP сервера в локальной сети (например 192.168.1.10), чтобы панель слушала только её
-      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:8080"
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-80}:8080"
     depends_on:
       postgres:
         condition: service_healthy
