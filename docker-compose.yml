@@ -40,13 +40,29 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    command: ["uvicorn", "--factory", "app.panel.server:create_app", "--host", "0.0.0.0", "--port", "8080"]
-    ports:
-      # WEB_BIND — IP сервера в локальной сети (например 192.168.1.10), чтобы панель слушала только её
-      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-80}:8080"
+    # Наружу не открыта: к ней ходит только proxy (nginx с HTTPS). --proxy-headers — чтобы видеть IP сотрудника.
+    command: ["uvicorn", "--factory", "app.panel.server:create_app", "--host", "0.0.0.0", "--port", "8080",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment:
+      WEB_HTTPS: "1"  # cookie входа передаётся только по HTTPS
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *logging
+
+  proxy:
+    # HTTPS для панели: https://partsbot.jacmotors.uz. Сертификаты — в папке ./certs (см. README).
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      # WEB_BIND — IP сервера в локальной сети, чтобы панель слушала только её (по умолчанию все адреса)
+      - "${WEB_BIND:-0.0.0.0}:80:80"
+      - "${WEB_BIND:-0.0.0.0}:443:443"
+    volumes:
+      - ./nginx/panel.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
     logging: *logging
 
   backup:

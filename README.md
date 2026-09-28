@@ -198,25 +198,39 @@ INFO  [alembic.runtime.migration] Running upgrade 0008 -> 0009, web panel users,
 ## Веб-панель (только локальная сеть компании)
 
 Сайт для сотрудников: заказы, дилеры, клиенты, каталог и переводы, загрузка Excel, сотрудники и роли. Работает в том же
-`docker compose`, что и бот (сервис `web`), и открывается **только внутри локальной сети** — снаружи его не видно.
+`docker compose`, что и бот (сервисы `web` и `proxy`), и открывается **только внутри локальной сети** — снаружи его не видно.
 
-### Настройка (один раз)
+### Настройка (один раз) — адрес https://partsbot.jacmotors.uz
 
-1. Узнайте IP сервера в локальной сети: `hostname -I` (например `192.168.48.103`).
-2. Добавьте в `.env` (образец — в `.env.example`):
+Панель открывается по HTTPS через сервис `proxy` (nginx) с сертификатом `*.jacmotors.uz`.
+Сама панель (сервис `web`) наружу не открыта — к ней ходит только `proxy`.
+
+1. **Сертификат на сервер.** Файлы `certs/fullchain.crt` и `certs/private.key` в git **не попадают** (это секрет) —
+   скопируйте их с компьютера на сервер отдельно:
+   ```
+   scp C:\Users\USer\Downloads\jac-parts-bot\certs\fullchain.crt C:\Users\USer\Downloads\jac-parts-bot\certs\private.key пользователь@192.168.48.103:~/parts_bot/certs/
+   ```
+   На сервере закройте ключ от чужих глаз: `chmod 600 ~/parts_bot/certs/private.key`.
+   `fullchain.crt` = сертификат сайта + промежуточный из ca-bundle (в таком порядке). Если будете собирать сами —
+   между файлами должен быть перевод строки, иначе nginx не запустится (`bad end line`).
+2. **Имя в локальной сети.** Попросите IT добавить во **внутренний DNS** запись
+   `partsbot.jacmotors.uz → 192.168.48.103`. Пока записи нет — на отдельном компьютере можно добавить строку
+   `192.168.48.103 partsbot.jacmotors.uz` в файл `C:\Windows\System32\drivers\etc\hosts` (открыть Блокнотом от администратора).
+   Открывать по IP (`https://192.168.48.103`) не надо — браузер покажет предупреждение: сертификат выдан на имя.
+3. В `.env`:
    ```ini
-   WEB_URL=http://192.168.48.103
-   WEB_PORT=80
+   WEB_URL=https://partsbot.jacmotors.uz
    WEB_BIND=0.0.0.0
    BOT_USERNAME=имя_вашего_бота
    ```
-3. `docker compose up -d --build` → проверка: `docker compose ps` — сервис `web` в статусе `Up`.
-4. С компьютера в той же сети откройте `http://192.168.48.103` (без порта).
+   (строку `WEB_PORT` можно удалить — больше не используется.)
+4. Порты 80 и 443 должны быть свободны: `sudo ss -ltnp | grep -E ':(80|443) '` — пусто = свободны.
+5. `docker compose up -d --build` → `docker compose ps`: `web` и `proxy` в статусе `Up`.
+6. Откройте **https://partsbot.jacmotors.uz** — слева от адреса замок. `http://…` сам переходит на `https://`.
 
-Чтобы открывать по имени **`http://partsbot.jacmotors.uz`**, попросите IT добавить в **локальный DNS** компании
-запись `partsbot.jacmotors.uz → 192.168.48.103` (или на отдельном компьютере — строку в файле `hosts`).
-Порт 80 должен быть свободен. Проверка: `sudo ss -ltnp | grep ':80 '` — пусто = свободен. Если занят
-(например, nginx или apache), поставьте `WEB_PORT=8080` и открывайте `http://192.168.48.103:8080`.
+**Продление сертификата.** Текущий действует **до 28.11.2026**. Новый: положите новые `fullchain.crt` и
+`private.key` в `~/parts_bot/certs/` и выполните `docker compose restart proxy`. Проверить срок:
+`openssl x509 -in ~/parts_bot/certs/fullchain.crt -noout -enddate`.
 
 ### Вход
 
@@ -590,7 +604,9 @@ docker compose logs --tail 20 bot
 | Админу не приходят заказы | Этот Telegram ID есть в `ADMIN_IDS`? Нажимал ли он **Start** в боте? После правки `.env` — `docker compose up -d`. |
 | Дилеру не приходят заказы | В карточке дилера **👥 Сотрудники** — есть ли он там? Если нет — новое приглашение. |
 | `docker compose logs backup`: *backup FAILED* | Проверьте, что `postgres` работает (`docker compose ps`) и пароль в `.env` тот же, что при первом запуске. |
-| Панель не открывается | `docker compose ps` — `web` в `Up`? Компьютер в той же сети? Открывайте `http://IP` (не https). Файрвол сервера: `sudo ufw allow from 192.168.0.0/16 to any port 80`. Ошибка `address already in use` в `docker compose up` — порт 80 занят, см. «Настройка». |
+| Панель не открывается | `docker compose ps` — `web` и `proxy` в `Up`? `ping partsbot.jacmotors.uz` отвечает `192.168.48.103`? (нет — нужна запись в DNS/hosts). Файрвол: `sudo ufw allow from 192.168.0.0/16 to any port 80,443 proto tcp`. `address already in use` — порт 80/443 занят другой программой. |
+| `proxy` постоянно перезапускается | `docker compose logs --tail 30 proxy`. `cannot load certificate` — нет файлов в `certs/` или они собраны без перевода строки; `key values mismatch` — ключ не от этого сертификата. |
+| Предупреждение «подключение не защищено» | Открыли по IP, а не по имени, или сертификат истёк (см. «Продление сертификата»). |
 | В панели «Неверный логин или пароль» | Возьмите новый пароль: в боте `/panel` → 🔑 Новый пароль. Логин — без @. |
 | Нет места на диске | `df -h`; старые образы: `docker image prune -f`. Логи и копии ограничены автоматически. |
 

@@ -115,7 +115,7 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     # Ключ подписи cookie: WEB_SECRET из .env, иначе выводится из токена бота (не меняется между перезапусками)
     secret = os.getenv("WEB_SECRET") or hashlib.sha256(f"panel:{settings.bot_token}".encode()).hexdigest()
     app.add_middleware(SessionMiddleware, secret_key=secret, session_cookie="jac_panel",
-                       max_age=12 * 3600, same_site="strict", https_only=False)
+                       max_age=12 * 3600, same_site="strict", https_only=os.getenv("WEB_HTTPS") == "1")
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     register_routes(app)
     return app
