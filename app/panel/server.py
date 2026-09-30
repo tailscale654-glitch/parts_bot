@@ -32,12 +32,14 @@ from app.config import Settings, load_settings
 from app.database.database import create_engine, create_session_factory
 from app.database.models import (
     AuditLog,
+    BotSetting,
     Broadcast,
     Dealer,
     DealerStaff,
     OrderMessage,
     Part,
     Region,
+    SyncRun,
     User,
     WebUser,
 )
@@ -854,6 +856,34 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
                         f"UZ: {region.name_uz or '—'}; EN: {region.name_en or '—'}; порядок {region.sort_order}; "
                         f"{'показывается' if region.active else 'скрыт'}")
         return back("/settings#regions", f"Регион «{region.name_ru}» сохранён.")
+
+    # --- синхронизация с CarSale ---
+
+    @app.get("/sync", response_class=HTMLResponse)
+    async def sync_page(request: Request, web: WebUser = Depends(require("upload")),
+                        session: AsyncSession = Depends(get_session)):
+        from app.sync.runner import REQUEST_KEY, SyncConfig
+        cfg = SyncConfig.from_env()
+        runs = list(await session.scalars(select(SyncRun).order_by(SyncRun.id.desc()).limit(30)))
+        flag = await session.get(BotSetting, REQUEST_KEY)
+        requested = bool(flag and flag.value)
+        busy = requested or any(r.status == "running" for r in runs)
+        last_ok = next((r for r in runs if r.status == "ok"), None)
+        return render(request, "sync.html", web, cfg=cfg, runs=runs, requested=requested, busy=busy, last_ok=last_ok)
+
+    @app.post("/sync/run")
+    async def sync_run(request: Request, csrf: str = Form(""), web: WebUser = Depends(require("upload")),
+                       session: AsyncSession = Depends(get_session)):
+        from app.sync.runner import REQUEST_KEY
+        check_csrf(request, csrf)
+        flag = await session.get(BotSetting, REQUEST_KEY)
+        if flag is None:
+            session.add(BotSetting(key=REQUEST_KEY, value=datetime.now(timezone.utc).isoformat()))
+        else:
+            flag.value = datetime.now(timezone.utc).isoformat()
+        await session.commit()
+        await audit.log(session, web, "sync.run", "CarSale")
+        return back("/sync", "Запрос отправлен. Синхронизация начнётся в течение минуты и займёт 3–5 минут.")
 
     # --- журнал действий ---
 

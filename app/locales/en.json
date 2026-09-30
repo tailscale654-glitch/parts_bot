@@ -318,5 +318,6 @@
   "contact_phone_label": "Phone",
   "contact_hours_label": "Working hours",
   "contact_address_label": "Address",
-  "contact_write_btn": "✍️ Message the manager"
+  "contact_write_btn": "✍️ Message the manager",
+  "sync_failed": "⚠️ CarSale sync failed — stock in the bot was not changed.\n\n{error}\n\nDetails: web panel → “🔄 CarSale” or docker compose logs --tail 100 sync"
 }

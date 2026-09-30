@@ -19,6 +19,7 @@ ACTIONS = {
     "client.blocked": "Блокировка клиента",
     "part.translation": "Перевод детали",
     "upload.apply": "Загрузка Excel",
+    "sync.run": "Синхронизация CarSale (вручную)",
     "broadcast": "Рассылка",
     "settings.contacts": "Контакты менеджера",
     "region.edit": "Регион",

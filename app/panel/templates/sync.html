@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}CarSale — {{ brand }}{% endblock %}
+{% block head %}{% if busy %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+{% block content %}
+<h1>Синхронизация с CarSale</h1>
+<div class="grid2">
+<div class="card">
+  {% if not cfg.login or not cfg.password %}
+  <div class="error">Не заданы <b>CARSALE_LOGIN</b> и <b>CARSALE_PASSWORD</b> в файле .env на сервере — синхронизация выключена.</div>
+  {% endif %}
+  <p>Бот сам входит в <b>{{ cfg.base_url }}</b> под логином <b>{{ cfg.login or '—' }}</b>, читает «Список запчастей»
+  (статус «У дилера», по каждому дилеру) и обновляет цены и остатки — так же, как при загрузке Excel.</p>
+  <p>Расписание: {% if cfg.every_minutes %}<b>каждые {{ cfg.every_minutes }} мин.</b>{% else %}<b>только по кнопке</b>{% endif %}
+  {% if last_ok %} · последняя удачная: <b>{{ fmt_date(last_ok.finished_at) }}</b>{% endif %}</p>
+  <form method="post" action="/sync/run"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn primary" {{ 'disabled' if busy or not cfg.login }}>🔄 Синхронизировать сейчас</button>
+    {% if busy %}<span class="muted">⏳ {{ 'в очереди…' if requested else 'идёт…' }} страница обновится сама</span>{% endif %}
+  </form>
+</div>
+<div class="card"><b>Защита от ошибок</b>
+  <ul class="muted">
+    <li>По каждому дилеру сумма строк сверяется с итогом «Кол-во у дилера» в CarSale.</li>
+    <li>Сумма по всем дилерам сверяется с общим итогом.</li>
+    <li>Если скрылось бы больше {{ (cfg.max_hidden_share * 100)|round|int }}% деталей — ничего не меняется.</li>
+    <li>При ошибке остатки в боте остаются прежними, администраторы получают сообщение в Telegram.</li>
+  </ul>
+</div>
+</div>
+
+<h2>История</h2>
+<div class="tablewrap"><table>
+  <tr><th>Начало</th><th>Запуск</th><th>Статус</th><th class="num">Дилеров</th><th class="num">Строк</th><th class="num">Штук</th><th>Результат</th></tr>
+  {% for r in runs %}
+  <tr><td style="white-space:nowrap">{{ fmt_date(r.started_at) }}</td>
+    <td>{{ 'вручную' if r.trigger == 'manual' else 'по расписанию' }}</td>
+    <td>{% if r.status == 'ok' %}<span class="st st-COMPLETED">✅ готово</span>{% elif r.status == 'running' %}<span class="st st-NEW">⏳ идёт</span>{% else %}<span class="st st-CANCELLED">⚠️ ошибка</span>{% endif %}</td>
+    <td class="num">{{ r.dealers or '' }}</td><td class="num">{{ r.rows or '' }}</td><td class="num">{{ r.pieces or '' }}</td>
+    <td style="max-width:460px"><pre class="report muted" style="font-size:12px">{{ r.error or r.summary }}</pre></td></tr>
+  {% else %}<tr><td colspan="7" class="muted">Синхронизаций ещё не было.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

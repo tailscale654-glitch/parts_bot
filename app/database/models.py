@@ -336,3 +336,21 @@ class AuditLog(Base):
     target: Mapped[str] = mapped_column(String(255), default="", server_default="")
     details: Mapped[str] = mapped_column(Text, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class SyncRun(Base):
+    """Одна синхронизация остатков с CarSale (сервис sync). status: running | ok | failed."""
+
+    __tablename__ = "sync_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(32), default="carsale", server_default="carsale")
+    trigger: Mapped[str] = mapped_column(String(16), default="schedule", server_default="schedule")
+    status: Mapped[str] = mapped_column(String(16), default="running", server_default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rows: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    dealers: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    pieces: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    error: Mapped[str] = mapped_column(Text, default="", server_default="")

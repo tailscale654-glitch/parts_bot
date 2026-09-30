@@ -112,3 +112,16 @@ async def test_audit_log(env):
     assert f"заказ №{env.order.id}" in html and "Вход в панель</td>" not in html
     await login(env.client, *env.creds["operator"])
     assert (await env.client.get("/audit")).status_code == 403
+
+
+async def test_sync_page_and_manual_request(env):
+    from app.database.models import BotSetting
+    from app.sync.runner import REQUEST_KEY
+    await login(env.client, *env.creds["admin"])
+    r = await env.client.get("/sync")
+    assert r.status_code == 200 and "CarSale" in r.text and "Синхронизаций ещё не было" in r.text
+    await post(env.client, "/sync/run", {}, "/sync")
+    flag = await env.db.get(BotSetting, REQUEST_KEY)
+    assert flag is not None and flag.value
+    await login(env.client, *env.creds["operator"])
+    assert (await env.client.get("/sync")).status_code == 403

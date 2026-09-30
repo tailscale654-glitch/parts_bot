@@ -318,5 +318,6 @@
   "contact_phone_label": "Телефон",
   "contact_hours_label": "Часы работы",
   "contact_address_label": "Адрес",
-  "contact_write_btn": "✍️ Написать менеджеру"
+  "contact_write_btn": "✍️ Написать менеджеру",
+  "sync_failed": "⚠️ Синхронизация с CarSale не удалась — остатки в боте не изменены.\n\n{error}\n\nПодробно: веб-панель → «🔄 CarSale» или docker compose logs --tail 100 sync"
 }

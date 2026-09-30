@@ -1,0 +1,17 @@
+# Сервис синхронизации с CarSale: тот же код бота + браузер Chromium (Playwright).
+# Образ большой (~1,5 ГБ) из-за браузера — собирается один раз.
+FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /bot
+
+COPY requirements.txt requirements-sync.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-sync.txt
+
+COPY . .
+RUN chown -R pwuser /bot
+USER pwuser
+
+CMD ["python", "-m", "app.sync"]

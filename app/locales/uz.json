@@ -318,5 +318,6 @@
   "contact_phone_label": "Telefon",
   "contact_hours_label": "Ish vaqti",
   "contact_address_label": "Manzil",
-  "contact_write_btn": "✍️ Menejerga yozish"
+  "contact_write_btn": "✍️ Menejerga yozish",
+  "sync_failed": "⚠️ CarSale bilan sinxronlash bo‘lmadi — botdagi qoldiqlar o‘zgarmadi.\n\n{error}\n\nBatafsil: veb-panel → «🔄 CarSale» yoki docker compose logs --tail 100 sync"
 }

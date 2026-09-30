@@ -65,6 +65,22 @@ services:
       - web
     logging: *logging
 
+  sync:
+    # Синхронизация остатков с CarSale (app.carsale.uz) — см. README «Синхронизация с CarSale».
+    # Выключить: CARSALE_SYNC_MINUTES=0 в .env (останется только кнопка в панели) или не задавать CARSALE_LOGIN.
+    build:
+      context: .
+      dockerfile: Dockerfile.sync
+    restart: unless-stopped
+    env_file: .env
+    shm_size: "1gb"  # браузеру нужна общая память
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bot:
+        condition: service_started  # бот применяет миграции базы
+    logging: *logging
+
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
