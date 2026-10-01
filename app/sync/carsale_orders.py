@@ -160,21 +160,26 @@ async def _add_part(page, req: SaleRequest, line: SaleLine) -> None:
     cards = page.locator("div, li, button").filter(has_text=re.compile(r"Остаток:\s*\d+")) \
         .filter(has_text=line.part_number)
     entries: list[tuple[int, int]] = []
+    seen: list[str] = []
     count = await cards.count()
     for i in range(count):
-        text = await cards.nth(i).inner_text()
-        if len(text) > 300 or text.count("Остаток") != 1:  # пропускаем внешние контейнеры
+        # части карточки бывают в отдельных блоках («Остаток:» / «50» / «·» на разных строках) — склеиваем
+        flat = " ".join((await cards.nth(i).inner_text()).split())
+        if len(flat) > 300 or flat.count("Остаток") != 1:  # пропускаем внешние контейнеры
             continue
-        first = text.strip().splitlines()[0].strip()
-        if first.upper() != line.part_number.upper():
+        seen.append(flat)
+        if not flat.upper().startswith(line.part_number.upper()):
             continue
-        info = next(ln for ln in text.splitlines() if "Остаток" in ln)  # «Остаток: 50 · 85 500 · ДИЛЕР»
-        if dealer_key(info.rsplit("·", 1)[-1]) != req.dealer_key:
+        head, info = flat.split("Остаток", 1)  # info: «: 50 · 85 500 · ДИЛЕР [Дилер]»
+        if not re.search(rf"(^|\s){re.escape(line.part_number)}(\s|$)", head, re.I):
+            continue  # другой артикул, начинающийся так же (например, …0040 и …0040-01)
+        if req.dealer_key not in dealer_key(info):
             continue
-        stock = int(re.search(r"Остаток:\s*(\d+)", info).group(1))
+        stock = int(re.search(r":\s*(\d+)", info).group(1))
         entries.append((i, stock))
     if not entries:
-        raise CarsaleError(f"В CarSale у дилера нет запчасти {line.part_number}")
+        sample = "; ".join(dict.fromkeys(seen))[:300] or "список пуст"
+        raise CarsaleError(f"В CarSale у дилера нет запчасти {line.part_number} (в поиске: {sample})")
     index = pick_stock(entries, line.quantity)
     if index is None:
         best = max(s for _, s in entries)
