@@ -20,6 +20,7 @@ ACTIONS = {
     "part.translation": "Перевод детали",
     "upload.apply": "Загрузка Excel",
     "sync.run": "Синхронизация CarSale (вручную)",
+    "sync.sale": "Продажа в CarSale",
     "broadcast": "Рассылка",
     "settings.contacts": "Контакты менеджера",
     "region.edit": "Регион",

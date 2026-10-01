@@ -1,6 +1,8 @@
 """Заказы: создание из корзины, смена статуса, история клиента."""
 from __future__ import annotations
 
+import os
+
 from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
@@ -8,7 +10,7 @@ from decimal import Decimal
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import CartItem, Order, OrderItem, Stock, User
+from app.database.models import CarsaleOp, CartItem, Order, OrderItem, Stock, User
 from app.database.repositories.cart import is_available
 
 # Какой статус можно поставить из текущего
@@ -20,6 +22,12 @@ TRANSITIONS = {
     "CANCELLED": set(),
 }
 FINAL_STATUSES = {"COMPLETED", "CANCELLED"}
+
+
+def carsale_mode() -> str:
+    """CARSALE_ORDERS в .env: off — не писать в CarSale; dry — заполнить форму без сохранения; on — записывать."""
+    mode = os.getenv("CARSALE_ORDERS", "off").strip().lower()
+    return mode if mode in ("off", "dry", "on") else "off"
 
 
 @dataclass
@@ -128,5 +136,10 @@ class OrderRepository:
                 if item.stock_id in stocks:
                     stocks[item.stock_id].quantity += item.quantity
         order.status = new_status
+        if new_status == "COMPLETED" and carsale_mode() != "off":
+            # выдан клиенту → сервис sync запишет продажу в CarSale (см. app/sync/carsale_orders.py)
+            exists = await self.session.scalar(select(CarsaleOp.id).where(CarsaleOp.order_id == order.id))
+            if exists is None:
+                self.session.add(CarsaleOp(order_id=order.id, kind="sale"))
         await self.session.flush()
         return True

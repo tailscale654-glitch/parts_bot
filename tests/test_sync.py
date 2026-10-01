@@ -107,3 +107,102 @@ def test_write_xlsx_is_valid_warehouse_export(tmp_path):
     path = write_xlsx(snapshot([row(7, "X1", "OIL FILTER", "OOO «ASIAMOTOR»", model="T8-P30BF")]), tmp_path / "s.xlsx")
     rows, errors, _, fmt = validate_any(path, [Region(id=1, code="tashkent_city", name_ru="Ташкент")])
     assert fmt == "warehouse" and errors == [] and rows[0].stock == 7 and rows[0].model["ru"] == "JAC T8"
+
+
+# ---------- продажи бота → CarSale ----------
+
+from app.database.models import CarModel, CarsaleOp, Node, Order, OrderItem, User  # noqa: E402
+from app.database.repositories.orders import OrderRepository  # noqa: E402
+from app.sync.carsale_orders import AfterSaveError, SaleResult, phone_digits, pick_stock  # noqa: E402
+from app.sync.runner import mark_stale, process_sales, sale_request  # noqa: E402
+
+
+async def ready_order(f, status="READY"):
+    async with f() as s:
+        stock = await s.scalar(select(Stock))
+        if stock is None:
+            dealer = Dealer(region_id=1, name="OOO «China Group»")
+            part = Part(name_ru="Фильтр", name_en="FILTER", part_number="1010208GD190",
+                        model=CarModel(name_ru="Все модели"), node=Node(name_ru="ТО"))
+            stock = Stock(part=part, dealer=dealer, price=Decimal(85500), quantity=10)
+            s.add(stock)
+            await s.flush()
+        n = await s.scalar(select(func.count(User.id)))
+        user = User(telegram_id=77 + n, first_name="Азиз", phone="998901234567", language="ru", region_id=1)
+        order = Order(user=user, dealer_id=stock.dealer_id, status=status, total_amount=Decimal(171000))
+        order.items = [OrderItem(part_id=stock.part_id, stock_id=stock.id, part_number="1010208GD190",
+                                 name_ru="Фильтр", name_en="FILTER", quantity=2, price=Decimal(85500),
+                                 total=Decimal(171000))]
+        s.add(order)
+        await s.commit()
+        return order.id
+
+
+async def complete(f, order_id):
+    async with f() as s:
+        order = await s.get(Order, order_id)
+        assert await OrderRepository(s).set_status(order, "COMPLETED")
+        await s.commit()
+
+
+async def ops(f):
+    async with f() as s:
+        return list((await s.scalars(select(CarsaleOp).order_by(CarsaleOp.id))).unique())
+
+
+def test_helpers():
+    assert phone_digits("+998 90 123-45-67") == "901234567"
+    assert pick_stock([(0, 1), (1, 10), (2, 5)], 4) == 1 and pick_stock([(0, 1)], 2) is None
+
+
+async def test_completed_order_is_queued_only_when_enabled(factory, monkeypatch):
+    monkeypatch.setenv("CARSALE_ORDERS", "off")
+    await complete(factory, await ready_order(factory))
+    assert await ops(factory) == []
+    monkeypatch.setenv("CARSALE_ORDERS", "dry")
+    order_id = await ready_order(factory)
+    await complete(factory, order_id)
+    queued = await ops(factory)
+    assert [(o.order_id, o.status) for o in queued] == [(order_id, "queued")]
+    async with factory() as s:
+        req = sale_request(await s.get(Order, order_id))
+    assert (req.client_phone, req.dealer_key, req.lines[0].quantity) == ("+998901234567", "chinagroup", 2)
+    assert "заказ №" in req.note
+
+
+async def test_process_sales_outcomes(factory, monkeypatch):
+    monkeypatch.setenv("CARSALE_ORDERS", "on")
+    ids = [await ready_order(factory) for _ in range(3)]
+    for i in ids:
+        await complete(factory, i)
+    outcomes = iter([SaleResult(saved=True, message="ok"), CarsaleError("нет запчасти"), AfterSaveError("не закрылась")])
+    seen_save = []
+
+    async def submitter(req, cfg, save):
+        seen_save.append(save)
+        result = next(outcomes)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    assert await process_sales(factory, CFG, None, None, submitter) == 3
+    assert [o.status for o in await ops(factory)] == ["done", "failed", "unknown"]
+    assert seen_save == [True, True, True]
+    assert await process_sales(factory, CFG, None, None, submitter) == 0  # ничего не повторяет само
+
+
+async def test_queued_sale_keeps_stock_reserved_and_stale_running_becomes_unknown(factory, monkeypatch):
+    monkeypatch.setenv("CARSALE_ORDERS", "on")
+    order_id = await ready_order(factory)
+    await complete(factory, order_id)
+    # синхронизация пришла раньше, чем бот списал в CarSale: 10 шт. в CarSale, 2 из них уже выданы
+    snap = snapshot([row(10, "1010208GD190", "FILTER", "OOO «China Group»")])
+    run = await run_sync(factory, CFG, fetcher=fetcher_for(snap))
+    assert run.status == "ok" and "Вычтено из остатков" in run.summary
+    async with factory() as s:
+        assert (await s.scalar(select(Stock))).quantity == 8
+        op = (await s.scalars(select(CarsaleOp))).unique().one()
+        op.status = "running"
+        await s.commit()
+    await mark_stale(factory)
+    assert (await ops(factory))[0].status == "unknown"

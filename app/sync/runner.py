@@ -18,10 +18,14 @@ from aiogram import Bot
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database.models import BotSetting, Part, SyncRun
+from aiogram.types import BufferedInputFile
+
+from app.database.models import BotSetting, CarsaleOp, Order, Part, SyncRun
+from app.database.repositories.orders import carsale_mode
 from app.services import import_flow
 from app.services.notify import notify_admins_text, send
 from app.sync.carsale import CarsaleError, Snapshot, fetch_snapshot, write_xlsx
+from app.sync.carsale_orders import AfterSaveError, SaleLine, SaleRequest, SaleResult, submit_sale
 
 logger = logging.getLogger(__name__)
 REQUEST_KEY = "carsale_sync_request"  # веб-панель пишет сюда время нажатия «Синхронизировать сейчас»
@@ -133,6 +137,82 @@ async def notify(bot: Bot | None, session_factory: async_sessionmaker, settings,
                                           f"{run.pieces} шт.\n\n{run.summary}"[:4000])
 
 
+# ---------- продажи бота → CarSale ----------
+
+SaleSubmitter = Callable[[SaleRequest, SyncConfig, bool], Awaitable[SaleResult]]
+
+
+async def default_submitter(req: SaleRequest, cfg: SyncConfig, save: bool) -> SaleResult:
+    return await submit_sale(req, cfg.login, cfg.password, cfg.base_url, save=save)
+
+
+def sale_request(order: Order) -> SaleRequest:
+    from app.services.notify import person_name
+
+    lines: dict[str, SaleLine] = {}
+    for item in order.items:
+        line = lines.setdefault(item.part_number, SaleLine(item.part_number, item.name_en or item.name_ru, 0))
+        line.quantity += item.quantity
+    phone = "".join(ch for ch in (order.user.phone or "") if ch.isdigit())
+    return SaleRequest(order_id=order.id, dealer_name=order.dealer.name, dealer_key=order.dealer.name_key,
+                       client_name=person_name(order.user), client_phone=f"+{phone}" if phone else "",
+                       lines=list(lines.values()))
+
+
+async def process_sales(session_factory: async_sessionmaker, cfg: SyncConfig, bot: Bot | None, settings,
+                        submitter: SaleSubmitter = default_submitter, limit: int = 5) -> int:
+    """Обработать очередь: заказы, выданные клиенту, записать в CarSale. → сколько обработано."""
+    mode = carsale_mode()
+    if mode == "off" or not cfg.login or not cfg.password:
+        return 0
+    async with session_factory() as session:
+        ids = list(await session.scalars(select(CarsaleOp.id).where(CarsaleOp.status == "queued")
+                                         .order_by(CarsaleOp.id).limit(limit)))
+    for op_id in ids:
+        async with session_factory() as session:
+            op = await session.get(CarsaleOp, op_id)
+            if op is None or op.status != "queued":
+                continue
+            op.status, op.attempts = "running", op.attempts + 1
+            await session.commit()
+            req = sale_request(op.order)
+        status, shot = "failed", b""
+        try:
+            result = await submitter(req, cfg, mode == "on")
+            status = "done" if result.saved else "dry"
+            message, shot = result.message, result.screenshot
+        except AfterSaveError as e:
+            status, message = "unknown", str(e)
+        except CarsaleError as e:
+            message = str(e)
+        except Exception as e:
+            message = f"{type(e).__name__}: {e}"[:1500]
+            logger.exception("CarSale sale for order %s crashed", req.order_id)
+        async with session_factory() as session:
+            op = await session.get(CarsaleOp, op_id)
+            op.status, op.message = status, message[:2000]
+            await session.commit()
+        logger.info("CarSale sale order %s: %s — %s", req.order_id, status, message)
+        await notify_sale(bot, settings, req, status, message, shot)
+    return len(ids)
+
+
+async def notify_sale(bot: Bot | None, settings, req: SaleRequest, status: str, message: str, shot: bytes) -> None:
+    if bot is None or settings is None or status == "done":
+        return
+    head = {"dry": "🧪 CarSale, пробный режим", "failed": "⚠️ CarSale: заказ не записан",
+            "unknown": "❓ CarSale: проверьте вручную"}[status]
+    text = f"{head} — заказ №{req.order_id}\n\n{message}"[:1000]
+    for admin_id in settings.admin_ids:
+        try:
+            if shot:
+                await bot.send_photo(admin_id, BufferedInputFile(shot, f"carsale_{req.order_id}.png"), caption=text)
+            else:
+                await send(bot, admin_id, text)
+        except Exception as e:  # уведомление не должно ломать очередь
+            logger.warning("Cannot notify %s about CarSale sale: %s", admin_id, e)
+
+
 async def take_request(session_factory: async_sessionmaker) -> bool:
     """Нажали ли в панели «Синхронизировать сейчас» (флаг снимается)."""
     async with session_factory() as session:
@@ -145,16 +225,20 @@ async def take_request(session_factory: async_sessionmaker) -> bool:
 
 
 async def mark_stale(session_factory: async_sessionmaker) -> None:
-    """Если сервис перезапустился посреди синхронизации — отметить её как прерванную."""
+    """Если сервис перезапустился посреди работы — синхронизацию отметить прерванной,
+    а запись заказа — «unknown» (могла успеть сохраниться: человек проверит)."""
     async with session_factory() as session:
         for run in await session.scalars(select(SyncRun).where(SyncRun.status == "running")):
             run.status, run.error = "failed", "Прервано перезапуском сервиса"
             run.finished_at = datetime.now(timezone.utc)
+        for op in (await session.scalars(select(CarsaleOp).where(CarsaleOp.status == "running"))).unique():
+            op.status, op.message = "unknown", "Сервис перезапустился во время записи — проверьте заказ в CarSale"
         await session.commit()
 
 
 async def loop(session_factory: async_sessionmaker, cfg: SyncConfig, bot: Bot | None, settings,
-               fetcher: Fetcher = default_fetcher, poll_seconds: int = 20, once: bool = False) -> None:
+               fetcher: Fetcher = default_fetcher, poll_seconds: int = 20, once: bool = False,
+               submitter: SaleSubmitter = default_submitter) -> None:
     for attempt in range(30):  # при первом запуске бот ещё может применять миграции
         try:
             await mark_stale(session_factory)
@@ -168,6 +252,10 @@ async def loop(session_factory: async_sessionmaker, cfg: SyncConfig, bot: Bot | 
             return
     last_run = 0.0
     while True:
+        try:
+            await process_sales(session_factory, cfg, bot, settings, submitter)  # продажи — в первую очередь
+        except Exception:
+            logger.exception("CarSale sales queue error")
         try:
             manual = await take_request(session_factory)
             now = asyncio.get_running_loop().time()

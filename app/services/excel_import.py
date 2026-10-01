@@ -16,10 +16,10 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import CarModel, Dealer, Node, Order, OrderItem, Part, Region, Stock
+from app.database.models import CarModel, CarsaleOp, Dealer, Node, Order, OrderItem, Part, Region, Stock
 from app.services import import_mapping as mapping
 from app.services.part_names import has_translation, translate
 from app.services.dealers import dealer_key, find_region, is_directory, region_lookup, validate_directory
@@ -460,7 +460,12 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
     reserved_rows = await session.execute(
         select(OrderItem.part_id, Order.dealer_id, func.sum(OrderItem.quantity))
         .join(Order, Order.id == OrderItem.order_id)
-        .where(Order.status.in_(("NEW", "CONFIRMED", "READY")), OrderItem.part_id.is_not(None))
+        .where(or_(
+            Order.status.in_(("NEW", "CONFIRMED", "READY")),
+            # выдан, но ещё не списан в CarSale (очередь сервиса sync) — в CarSale остаток пока прежний
+            and_(Order.status == "COMPLETED", select(CarsaleOp.id).where(
+                CarsaleOp.order_id == Order.id, CarsaleOp.status.in_(("queued", "running"))).exists()),
+        ), OrderItem.part_id.is_not(None))
         .group_by(OrderItem.part_id, Order.dealer_id)
     )
     for part_id, dealer_id, qty in reserved_rows.all():

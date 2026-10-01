@@ -27,7 +27,38 @@
 </div>
 </div>
 
-<h2>История</h2>
+<h2>Продажи бота в CarSale</h2>
+<div class="card">
+  <p>Когда заказ в боте получает статус <b>«Выдан»</b>, бот оформляет его в CarSale («Перемещение → Заказы запчастей →
+  Оформить заказ»): дилер, клиент, запчасти, в «Примечании» — номер заказа бота. В CarSale это сразу «Заказ реализован» — расход с дилера.</p>
+  <p>Режим (CARSALE_ORDERS в .env): {% if orders_mode == 'on' %}<span class="st st-COMPLETED">✅ включено — записывает</span>
+  {% elif orders_mode == 'dry' %}<span class="st st-NEW">🧪 пробный — заполняет форму, не сохраняет, присылает скриншот</span>
+  {% else %}<span class="st">выключено</span>{% endif %}</p>
+</div>
+<div class="tablewrap"><table>
+  <tr><th>Заказ</th><th>Поставлен</th><th>Статус</th><th>Попыток</th><th>Результат</th><th></th></tr>
+  {% for o in ops %}
+  <tr><td><a href="/orders/{{ o.order_id }}">№{{ o.order_id }}</a><br><span class="muted">{{ o.order.dealer.name }}</span></td>
+    <td style="white-space:nowrap">{{ fmt_date(o.created_at) }}</td>
+    <td>{% if o.status == 'done' %}<span class="st st-COMPLETED">✅ записан</span>
+      {% elif o.status == 'dry' %}<span class="st st-NEW">🧪 пробный</span>
+      {% elif o.status in ('queued', 'running') %}<span class="st st-CONFIRMED">⏳ {{ 'в очереди' if o.status == 'queued' else 'записывается' }}</span>
+      {% elif o.status == 'unknown' %}<span class="st st-READY">❓ проверить</span>
+      {% else %}<span class="st st-CANCELLED">⚠️ ошибка</span>{% endif %}</td>
+    <td class="num">{{ o.attempts }}</td>
+    <td style="max-width:420px"><pre class="report muted" style="font-size:12px">{{ o.message }}</pre></td>
+    <td class="row-actions">{% if o.status in ('failed', 'unknown', 'dry') %}
+      <form method="post" action="/sync/ops/{{ o.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="retry">
+        <button class="btn small" {% if o.status == 'unknown' %}onclick="return confirm('Вы проверили в CarSale, что заказ №{{ o.order_id }} НЕ записан?')"{% endif %}>↻ Повторить</button></form>{% endif %}
+      {% if o.status in ('unknown', 'failed') %}
+      <form method="post" action="/sync/ops/{{ o.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="done">
+        <button class="btn small">✓ Записан вручную</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">Пока ничего — появится, когда заказ в боте получит статус «Выдан».</td></tr>{% endfor %}
+</table></div>
+<p class="muted">«❓ проверить» — запись оборвалась после «Сохранить». Найдите в CarSale заказ по «Примечанию» (JAC Parts Bot · заказ №…):
+есть — «Записан вручную», нет — «Повторить». Бот сам такие заказы не повторяет, чтобы не списать дважды.</p>
+
+<h2>История синхронизаций</h2>
 <div class="tablewrap"><table>
   <tr><th>Начало</th><th>Запуск</th><th>Статус</th><th class="num">Дилеров</th><th class="num">Строк</th><th class="num">Штук</th><th>Результат</th></tr>
   {% for r in runs %}

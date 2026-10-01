@@ -354,3 +354,27 @@ class SyncRun(Base):
     pieces: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     summary: Mapped[str] = mapped_column(Text, default="", server_default="")
     error: Mapped[str] = mapped_column(Text, default="", server_default="")
+
+
+CARSALE_OP_STATUSES = ("queued", "running", "done", "dry", "failed", "unknown")
+
+
+class CarsaleOp(Base):
+    """Запись заказа бота в CarSale («Оформить заказ» при выдаче клиенту).
+    Одна запись на заказ (уникально) — так заказ не попадёт в CarSale дважды."""
+
+    __tablename__ = "carsale_ops"
+    __table_args__ = (UniqueConstraint("order_id", "kind", name="uq_carsale_ops_order_kind"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(16), default="sale", server_default="sale")
+    status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    message: Mapped[str] = mapped_column(Text, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    order: Mapped[Order] = relationship(lazy="joined")

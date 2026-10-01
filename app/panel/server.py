@@ -33,6 +33,7 @@ from app.database.database import create_engine, create_session_factory
 from app.database.models import (
     AuditLog,
     BotSetting,
+    CarsaleOp,
     Broadcast,
     Dealer,
     DealerStaff,
@@ -869,7 +870,29 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         requested = bool(flag and flag.value)
         busy = requested or any(r.status == "running" for r in runs)
         last_ok = next((r for r in runs if r.status == "ok"), None)
-        return render(request, "sync.html", web, cfg=cfg, runs=runs, requested=requested, busy=busy, last_ok=last_ok)
+        from app.database.repositories.orders import carsale_mode
+        ops = list((await session.scalars(select(CarsaleOp).order_by(CarsaleOp.id.desc()).limit(40))).unique())
+        busy = busy or any(o.status in ("queued", "running") for o in ops)
+        return render(request, "sync.html", web, cfg=cfg, runs=runs, requested=requested, busy=busy, last_ok=last_ok,
+                      ops=ops, orders_mode=carsale_mode())
+
+    @app.post("/sync/ops/{op_id}")
+    async def sync_op(op_id: int, request: Request, action: str = Form(...), csrf: str = Form(""),
+                      web: WebUser = Depends(require("upload")), session: AsyncSession = Depends(get_session)):
+        """failed/unknown/dry → «Повторить» (снова в очередь); unknown → «Записано» (проверили вручную)."""
+        check_csrf(request, csrf)
+        op = await session.get(CarsaleOp, op_id)
+        if op is None:
+            raise HTTPException(404, "Запись не найдена.")
+        if action == "retry" and op.status in ("failed", "unknown", "dry"):
+            op.status, op.message = "queued", f"Поставлено в очередь вручную ({web.login})"
+        elif action == "done" and op.status in ("unknown", "failed"):
+            op.status, op.message = "done", f"Отмечено как записанное вручную ({web.login})"
+        else:
+            return back("/sync", "Это действие сейчас недоступно.")
+        await session.commit()
+        await audit.log(session, web, "sync.sale", f"заказ №{op.order_id}", "повторить" if action == "retry" else "записано вручную")
+        return back("/sync", f"Заказ №{op.order_id}: {'снова в очереди' if action == 'retry' else 'отмечен как записанный'}.")
 
     @app.post("/sync/run")
     async def sync_run(request: Request, csrf: str = Form(""), web: WebUser = Depends(require("upload")),

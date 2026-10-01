@@ -182,6 +182,30 @@ def _js(body: str, **args) -> str:
 
 # ---------- сам браузер ----------
 
+async def sign_in(page, base_url: str, login: str, password: str) -> None:
+    """Страница входа CarSale: логин, пароль, Enter (или кнопка «Войти в систему»)."""
+    from playwright.async_api import TimeoutError as PwTimeout
+
+    await page.goto(f"{base_url}/auth", wait_until="domcontentloaded")
+    try:
+        await page.get_by_placeholder("Введите логин").fill(login)
+        await page.get_by_placeholder("Введите пароль").fill(password)
+    except PwTimeout as e:
+        raise CarsaleError("Не нашёл поля логина и пароля на странице входа CarSale") from e
+    await page.get_by_placeholder("Введите пароль").press("Enter")
+    try:
+        await page.wait_for_url(lambda url: "/auth" not in url, timeout=30_000)
+    except PwTimeout:
+        button = page.get_by_text("Войти в систему", exact=True)
+        if await button.count():
+            await button.first.click()
+        try:
+            await page.wait_for_url(lambda url: "/auth" not in url, timeout=30_000)
+        except PwTimeout as e:
+            raise CarsaleError("CarSale не пустил: проверьте CARSALE_LOGIN и CARSALE_PASSWORD") from e
+    logger.info("CarSale: вход выполнен")
+
+
 async def fetch_snapshot(login: str, password: str, base_url: str = "https://app.carsale.uz",
                          skip_dealers: set[str] | None = None, headless: bool = True) -> Snapshot:
     """Войти в CarSale и прочитать остатки всех дилеров. Бросает CarsaleError с понятной причиной."""
@@ -200,25 +224,7 @@ async def fetch_snapshot(login: str, password: str, base_url: str = "https://app
             page = await (await browser.new_context(locale="ru-RU", viewport={"width": 1600, "height": 1000})).new_page()
             page.set_default_timeout(60_000)
 
-            # 1. вход
-            await page.goto(f"{base_url}/auth", wait_until="domcontentloaded")
-            try:
-                await page.get_by_placeholder("Введите логин").fill(login)
-                await page.get_by_placeholder("Введите пароль").fill(password)
-            except PwTimeout as e:
-                raise CarsaleError("Не нашёл поля логина и пароля на странице входа CarSale") from e
-            await page.get_by_placeholder("Введите пароль").press("Enter")
-            try:
-                await page.wait_for_url(lambda url: "/auth" not in url, timeout=30_000)
-            except PwTimeout:
-                button = page.get_by_text("Войти в систему", exact=True)
-                if await button.count():
-                    await button.first.click()
-                try:
-                    await page.wait_for_url(lambda url: "/auth" not in url, timeout=30_000)
-                except PwTimeout as e:
-                    raise CarsaleError("CarSale не пустил: проверьте CARSALE_LOGIN и CARSALE_PASSWORD") from e
-            logger.info("CarSale: вход выполнен")
+            await sign_in(page, base_url, login, password)  # 1. вход
 
             # 2. список запчастей
             await page.goto(f"{base_url}/spare-parts/parts-list", wait_until="domcontentloaded")
