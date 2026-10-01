@@ -78,6 +78,19 @@ async def _wait(page, ms: int = 800) -> None:
     await page.wait_for_timeout(ms)
 
 
+async def _dismiss_tour(page) -> None:
+    """В новом браузере CarSale показывает обучение («1 / 8 … Пропустить / Далее»), и оно перекрывает
+    кнопки. Закрываем его, если появилось (может появиться не сразу и на каждой странице)."""
+    for _ in range(3):
+        skip = page.get_by_text("Пропустить", exact=True)
+        if not await skip.count() or not await skip.first.is_visible():
+            await _wait(page, 400)
+            if not await skip.count() or not await skip.first.is_visible():
+                return
+        await skip.first.click()
+        await _wait(page, 600)
+
+
 async def _click_visible(page, text: str) -> None:
     """Кнопка с этим текстом (может быть «+ Добавить …»); если не кнопка — любой видимый элемент."""
     pattern = re.compile(re.escape(text))
@@ -198,9 +211,11 @@ async def submit_sale(req: SaleRequest, login: str, password: str, base_url: str
             try:
                 await page.goto(f"{base_url}/spare-parts/movement", wait_until="domcontentloaded")
                 await page.wait_for_load_state("networkidle")
+                await _dismiss_tour(page)
                 step = "вкладка «Заказы запчастей»"
                 await _click_visible(page, "Заказы запчастей")
                 await _wait(page, 2000)
+                await _dismiss_tour(page)  # обучение может начаться и на вкладке
                 step = "кнопка «Оформить заказ»"
                 await _click_visible(page, "Оформить заказ")
                 await _wait(page, 1200)
