@@ -184,7 +184,7 @@ async def process_sales(session_factory: async_sessionmaker, cfg: SyncConfig, bo
         except AfterSaveError as e:
             status, message = "unknown", str(e)
         except CarsaleError as e:
-            message = str(e)
+            message, shot = str(e), getattr(e, "screenshot", b"")
         except Exception as e:
             message = f"{type(e).__name__}: {e}"[:1500]
             logger.exception("CarSale sale for order %s crashed", req.order_id)

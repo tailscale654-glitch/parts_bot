@@ -194,20 +194,34 @@ async def submit_sale(req: SaleRequest, login: str, password: str, base_url: str
             page = await (await browser.new_context(locale="ru-RU", viewport={"width": 1500, "height": 1100})).new_page()
             page.set_default_timeout(30_000)
             await sign_in(page, base_url, login, password)
-            await page.goto(f"{base_url}/spare-parts/movement", wait_until="domcontentloaded")
+            step = "открыть «Перемещение»"
             try:
-                await page.get_by_text("Заказы запчастей").first.click()
-                await _wait(page, 1500)
-                await page.get_by_role("button", name="Оформить заказ", exact=True).click()
-                await _wait(page)
+                await page.goto(f"{base_url}/spare-parts/movement", wait_until="domcontentloaded")
+                await page.wait_for_load_state("networkidle")
+                step = "вкладка «Заказы запчастей»"
+                await _click_visible(page, "Заказы запчастей")
+                await _wait(page, 2000)
+                step = "кнопка «Оформить заказ»"
+                await _click_visible(page, "Оформить заказ")
+                await _wait(page, 1200)
+                step = "выбор дилера"
                 await _choose_dealer(page, req)
+                step = "выбор клиента"
                 client = await _choose_client(page, req)
                 for line in req.lines:
+                    step = f"запчасть {line.part_number}"
                     await _add_part(page, req, line)
+                step = "примечание"
                 await page.get_by_placeholder(re.compile("Комментарий к заказу")).last.fill(req.note)
                 await _wait(page, 500)
-            except PwTimeout as e:
-                raise CarsaleError(f"CarSale: не нашёл нужный элемент формы ({str(e).splitlines()[0][:150]})") from e
+            except (PwTimeout, CarsaleError) as e:
+                error = CarsaleError(f"Шаг «{step}»: " + (str(e) if isinstance(e, CarsaleError) and not isinstance(
+                    e, PwTimeout) else f"не нашёл нужный элемент ({str(e).splitlines()[0][:150]})"))
+                try:
+                    error.screenshot = await page.screenshot(full_page=False)
+                except Exception:
+                    pass
+                raise error from e
             shot = await page.screenshot(full_page=False)
             summary = (f"дилер {req.dealer_name}, клиент {client}: {req.client_name} {req.client_phone}, "
                        + ", ".join(f"{ln.part_number} × {ln.quantity}" for ln in req.lines))
