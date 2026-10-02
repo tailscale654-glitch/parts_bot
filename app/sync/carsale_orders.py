@@ -22,7 +22,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from app.sync.carsale import CarsaleError, sign_in
+from app.sync.carsale import CarsaleError, open_page, sign_in
 from app.utils.names import dealer_key
 
 logger = logging.getLogger(__name__)
@@ -211,11 +211,10 @@ async def submit_sale(req: SaleRequest, login: str, password: str, base_url: str
         try:
             page = await (await browser.new_context(locale="ru-RU", viewport={"width": 1500, "height": 1100})).new_page()
             page.set_default_timeout(30_000)
-            await sign_in(page, base_url, login, password)
+            await sign_in(page, base_url, login, password)  # каждая запись — новый браузер и новый вход
             step = "открыть «Перемещение»"
             try:
-                await page.goto(f"{base_url}/spare-parts/movement", wait_until="domcontentloaded")
-                await page.wait_for_load_state("networkidle")
+                await open_page(page, base_url, "/spare-parts/movement", login, password)
                 await _dismiss_tour(page)
                 step = "вкладка «Заказы запчастей»"
                 await _click_visible(page, "Заказы запчастей")

@@ -186,6 +186,7 @@ async def sign_in(page, base_url: str, login: str, password: str) -> None:
     """Страница входа CarSale: логин, пароль, Enter (или кнопка «Войти в систему»)."""
     from playwright.async_api import TimeoutError as PwTimeout
 
+    await page.context.clear_cookies()  # каждый раз — чистый вход, без старой сессии
     await page.goto(f"{base_url}/auth", wait_until="domcontentloaded")
     try:
         await page.get_by_placeholder("Введите логин").fill(login)
@@ -204,6 +205,23 @@ async def sign_in(page, base_url: str, login: str, password: str) -> None:
         except PwTimeout as e:
             raise CarsaleError("CarSale не пустил: проверьте CARSALE_LOGIN и CARSALE_PASSWORD") from e
     logger.info("CarSale: вход выполнен")
+
+
+async def open_page(page, base_url: str, path: str, login: str, password: str) -> None:
+    """Открыть страницу CarSale. Если CarSale выкинул на вход (сессия истекла) — войти заново и открыть снова."""
+    from playwright.async_api import TimeoutError as PwTimeout
+
+    for attempt in range(2):
+        await page.goto(f"{base_url}{path}", wait_until="domcontentloaded")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15_000)
+        except PwTimeout:
+            pass
+        if "/auth" not in page.url:
+            return
+        logger.info("CarSale: сессия закончилась — вхожу заново")
+        await sign_in(page, base_url, login, password)
+    raise CarsaleError("CarSale снова и снова просит войти — проверьте CARSALE_LOGIN и CARSALE_PASSWORD")
 
 
 async def fetch_snapshot(login: str, password: str, base_url: str = "https://app.carsale.uz",
@@ -227,7 +245,7 @@ async def fetch_snapshot(login: str, password: str, base_url: str = "https://app
             await sign_in(page, base_url, login, password)  # 1. вход
 
             # 2. список запчастей
-            await page.goto(f"{base_url}/spare-parts/parts-list", wait_until="domcontentloaded")
+            await open_page(page, base_url, "/spare-parts/parts-list", login, password)
             try:
                 await page.wait_for_selector("main table tbody tr", timeout=60_000)
             except PwTimeout as e:
