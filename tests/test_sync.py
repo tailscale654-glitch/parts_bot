@@ -206,3 +206,25 @@ async def test_queued_sale_keeps_stock_reserved_and_stale_running_becomes_unknow
         await s.commit()
     await mark_stale(factory)
     assert (await ops(factory))[0].status == "unknown"
+
+
+async def test_untranslated_names_are_reported_once(factory):
+    from types import SimpleNamespace
+
+    from app.sync.runner import notify
+
+    sent = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, **kw):
+            sent.append(text)
+
+    settings = SimpleNamespace(admin_ids=[1], web_url="https://panel")
+    snap = snapshot([row(1, "Z1", "FLUX CAPACITOR UNKNOWN", "OOO «China Group»"),
+                     row(1, "Z2", "OIL FILTER", "OOO «China Group»")])
+    for _ in range(2):
+        run = await run_sync(factory, CFG, fetcher=fetcher_for(snap))
+        await notify(FakeBot(), factory, settings, run)
+    hits = [t for t in sent if "без перевода" in t]
+    assert len(hits) == 1 and "FLUX CAPACITOR UNKNOWN" in hits[0] and "OIL FILTER" not in hits[0]
+    assert "https://panel/catalog?show=untranslated" in hits[0]

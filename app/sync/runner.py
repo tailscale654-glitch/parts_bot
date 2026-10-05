@@ -71,6 +71,7 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
         run_id = run.id
 
     status, summary, error = "failed", "", ""
+    untranslated: list[str] = []
     snap: Snapshot | None = None
     path = Path(tempfile.gettempdir()) / f"carsale_{run_id}.xlsx"
     try:
@@ -95,6 +96,8 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
                 await db.rollback()
                 raise
         status = "ok"
+        untranslated = sorted({r.part_name["en"] for r in rows if r.part_name["ru"] == r.part_name["en"]
+                               and not r.part_name.get("uz")})
         summary = import_flow.stats_text("applied", stats, fmt, LANG)
         if warnings:
             summary += "\n\n" + "\n".join(import_flow.issue_lines(warnings, LANG, limit=10))
@@ -112,6 +115,7 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
         run = await session.get(SyncRun, run_id)
         run.status, run.summary, run.error = status, summary, error
         run.finished_at = datetime.now(timezone.utc)
+        run.untranslated = untranslated if status == "ok" else []
         if snap is not None:
             run.rows, run.dealers, run.pieces = len(snap.rows), len(snap.dealers), snap.pieces
         await session.commit()
@@ -123,10 +127,37 @@ async def previous_status(session: AsyncSession, before_id: int) -> str | None:
                                 .order_by(SyncRun.id.desc()).limit(1))
 
 
+UNTRANSLATED_KEY = "untranslated_notified"  # названия без перевода, о которых уже сообщили
+
+
+async def new_untranslated(session_factory: async_sessionmaker, names: list[str]) -> list[str]:
+    """Названия без перевода, о которых администраторам ещё не сообщали (чтобы не слать каждые 30 минут)."""
+    async with session_factory() as session:
+        flag = await session.get(BotSetting, UNTRANSLATED_KEY)
+        seen = set(filter(None, (flag.value if flag else "").split("\n")))
+        fresh = [n for n in names if n not in seen]
+        value = "\n".join(sorted(set(names)))  # переведённые сами уходят из списка
+        if flag is None:
+            session.add(BotSetting(key=UNTRANSLATED_KEY, value=value))
+        else:
+            flag.value = value
+        await session.commit()
+        return fresh
+
+
 async def notify(bot: Bot | None, session_factory: async_sessionmaker, settings, run: SyncRun) -> None:
-    """Администраторам — только при смене состояния (сломалось / починилось) и при ручном запуске."""
+    """Администраторам — только при смене состояния (сломалось / починилось) и при ручном запуске.
+    Плюс: в CarSale появились детали с названием без перевода — сразу, один раз на каждое название."""
+    fresh = await new_untranslated(session_factory, run.untranslated) if run.status == "ok" else []
     if bot is None:
         return
+    if fresh:
+        link = f"\n\nПеревести: {settings.web_url.rstrip('/')}/catalog?show=untranslated" if settings.web_url else ""
+        text = (f"🈯 Новые детали без перевода: {len(fresh)}. Покупатели видят их по-английски.\n\n"
+                + "\n".join(f"• {n}" for n in fresh[:30]) + ("\n…" if len(fresh) > 30 else "")
+                + (link or "\n\nПеревести: веб-панель → Каталог → «Без перевода»."))
+        for admin_id in settings.admin_ids:
+            await send(bot, admin_id, text[:4000])
     async with session_factory() as session:
         before = await previous_status(session, run.id)
         if run.status == "failed" and (before != "failed" or run.trigger == "manual"):
