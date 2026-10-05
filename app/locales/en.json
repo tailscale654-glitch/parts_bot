@@ -324,5 +324,6 @@
   "catalog_preview": "Part codes in file: {total}\n➕ New in the list: {new}\n🔄 Already known (models merged): {updated}\n\nBy model: {models}\n\n🚗 Parts in the bot without a model that will get one: {in_bot}\n\nThis file does not change stock or prices.",
   "catalog_applied": "✅ Parts list updated\n\nCodes in file: {total} (new {new})\nTotal in the list: {catalog_total}\n\n🚗 Parts in the bot that will get their model: {in_bot} — on the next CarSale sync (started now if the service is running) or the next stock upload.",
   "warn_catalog_no_model": "⚠️ Rows without a model skipped: {n}",
-  "warn_model_from_catalog": "📚 Model taken from the parts list: {n} rows"
+  "warn_model_from_catalog": "📚 Model taken from the parts list: {n} rows",
+  "warn_admin_hidden": "🙈 Hidden by an admin (panel edit): {n} rows"
 }

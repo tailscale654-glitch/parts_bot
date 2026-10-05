@@ -9,7 +9,7 @@
     <div class="s">{% if untranslated %}<a href="/catalog?show=untranslated">перевести →</a>{% else %}всё переведено{% endif %}</div></div>
 </div>
 <div class="tabs">
-  {% for key, label in [('', 'В боте'), ('untranslated', 'Без перевода'), ('hidden', 'Скрытые'), ('all', 'Все')] %}
+  {% for key, label in [('', 'В боте'), ('untranslated', 'Без перевода'), ('hidden', 'Скрытые'), ('edited', 'Изменённые'), ('all', 'Все')] %}
   <a class="{{ 'on' if show == key }}" href="/catalog?{{ urlencode(dict(query, show=key, page=1)) }}">{{ label }}</a>
   {% endfor %}
 </div>

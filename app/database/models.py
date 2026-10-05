@@ -394,3 +394,28 @@ class PartCatalog(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class PartOverride(Base):
+    """Правки детали администратором в веб-панели (по артикулу). Главнее CarSale и Excel:
+    сохраняются при каждой синхронизации. Пустое поле — берётся из выгрузки как обычно."""
+
+    __tablename__ = "part_overrides"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), unique=True)  # артикул без пробелов, в верхнем регистре
+    part_number: Mapped[str] = mapped_column(String(64))
+    models: Mapped[str] = mapped_column(Text, default="", server_default="")  # названия моделей через «|»
+    node_ru: Mapped[str | None] = mapped_column(String(128))  # категория
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    photo: Mapped[str | None] = mapped_column(String(512))
+    description_ru: Mapped[str | None] = mapped_column(Text)
+    description_uz: Mapped[str | None] = mapped_column(Text)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    @property
+    def model_list(self) -> list[str]:
+        return [m for m in (self.models or "").split("|") if m]

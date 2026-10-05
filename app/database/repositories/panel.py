@@ -11,7 +11,8 @@ from sqlalchemy import String, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import (
-    CarModel, Dealer, DealerStaff, Node, Order, OrderItem, OrderMessage, Part, PartTranslation, Region, Stock, User,
+    CarModel, Dealer, DealerStaff, Node, Order, OrderItem, OrderMessage, Part, PartOverride, PartTranslation, Region,
+    Stock, User,
 )
 from app.database.repositories.admin import ORDER_FILTERS
 from app.utils.names import part_name_key
@@ -230,6 +231,8 @@ class PanelRepository:
             query = query.where(Part.active.is_(False))
         elif show == "untranslated":
             query = query.where(Part.active.is_(True), self.untranslated_condition())
+        elif show == "edited":  # изменены администратором в панели
+            query = query.where(func.upper(Part.part_number).in_(select(PartOverride.key)))
         elif show != "all":
             query = query.where(Part.active.is_(True))
         if model_id:

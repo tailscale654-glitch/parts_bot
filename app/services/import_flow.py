@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.database.models import Dealer, PartTranslation
 from app.database.repositories.regions import RegionRepository
 from app.services.dealers import DirectoryStats, apply_directory
-from app.services import part_catalog
+from app.services import part_catalog, part_overrides
 from app.services.excel_import import ImportError_, ImportStats, apply_import, validate_any
 from app.services.localization import i18n
 
@@ -31,7 +31,7 @@ async def validate_path(session: AsyncSession, path: Path):
     """→ (строки, ошибки, предупреждения, формат) с учётом справочника дилеров и переводов из панели."""
     regions = await RegionRepository(session).list_active()
     return validate_any(path, regions, await known_dealers(session), await known_translations(session),
-                        await part_catalog.load(session))
+                        await part_catalog.load(session), await part_overrides.load(session))
 
 
 async def run_import(db: AsyncSession, rows, fmt: str) -> ImportStats | DirectoryStats:

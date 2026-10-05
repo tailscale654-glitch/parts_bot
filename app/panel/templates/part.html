@@ -3,7 +3,8 @@
 {% block content %}
 <p><a href="{{ back_url if back_url.startswith('/catalog') else '/catalog' }}">← Каталог</a></p>
 <h1>{{ part.name_ru }} <span class="muted">· {{ part.part_number }}</span></h1>
-<p>{{ part.model.name_ru }} · {{ part.node.name_ru }} · {% if part.active %}<span class="st st-COMPLETED">в боте</span>{% else %}<span class="st">скрыта — нет в последнем файле</span>{% endif %}</p>
+<p>{{ part.model.name_ru }} · {{ part.node.name_ru }} · {% if part.active %}<span class="st st-COMPLETED">в боте</span>{% elif ov and ov.hidden %}<span class="st">скрыта администратором</span>{% else %}<span class="st">скрыта — нет в последнем файле</span>{% endif %}
+  {% if ov %} · <span class="st st-CONFIRMED">изменена в панели</span>{% endif %}</p>
 <div class="grid2">
 <div>
   <h2>У дилеров</h2>
@@ -36,6 +37,33 @@
     <p>🇷🇺 {{ part.name_ru }}<br>🇺🇿 {{ part.name_uz or '—' }}</p>
     {% endif %}
   </div>
+
+  {% if can('catalog.edit') %}
+  <div class="card"><b>Изменить деталь</b>
+    <p class="muted">Правка — для артикула {{ part.part_number }} (во всех моделях) и главнее CarSale: сохраняется при каждой синхронизации. Пустое поле — как в CarSale.</p>
+    <form method="post" action="/catalog/{{ part.id }}/edit" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div><span class="muted">Модели автомобиля</span><br>
+        {% set chosen = ov.model_list if ov else [] %}
+        {% for m in model_choices %}
+        <label style="display:inline-flex;align-items:center;gap:4px;margin:4px 12px 4px 0;font-size:14px;color:inherit">
+          <input type="checkbox" name="models" value="{{ m }}" {{ 'checked' if m in chosen }}> {{ m }}</label>
+        {% endfor %}
+        <div class="muted" style="font-size:12px">Не отмечено ничего — модели из CarSale / справочника запчастей. Сейчас: {{ part.model.name_ru }}.</div>
+      </div>
+      <label>Категория<select name="node_ru"><option value="">как в CarSale (сейчас: {{ part.node.name_ru }})</option>
+        {% for c in categories %}<option value="{{ c }}" {{ 'selected' if ov and ov.node_ru == c }}>{{ c }}</option>{% endfor %}</select></label>
+      <label>🇷🇺 Описание<textarea name="description_ru" maxlength="2000" placeholder="например: подходит для машин с 2022 года">{{ ov.description_ru or '' if ov else '' }}</textarea></label>
+      <label>🇺🇿 Описание<textarea name="description_uz" maxlength="2000">{{ ov.description_uz or '' if ov else '' }}</textarea></label>
+      <label>Фото (ссылка https://…)<input name="photo" value="{{ ov.photo or '' if ov else '' }}" maxlength="512" placeholder="https://…/photo.jpg"></label>
+      <label style="flex-direction:row;align-items:center;gap:6px;font-size:14px;color:inherit">
+        <input type="checkbox" name="hidden" value="1" {{ 'checked' if ov and ov.hidden }}> 🙈 Скрыть из бота (клиенты не увидят эту деталь)</label>
+      <div><button class="btn primary">Сохранить</button>
+        {% if ov %}<button class="btn" name="reset" value="1" onclick="return confirm('Удалить правку? Деталь снова будет как в CarSale.')">Сбросить правку</button>{% endif %}</div>
+    </form>
+    {% if ov %}<p class="muted">Изменено {{ fmt_date(ov.updated_at) }}.</p>{% endif %}
+  </div>
+  {% endif %}
 </div>
 </div>
 {% endblock %}

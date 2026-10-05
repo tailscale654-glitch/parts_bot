@@ -245,7 +245,7 @@ def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
 
 def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int,
                        known_dealers: dict[str, int] | None = None, translations: dict | None = None,
-                       catalog: dict[str, str] | None = None):
+                       catalog: dict[str, str] | None = None, overrides: dict | None = None):
     """Складская выгрузка → строки каталога. Неподходящие строки пропускаются с предупреждением.
     known_dealers: ключ дилера → регион из справочника дилеров (он главнее import_mapping.py).
     catalog: справочник запчастей завода (артикул → модели) — для деталей без модели («—»)."""
@@ -253,7 +253,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
 
     known_dealers = known_dealers or {}
     catalog = catalog or {}
-    from_catalog = 0
+    overrides = overrides or {}  # правки администратора (part_overrides.Override) — главнее файла
+    from_catalog, hidden_by_admin = 0, 0
     mapped_regions = {dealer_key(name): code for name, code in mapping.DEALER_REGIONS.items()}
     errors: list[ImportError_] = []
     warnings: list[ImportError_] = []
@@ -308,6 +309,12 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             default_region_dealers.add(dealer)
             region_id = region_by_code[mapping.DEFAULT_REGION]
         node = mapping.CATEGORIES.get((v.get("Тип запчасти") or "").upper(), mapping.OTHER_CATEGORY)
+        override = overrides.get(part_key(v["Код запчасти"]))
+        if override and override.hidden:
+            hidden_by_admin += 1
+            continue
+        if override and override.node:
+            node = override.node
         updated = pd.to_datetime(v.get("Дата обновления"), format="%d.%m.%Y %H:%M:%S", errors="coerce")
 
         if not has_translation(v["Название запчасти"], translations):
@@ -317,7 +324,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         if raw_model in EMPTY_MARKS and part_key(v["Код запчасти"]) in catalog:
             raw_model = catalog[part_key(v["Код запчасти"])]
             from_catalog += 1
-        for model in _model_names(raw_model):
+        models = override.models if override and override.models else _model_names(raw_model)
+        for model in models:
             if model[0] not in known_names:
                 unknown_models.add(model[0])
             key = (model[0].lower(), v["Код запчасти"].lower(), key_d)
@@ -325,12 +333,14 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             if offer is None:
                 offers[key] = {"row": excel_row, "region_id": region_id, "dealer": dealer, "model": model,
                                "node": node, "name": v["Название запчасти"], "number": v["Код запчасти"],
-                               "qty": qty, "price": price, "updated": updated}
+                               "qty": qty, "price": price, "updated": updated, "override": override}
             else:  # одна деталь у одного дилера в нескольких строках (разные инвойсы) — суммируем
                 offer["qty"] += qty
                 if pd.notna(updated) and (pd.isna(offer["updated"]) or updated > offer["updated"]):
                     offer["price"], offer["updated"] = price, updated  # цена — из самой свежей строки
 
+    if hidden_by_admin:
+        warnings.append(ImportError_(0, "warn_admin_hidden", {"n": hidden_by_admin}))
     if from_catalog:
         warnings.append(ImportError_(0, "warn_model_from_catalog", {"n": from_catalog}))
     for status, n in sorted(skipped_status.items()):
@@ -359,7 +369,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             model=dict(zip(("ru", "en", "uz"), o["model"])), node=dict(zip(("ru", "en", "uz"), o["node"])),
             part_name=translate(o["name"], translations),
             part_number=o["number"], price=o["price"], stock=o["qty"], delivery_days=None,
-            description={"ru": None, "en": None, "uz": None}, photo=None,
+            description=o["override"].description if o["override"] else {"ru": None, "en": None, "uz": None},
+            photo=o["override"].photo if o["override"] else None,
         )
         for o in offers.values()
     ]
@@ -367,7 +378,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
 
 
 def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int] | None = None,
-                 translations: dict | None = None, catalog: dict[str, str] | None = None):
+                 translations: dict | None = None, catalog: dict[str, str] | None = None,
+                 overrides: dict | None = None):
     """Определяем формат файла сами: справочник дилеров, складская выгрузка, справочник запчастей
     завода или наш шаблон. Возвращает (строки, ошибки, предупреждения, формат)."""
     from app.services import part_catalog
@@ -378,7 +390,7 @@ def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int
     found = _find_warehouse_header(path)
     if found:
         rows, errors, warnings = validate_warehouse(path, regions, *found, known_dealers=known_dealers,
-                                                    translations=translations, catalog=catalog)
+                                                    translations=translations, catalog=catalog, overrides=overrides)
         return rows, errors, warnings, "warehouse"
     if part_catalog.is_catalog(path):
         rows, errors, warnings = part_catalog.validate_catalog(path)
@@ -448,8 +460,8 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
             session.add(part)
         part.node_id = nodes[r.node["ru"].lower()].id
         _set_names(part, r.part_name)
-        if r.description["ru"]:
-            _set_names(part, r.description, prefix="description")
+        if r.description["ru"] or r.description.get("uz"):
+            _set_names(part, {**r.description, "ru": r.description["ru"] or part.description_ru}, prefix="description")
         if r.photo:
             part.photo = r.photo
         part.active = True

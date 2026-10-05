@@ -625,7 +625,12 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
     async def part_page(part_id: int, request: Request, web: WebUser = Depends(require("catalog.view")),
                         session: AsyncSession = Depends(get_session)):
         part, repo = await _part(session, part_id), PanelRepository(session)
+        from app.services import part_overrides
+
         return render(request, "part.html", web, part=part, offers=await repo.part_offers(part.id),
+                      ov=await part_overrides.get(session, part.part_number),
+                      model_choices=await part_overrides.model_choices(session),
+                      categories=[c[0] for c in part_overrides.categories()],
                       same=await repo.same_name_parts(part), tr=await repo.translation_for(part),
                       back_url=request.query_params.get("back") or "/catalog")
 
@@ -644,6 +649,35 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             if lines:
                 return back(f"/catalog/{lines[0].part.id}?back=/catalog?show=untranslated", flash)
             return back("/catalog?show=untranslated", flash + " Непереведённых больше нет 🎉")
+        return back(f"/catalog/{part.id}", flash)
+
+    @app.post("/catalog/{part_id}/edit")
+    async def part_edit(part_id: int, request: Request, web: WebUser = Depends(require("catalog.edit")),
+                        session: AsyncSession = Depends(get_session)):
+        from app.services import part_overrides
+
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        part = await _part(session, part_id)
+        if form.get("reset"):
+            done = await part_overrides.reset(session, part)
+            if done:
+                await audit.log(session, web, "part.reset", part.part_number, "")
+            return back(f"/catalog/{part.id}", "Правка удалена: деталь снова как в CarSale (обновится через 1–2 минуты)."
+                        if done else "Правок не было.")
+        data = dict(models=[str(m) for m in form.getlist("models")], node_ru=str(form.get("node_ru") or "") or None,
+                    hidden=bool(form.get("hidden")), photo=str(form.get("photo") or "")[:512],
+                    description_ru=str(form.get("description_ru") or "")[:2000],
+                    description_uz=str(form.get("description_uz") or "")[:2000])
+        try:
+            flash = await part_overrides.save(session, part, by_id=web.user.id, **data)
+        except ValueError as e:
+            return back(f"/catalog/{part.id}", f"⚠️ {e}")
+        details = (f"модели: {', '.join(data['models']) or 'из CarSale'}; категория: {data['node_ru'] or 'из CarSale'}"
+                   f"{'; скрыта' if data['hidden'] else ''}{'; фото' if data['photo'] else ''}"
+                   f"{'; описание' if data['description_ru'] or data['description_uz'] else ''}")
+        await audit.log(session, web, "part.edit", part.part_number, details)
+        logger.info("Panel %s edited part %s: %s", web.login, part.part_number, details)
         return back(f"/catalog/{part.id}", flash)
 
     # --- загрузка Excel ---
