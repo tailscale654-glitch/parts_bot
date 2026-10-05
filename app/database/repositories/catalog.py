@@ -1,8 +1,9 @@
 """Чтение каталога: модели → узлы → детали. Показываем только активные записи."""
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarModel, Node, Part
+from app.services.import_mapping import ALL_MODELS
 
 
 def _name_order(table, lang: str | None):
@@ -23,7 +24,7 @@ class CatalogRepository:
         """Только модели, у которых есть хотя бы одна активная деталь."""
         has_parts = _active_parts().where(Part.model_id == CarModel.id).exists()
         result = await self.session.execute(
-            select(CarModel).where(CarModel.active.is_(True), has_parts).order_by(_name_order(CarModel, lang))
+            select(CarModel).where(CarModel.active.is_(True), has_parts).order_by(CarModel.name_ru == ALL_MODELS[0], _name_order(CarModel, lang))  # «Прочее» — в конце
         )
         return list(result.scalars())
 
@@ -64,3 +65,34 @@ class CatalogRepository:
 
     async def get_part(self, part_id: int) -> Part | None:
         return await self.session.scalar(select(Part).where(Part.id == part_id, Part.active.is_(True)))
+
+    async def count_parts_by_node(self, model_id: int) -> dict[int, int]:
+        result = await self.session.execute(
+            select(Part.node_id, func.count(Part.id))
+            .where(Part.model_id == model_id, Part.active.is_(True))
+            .group_by(Part.node_id)
+        )
+        return dict(result.all())
+
+    async def search_parts(self, query: str, lang: str | None, limit: int = 30) -> list[Part]:
+        """Поиск по названию (на всех трёх языках) и по артикулу."""
+        pattern = f"%{query}%"
+        result = await self.session.execute(
+            select(Part)
+            .join(CarModel, CarModel.id == Part.model_id)
+            .join(Node, Node.id == Part.node_id)
+            .where(
+                Part.active.is_(True),
+                CarModel.active.is_(True),
+                Node.active.is_(True),
+                or_(
+                    Part.name_ru.ilike(pattern),
+                    Part.name_en.ilike(pattern),
+                    Part.name_uz.ilike(pattern),
+                    Part.part_number.ilike(pattern),
+                ),
+            )
+            .order_by(_name_order(Part, lang), Part.id)
+            .limit(limit)
+        )
+        return list(result.scalars())

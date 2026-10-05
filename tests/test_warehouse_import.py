@@ -38,7 +38,7 @@ def test_model_code_lists():
     assert [m[0] for m in _model_names("RF8-V9AA3,V9HA0")] == ["JAC RF8"]  # две комплектации — одна модель
     assert [m[0] for m in _model_names("JS8P-S55NG")] == ["JAC JS8"]
     assert [m[0] for m in _model_names("M4")] == ["JAC M4 Luxe"]
-    assert _model_names("—")[0] == ("Все модели", "All models", "Barcha modellar")
+    assert _model_names("—")[0] == ("Прочее", "Other", "Boshqa")
     assert _model_names("XYZ-1")[0][0] == "XYZ-1"  # неизвестный код — как есть
 
 
@@ -63,7 +63,7 @@ def test_warehouse_export(tmp_path):
 
     belt = next(r for r in rows if r.part_number == "1015601GD190")
     assert belt.price == Decimal("72870")  # цена реализации 0 → цена продажи
-    assert belt.model["ru"] == "Все модели" and belt.region_id == 4  # Навои
+    assert belt.model["ru"] == "Прочее" and belt.region_id == 4  # Навои
 
     odd = [r for r in rows if r.part_number == "X1"]
     assert sorted(r.model["ru"] for r in odd) == ["JAC T8", "JAC T9"] and odd[0].node["ru"] == "Прочее"

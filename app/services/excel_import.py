@@ -227,7 +227,7 @@ def _find_warehouse_header(path: Path) -> tuple[str, int] | None:
 
 
 def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
-    """'T9-P33Z3,T8-P30BF' → две модели; 'RF8-V9AA3,V9HA0' → RF8-V9AA3 и RF8-V9HA0; '—' → «Все модели»."""
+    """'T9-P33Z3,T8-P30BF' → две модели; 'RF8-V9AA3,V9HA0' → RF8-V9AA3 и RF8-V9HA0; '—' → «Прочее»."""
     if raw in EMPTY_MARKS:
         return [mapping.ALL_MODELS]
     codes, prefix = [], ""
@@ -493,7 +493,7 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
             stats.reserved += taken
 
     # 4. Всё, чего нет в файле, скрываем (файл = полный прайс).
-    # «Скрыто» считаем по артикулам: деталь, которая просто перешла из «Все модели» в свою модель,
+    # «Скрыто» считаем по артикулам: деталь, которая просто перешла из «Прочее» в свою модель,
     # не пропала из прайса.
     in_file = {r.part_number.lower() for r in rows}
     gone: set[str] = set()

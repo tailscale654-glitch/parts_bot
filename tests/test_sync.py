@@ -123,7 +123,7 @@ async def ready_order(f, status="READY"):
         if stock is None:
             dealer = Dealer(region_id=1, name="OOO «China Group»")
             part = Part(name_ru="Фильтр", name_en="FILTER", part_number="1010208GD190",
-                        model=CarModel(name_ru="Все модели"), node=Node(name_ru="ТО"))
+                        model=CarModel(name_ru="Прочее"), node=Node(name_ru="ТО"))
             stock = Stock(part=part, dealer=dealer, price=Decimal(85500), quantity=10)
             s.add(stock)
             await s.flush()

@@ -65,7 +65,7 @@ def test_three_layouts_are_recognized(tmp_path):
 
 
 async def test_catalog_gives_models_to_parts_without_model(factory, tmp_path):
-    # 1. В боте деталь без модели («—» в CarSale) → «Все модели»
+    # 1. В боте деталь без модели («—» в CarSale) → «Прочее»
     snap = snapshot([row(5, "1010208GD190", "FILTER", "OOO «China Group»"),
                      row(2, "B1", "BELT", "OOO «China Group»", model="T8-P30BF")])
     assert (await run_sync(factory, SyncConfig(login="x", password="x"), fetcher=fetcher_for(snap))).status == "ok"
@@ -101,6 +101,6 @@ async def test_catalog_gives_models_to_parts_without_model(factory, tmp_path):
 def test_warehouse_without_catalog_keeps_all_models(tmp_path):
     path = write_xlsx(snapshot([row(1, "X1", "OIL FILTER", "OOO «ASIAMOTOR»")]), tmp_path / "w.xlsx")
     rows, _, _, _ = validate_any(path, REGIONS)
-    assert rows[0].model["ru"] == "Все модели"
+    assert rows[0].model["ru"] == "Прочее"
     rows, _, warnings, _ = validate_any(path, REGIONS, catalog={"X1": "RF8-V9AA3,RF8-V9HA0"})
     assert [r.model["ru"] for r in rows] == ["JAC RF8"] and any(w.key == "warn_model_from_catalog" for w in warnings)
