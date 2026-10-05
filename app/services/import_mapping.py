@@ -31,6 +31,10 @@ ALL_MODELS = ("Все модели", "All models", "Barcha modellar")
 # Код, которого здесь нет, покажется как есть — бот предупредит.
 MODEL_NAMES = {
     "T8-P30BF": "JAC T8",
+    "T8": "JAC T8",
+    "T9": "JAC T9",
+    "JS8P": "JAC JS8",
+    "JS8PHEV": "JAC JS8 PHEV",
     "T9-P33Z3": "JAC T9",
     "JS8P-S55NG": "JAC JS8",
     "RF8-V9AA3": "JAC RF8",

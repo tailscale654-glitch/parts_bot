@@ -319,5 +319,10 @@
   "contact_hours_label": "Working hours",
   "contact_address_label": "Address",
   "contact_write_btn": "✍️ Message the manager",
-  "sync_failed": "⚠️ CarSale sync failed — stock in the bot was not changed.\n\n{error}\n\nDetails: web panel → “🔄 CarSale” or docker compose logs --tail 100 sync"
+  "sync_failed": "⚠️ CarSale sync failed — stock in the bot was not changed.\n\n{error}\n\nDetails: web panel → “🔄 CarSale” or docker compose logs --tail 100 sync",
+  "import_format_catalog": "📚 Format: factory parts list (model → part code → name)",
+  "catalog_preview": "Part codes in file: {total}\n➕ New in the list: {new}\n🔄 Already known (models merged): {updated}\n\nBy model: {models}\n\n🚗 Parts in the bot without a model that will get one: {in_bot}\n\nThis file does not change stock or prices.",
+  "catalog_applied": "✅ Parts list updated\n\nCodes in file: {total} (new {new})\nTotal in the list: {catalog_total}\n\n🚗 Parts in the bot that will get their model: {in_bot} — on the next CarSale sync (started now if the service is running) or the next stock upload.",
+  "warn_catalog_no_model": "⚠️ Rows without a model skipped: {n}",
+  "warn_model_from_catalog": "📚 Model taken from the parts list: {n} rows"
 }

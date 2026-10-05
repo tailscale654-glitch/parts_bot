@@ -378,3 +378,19 @@ class CarsaleOp(Base):
     )
 
     order: Mapped[Order] = relationship(lazy="joined")
+
+
+class PartCatalog(Base):
+    """Справочник запчастей завода: артикул → модели автомобиля и английское название.
+    Остатков и цен здесь нет. Нужен, чтобы деталь из CarSale без модели («—») попала в свою модель."""
+
+    __tablename__ = "part_catalog"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), unique=True)  # артикул без пробелов, в верхнем регистре
+    part_number: Mapped[str] = mapped_column(String(64))
+    models: Mapped[str] = mapped_column(String(255))  # коды моделей через запятую: «M4,M3»
+    name_en: Mapped[str | None] = mapped_column(String(255))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

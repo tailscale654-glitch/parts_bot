@@ -24,11 +24,11 @@ from app.database.models import BotSetting, CarsaleOp, Order, Part, SyncRun
 from app.database.repositories.orders import carsale_mode
 from app.services import import_flow
 from app.services.notify import notify_admins_text, send
+from app.services.part_catalog import SYNC_REQUEST_KEY as REQUEST_KEY  # флаг «Синхронизировать сейчас»
 from app.sync.carsale import CarsaleError, Snapshot, fetch_snapshot, write_xlsx
 from app.sync.carsale_orders import AfterSaveError, SaleLine, SaleRequest, SaleResult, submit_sale
 
 logger = logging.getLogger(__name__)
-REQUEST_KEY = "carsale_sync_request"  # веб-панель пишет сюда время нажатия «Синхронизировать сейчас»
 LANG = "ru"
 
 

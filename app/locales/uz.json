@@ -319,5 +319,10 @@
   "contact_hours_label": "Ish vaqti",
   "contact_address_label": "Manzil",
   "contact_write_btn": "✍️ Menejerga yozish",
-  "sync_failed": "⚠️ CarSale bilan sinxronlash bo‘lmadi — botdagi qoldiqlar o‘zgarmadi.\n\n{error}\n\nBatafsil: veb-panel → «🔄 CarSale» yoki docker compose logs --tail 100 sync"
+  "sync_failed": "⚠️ CarSale bilan sinxronlash bo‘lmadi — botdagi qoldiqlar o‘zgarmadi.\n\n{error}\n\nBatafsil: veb-panel → «🔄 CarSale» yoki docker compose logs --tail 100 sync",
+  "import_format_catalog": "📚 Format: zavod ehtiyot qismlar ro‘yxati (model → artikul → nom)",
+  "catalog_preview": "Fayldagi artikullar: {total}\n➕ Yangi: {new}\n🔄 Avval bor edi (modellar qo‘shildi): {updated}\n\nModellar bo‘yicha: {models}\n\n🚗 Botdagi modelsiz qismlardan model oladiganlari: {in_bot}\n\nBu fayl qoldiq va narxlarni o‘zgartirmaydi.",
+  "catalog_applied": "✅ Ehtiyot qismlar ro‘yxati yangilandi\n\nFayldagi artikullar: {total} (yangi {new})\nRo‘yxatda jami: {catalog_total}\n\n🚗 Botda modelini oladigan qismlar: {in_bot} — CarSale bilan navbatdagi sinxronizatsiyada yoki keyingi yuklashda.",
+  "warn_catalog_no_model": "⚠️ Modelsiz qatorlar o‘tkazib yuborildi: {n}",
+  "warn_model_from_catalog": "📚 Model ehtiyot qismlar ro‘yxatidan olindi: {n} qator"
 }

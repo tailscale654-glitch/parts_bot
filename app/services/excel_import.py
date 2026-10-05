@@ -244,10 +244,16 @@ def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
 
 
 def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int,
-                       known_dealers: dict[str, int] | None = None, translations: dict | None = None):
+                       known_dealers: dict[str, int] | None = None, translations: dict | None = None,
+                       catalog: dict[str, str] | None = None):
     """Складская выгрузка → строки каталога. Неподходящие строки пропускаются с предупреждением.
-    known_dealers: ключ дилера → регион из справочника дилеров (он главнее import_mapping.py)."""
+    known_dealers: ключ дилера → регион из справочника дилеров (он главнее import_mapping.py).
+    catalog: справочник запчастей завода (артикул → модели) — для деталей без модели («—»)."""
+    from app.services.part_catalog import part_key
+
     known_dealers = known_dealers or {}
+    catalog = catalog or {}
+    from_catalog = 0
     mapped_regions = {dealer_key(name): code for name, code in mapping.DEALER_REGIONS.items()}
     errors: list[ImportError_] = []
     warnings: list[ImportError_] = []
@@ -307,7 +313,11 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         if not has_translation(v["Название запчасти"], translations):
             untranslated.add(v["Название запчасти"])
         known_names = set(mapping.MODEL_NAMES.values()) | {mapping.ALL_MODELS[0]}
-        for model in _model_names(v.get("Автомобильная марка")):
+        raw_model = v.get("Автомобильная марка")
+        if raw_model in EMPTY_MARKS and part_key(v["Код запчасти"]) in catalog:
+            raw_model = catalog[part_key(v["Код запчасти"])]
+            from_catalog += 1
+        for model in _model_names(raw_model):
             if model[0] not in known_names:
                 unknown_models.add(model[0])
             key = (model[0].lower(), v["Код запчасти"].lower(), key_d)
@@ -321,6 +331,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
                 if pd.notna(updated) and (pd.isna(offer["updated"]) or updated > offer["updated"]):
                     offer["price"], offer["updated"] = price, updated  # цена — из самой свежей строки
 
+    if from_catalog:
+        warnings.append(ImportError_(0, "warn_model_from_catalog", {"n": from_catalog}))
     for status, n in sorted(skipped_status.items()):
         warnings.append(ImportError_(0, "warn_skipped_status", {"status": status, "n": n}))
     if no_dealer:
@@ -355,17 +367,22 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
 
 
 def validate_any(path: Path, regions: list[Region], known_dealers: dict[str, int] | None = None,
-                 translations: dict | None = None):
-    """Определяем формат файла сами: справочник дилеров, складская выгрузка или наш шаблон.
-    Возвращает (строки, ошибки, предупреждения, формат)."""
+                 translations: dict | None = None, catalog: dict[str, str] | None = None):
+    """Определяем формат файла сами: справочник дилеров, складская выгрузка, справочник запчастей
+    завода или наш шаблон. Возвращает (строки, ошибки, предупреждения, формат)."""
+    from app.services import part_catalog
+
     if is_directory(path):
         rows, errors = validate_directory(path, regions)
         return rows, errors, [], "directory"
     found = _find_warehouse_header(path)
     if found:
         rows, errors, warnings = validate_warehouse(path, regions, *found, known_dealers=known_dealers,
-                                                    translations=translations)
+                                                    translations=translations, catalog=catalog)
         return rows, errors, warnings, "warehouse"
+    if part_catalog.is_catalog(path):
+        rows, errors, warnings = part_catalog.validate_catalog(path)
+        return rows, errors, warnings, "catalog"
     rows, errors = validate_file(path, regions)
     return rows, errors, [], "template"
 
@@ -475,11 +492,17 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
             stock.quantity -= taken
             stats.reserved += taken
 
-    # 4. Всё, чего нет в файле, скрываем (файл = полный прайс)
+    # 4. Всё, чего нет в файле, скрываем (файл = полный прайс).
+    # «Скрыто» считаем по артикулам: деталь, которая просто перешла из «Все модели» в свою модель,
+    # не пропала из прайса.
+    in_file = {r.part_number.lower() for r in rows}
+    gone: set[str] = set()
     for part in parts.values():
         if part.id not in seen_parts and part.active:
             part.active = False
-            stats.hidden += 1
+            if part.part_number.lower() not in in_file:
+                gone.add(part.part_number.lower())
+    stats.hidden = len(gone)
     for key, stock in stocks.items():
         if key not in seen_stocks:
             await session.delete(stock)
