@@ -228,3 +228,21 @@ async def test_untranslated_names_are_reported_once(factory):
     hits = [t for t in sent if "без перевода" in t]
     assert len(hits) == 1 and "FLUX CAPACITOR UNKNOWN" in hits[0] and "OIL FILTER" not in hits[0]
     assert "https://panel/catalog?show=untranslated" in hits[0]
+
+
+def test_columns_found_by_header_name():
+    """CarSale добавил колонку «Партии» перед кодом — колонки ищем по названию, а не по месту."""
+    from app.sync.carsale import COLUMNS, column_indexes, pick_columns
+
+    new = ["", "№", "КОЛ-ВО L", "ПАРТИИ", "КОД ЗАПЧАСТИ", "НАЗВАНИЕ ЗАПЧАСТИ", "СТАТУС", "ТИП ЗАПЧАСТИ",
+           "АВТОМОБИЛЬНАЯ МАРКА", "ЦЕНА ПРОДАЖИ", "ЦЕНА РЕАЛИЗАЦИИ", "СКЛАД", "ЯЧЕЙКА", "ИНВОЙС", "НА ДИЛЕРА",
+           "ПОСЛЕДНЕЕ ПЕРЕМЕЩЕНИЕ", "ДАТА ОБНОВЛЕНИЯ", "R"]
+    cells = ["", "1", "2", "2 партии", "2803101V6571", "FRONT BUMPER", "У дилера", "B", "—", "934300", "1074400",
+             "—", "A", "(+1)", "ООО «TOSHKENT-MOTORS-TRADE»", "—", "16.10.2026 09:45:54", ""]
+    got = dict(zip(COLUMNS, pick_columns(cells, column_indexes(new))))
+    assert (got["Кол-во"], got["Код запчасти"], got["Цена реализации"], got["На Дилера"]) == (
+        "2", "2803101V6571", "1074400", "ООО «TOSHKENT-MOTORS-TRADE»")
+    old = [h for h in new if h not in ("ПАРТИИ", "R")]
+    assert pick_columns([c for c in cells if c != "2 партии"][:-1], column_indexes(old))[2] == "2803101V6571"
+    with pytest.raises(CarsaleError, match="изменил таблицу"):
+        column_indexes(new[:5])

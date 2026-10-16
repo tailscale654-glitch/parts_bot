@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 COLUMNS = ["№", "Кол-во", "Код запчасти", "Название запчасти", "Статус", "Тип запчасти", "Автомобильная марка",
            "Цена продажи", "Цена реализации", "Склад", "Ячейка", "Инвойс", "На Дилера", "Последнее перемещение",
            "Дата обновления"]
+REQUIRED_COLUMNS = ["Кол-во", "Код запчасти", "Название запчасти", "Статус", "Цена продажи", "Цена реализации",
+                    "На Дилера"]
 DEALER_STATUS = "У дилера"
 ROWS_PER_PAGE = "1000"
 
@@ -70,10 +72,13 @@ const kpi = () => {
   const m = (document.querySelector('main')?.innerText || '').match(/КОЛ-ВО У ДИЛЕРА\s+([\d\s]+)/i);
   return m ? parseInt(m[1].replace(/\s/g, ''), 10) : null;
 };
+// заголовки колонок: колонки ищем по названию, а не по месту (CarSale добавляет новые, например «Партии»)
+const heads = () => [...document.querySelectorAll('main table thead th')].map(th => th.innerText.replace(/\s+/g, ' ').trim());
+const qtyIndex = () => Math.max(0, heads().findIndex(h => /^КОЛ-ВО/i.test(h)));
 const readRows = () => [...document.querySelectorAll('main table tbody tr')]
   .map(tr => [...tr.children].map(td => td.innerText.trim()))
-  .filter(cells => cells.length >= 16 && cells[3]);
-const pieces = rows => rows.reduce((s, c) => s + (parseInt(c[2], 10) || 0), 0);
+  .filter(cells => cells.length >= 10 && cells.filter(Boolean).length >= 5);
+const pieces = rows => { const q = qtyIndex(); return rows.reduce((s, c) => s + (parseInt(c[q], 10) || 0), 0); };
 const visible = el => !!(el && el.getClientRects().length);
 const panel = () => {
   let el = buttons().find(b => visible(b) && b.innerText.includes('Применить'));
@@ -167,9 +172,32 @@ return (async (dealer) => {
   await chipOn('ДИЛЕР', dealer);
   const res = await applyAndWait();
   const more = byLabel('Следующая страница');
-  return {...res, hasNext: !!(more && !more.disabled)};
+  return {...res, heads: heads(), hasNext: !!(more && !more.disabled)};
 })(DEALER);
 """.replace("%STATUS%", DEALER_STATUS)
+
+
+def _norm_head(text: str) -> str:
+    """«КОЛ-ВО L» → «КОЛ-ВО»: убираем значки закрепления колонки (L / R) и лишние пробелы."""
+    words = " ".join(str(text or "").split()).upper().split(" ")
+    while words and len(words[-1]) == 1 and words[-1].isascii() and words[-1].isalpha():
+        words.pop()
+    return " ".join(words)
+
+
+def column_indexes(heads: list[str]) -> list[int | None]:
+    """Для каждой колонки COLUMNS — её номер в таблице CarSale (None — такой колонки нет)."""
+    norm = [_norm_head(h) for h in heads]
+    found = [norm.index(c.upper()) if c.upper() in norm else None for c in COLUMNS]
+    missing = [c for c, i in zip(COLUMNS, found) if i is None and c in REQUIRED_COLUMNS]
+    if missing:
+        raise CarsaleError("CarSale изменил таблицу «Список запчастей»: не нашёл колонки "
+                           + ", ".join(f"«{c}»" for c in missing) + ". Ничего не меняю.")
+    return found
+
+
+def pick_columns(cells: list[str], indexes: list[int | None]) -> list[str]:
+    return [cells[i] if i is not None and i < len(cells) else "" for i in indexes]
 
 
 def _js(body: str, **args) -> str:
@@ -272,7 +300,8 @@ async def fetch_snapshot(login: str, password: str, base_url: str = "https://app
                 if name.lower() in skip:  # тестовые дилеры: считаем для проверки, но в бот не берём
                     continue
                 snap.dealers.append(DealerResult(name, len(res["rows"]), res["sum"], res["kpi"]))
-                snap.rows.extend(cells[1:16] for cells in res["rows"])
+                indexes = column_indexes(res.get("heads") or [])
+                snap.rows.extend(pick_columns(cells, indexes) for cells in res["rows"])
         finally:
             await browser.close()
 
