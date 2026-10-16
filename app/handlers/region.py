@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.database.repositories.regions import RegionRepository
 from app.database.repositories.users import UserRepository
-from app.handlers.start import profile_view, region_prompt
+from app.handlers.catalog import car_prompt
+from app.handlers.start import needs_car, profile_view, region_prompt
 from app.keyboards.phone import phone_keyboard
 from app.services.localization import i18n, localized_name
 
@@ -30,8 +31,12 @@ async def set_region(callback: CallbackQuery, user: User, session: AsyncSession)
     saved = i18n.t(user.language, "region_saved", region=localized_name(region, user.language))
     await callback.answer()
     if not user.phone:
-        # Регистрация: после региона просим телефон (кнопка «Отправить номер»)
+        # Регистрация: после региона — автомобиль, потом телефон (кнопка «Отправить номер»)
         await callback.message.edit_text(saved)
+        if await needs_car(user, session):
+            text, kb = car_prompt(user)
+            await callback.message.answer(text, reply_markup=kb)
+            return
         await callback.message.answer(i18n.t(user.language, "ask_phone"), reply_markup=phone_keyboard(user.language))
         return
     text, kb = profile_view(user)  # регион меняют из профиля — туда и возвращаемся

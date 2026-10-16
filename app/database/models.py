@@ -41,6 +41,10 @@ class User(Base):
     region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.id", ondelete="SET NULL"))
     # заблокирован в веб-панели: бот ему не отвечает (кроме администраторов из ADMIN_IDS)
     blocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # автомобиль клиента (выбирает при регистрации): модель как в боте, код модификации CarSale, цвет
+    car_model: Mapped[str | None] = mapped_column(String(128))
+    car_modification: Mapped[str | None] = mapped_column(String(32))  # None — одна модификация или «не знаю»
+    car_color: Mapped[str | None] = mapped_column(String(16))  # ключ из app/services/cars.py COLORS
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -92,6 +96,8 @@ class Part(Base):
     description_uz: Mapped[str | None] = mapped_column(Text)
     photo: Mapped[str | None] = mapped_column(String(512))
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # коды модификаций CarSale через запятую («RF8-V9AA3»); пусто — подходит ко всем модификациям модели
+    mod_codes: Mapped[str] = mapped_column(String(255), default="", server_default="")
 
     model: Mapped[CarModel] = relationship(lazy="joined")
     node: Mapped[Node] = relationship(lazy="joined")
@@ -167,6 +173,7 @@ class Order(Base):
     dealer_id: Mapped[int] = mapped_column(ForeignKey("dealers.id", ondelete="RESTRICT"), index=True)
     status: Mapped[str] = mapped_column(String(16), default="NEW", index=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    car: Mapped[str | None] = mapped_column(String(128))  # автомобиль клиента на момент заказа
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

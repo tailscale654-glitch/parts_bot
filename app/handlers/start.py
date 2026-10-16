@@ -10,13 +10,13 @@ from app.config import Settings
 from app.database.repositories.regions import RegionRepository
 from app.database.repositories.staff import InviteError, StaffRepository
 from app.handlers.cart import cart_view
-from app.handlers.catalog import models_view
+from app.handlers.catalog import car_prompt, full_access, models_view
 from app.handlers.orders import orders_view
 from app.keyboards.language import language_keyboard
 from app.keyboards.main import main_reply_keyboard, menu_action, profile_keyboard
 from app.keyboards.phone import phone_keyboard
 from app.keyboards.region import region_keyboard
-from app.services import bot_settings
+from app.services import bot_settings, cars
 from app.services.bot_settings import contact_view
 from app.services.localization import i18n, localized_name
 
@@ -43,7 +43,7 @@ def profile_view(user: User) -> tuple[str, InlineKeyboardMarkup]:
         lang, "profile_text",
         name=name, phone=user.phone or "—", region=region_title(user), language=i18n.t(lang, "language_name"),
     )
-    return text, profile_keyboard(lang)
+    return f"{text}\n{cars.car_line(user, lang)}", profile_keyboard(lang)
 
 
 async def region_prompt(user: User, session: AsyncSession, with_back: bool = False):
@@ -58,12 +58,20 @@ async def send_main_menu(message: Message, user: User, session: AsyncSession, pr
     await message.answer(text, reply_markup=main_reply_keyboard(user.language, staff=staff))
 
 
+async def needs_car(user: User, session: AsyncSession) -> bool:
+    """Автомобиль спрашиваем у клиентов; сотрудникам дилеров он не нужен."""
+    return cars.needs_car(user) and await StaffRepository(session).dealer_id_for(user) is None
+
+
 async def next_step(message: Message, user: User, session: AsyncSession) -> None:
-    """Регистрация по шагам: язык → регион → телефон → главное меню."""
+    """Регистрация по шагам: язык → регион → автомобиль (модель, цвет, модификация) → телефон → главное меню."""
     if user.language is None:
         await message.answer(i18n.t(None, "choose_language"), reply_markup=language_keyboard())
     elif user.region_id is None:
         text, kb = await region_prompt(user, session)
+        await message.answer(text, reply_markup=kb)
+    elif await needs_car(user, session):
+        text, kb = car_prompt(user)
         await message.answer(text, reply_markup=kb)
     elif not user.phone:
         await message.answer(i18n.t(user.language, "ask_phone"), reply_markup=phone_keyboard(user.language))
@@ -94,7 +102,8 @@ async def cmd_start(message: Message, user: User, session: AsyncSession) -> None
 
 
 @router.message(F.text.func(menu_action))
-async def menu_button(message: Message, user: User, session: AsyncSession, staff_dealer_id: int | None) -> None:
+async def menu_button(message: Message, user: User, session: AsyncSession, staff_dealer_id: int | None,
+                      settings: Settings | None = None) -> None:
     """Нажата кнопка нижнего меню (на любом языке)."""
     if not (user.language and user.region_id and user.phone):
         await next_step(message, user, session)  # регистрация не закончена
@@ -102,7 +111,7 @@ async def menu_button(message: Message, user: User, session: AsyncSession, staff
     lang = user.language
     action = menu_action(message.text)
     if action == "btn_catalog":
-        text, kb = await models_view(user, session)
+        text, kb = await models_view(user, session, full_access(user, settings, staff_dealer_id))
         await message.answer(text, reply_markup=kb)
     elif action == "btn_cart":
         text, kb = await cart_view(user, session)

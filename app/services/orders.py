@@ -84,8 +84,10 @@ def order_text(order: Order, lang: str | None, for_admin: bool = False) -> str:
             i18n.t(lang, "order_client", name=name),
             i18n.t(lang, "order_phone", phone=user.phone or "—"),
             i18n.t(lang, "order_client_region", region=region),
-            "",
         ]
+        if order.car:
+            lines.append(i18n.t(lang, "order_car", car=order.car))
+        lines.append("")
     for n, item in enumerate(order.items, start=1):
         lines.append(f"{n}. 📦 {item_name(item, lang)}")
         lines.append(f"    {i18n.t(lang, 'part_number', number=item.part_number)}")

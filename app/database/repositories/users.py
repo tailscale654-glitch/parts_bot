@@ -44,6 +44,13 @@ class UserRepository:
         await self.session.commit()
         return user
 
+    async def set_car(self, user: User, **fields) -> User:
+        """car_model / car_modification / car_color — что передали, то и меняем."""
+        for name, value in fields.items():
+            setattr(user, f"car_{name}", value)
+        await self.session.commit()
+        return user
+
     async def set_phone(self, user: User, phone: str) -> User:
         user.phone = phone
         await self.session.commit()

@@ -1,5 +1,5 @@
 """Чтение каталога: модели → узлы → детали. Показываем только активные записи."""
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarModel, Node, Part
@@ -16,6 +16,13 @@ def _active_parts():
     return select(Part.id).where(Part.active.is_(True))
 
 
+def _fits(mod: str | None):
+    """Деталь подходит к модификации клиента: без указания модификаций или с этой в списке."""
+    if not mod:
+        return true()
+    return or_(Part.mod_codes == "", Part.mod_codes.like(f"%{mod}%"))
+
+
 class CatalogRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -28,14 +35,20 @@ class CatalogRepository:
         )
         return list(result.scalars())
 
+    async def model_by_name(self, name_ru: str | None) -> CarModel | None:
+        if not name_ru:
+            return None
+        return await self.session.scalar(
+            select(CarModel).where(CarModel.name_ru == name_ru, CarModel.active.is_(True)))
+
     async def get_model(self, model_id: int) -> CarModel | None:
         return await self.session.scalar(
             select(CarModel).where(CarModel.id == model_id, CarModel.active.is_(True))
         )
 
-    async def list_nodes(self, model_id: int, lang: str | None) -> list[Node]:
+    async def list_nodes(self, model_id: int, lang: str | None, mod: str | None = None) -> list[Node]:
         """Узлы, в которых у этой модели есть активные детали."""
-        has_parts = _active_parts().where(Part.node_id == Node.id, Part.model_id == model_id).exists()
+        has_parts = _active_parts().where(Part.node_id == Node.id, Part.model_id == model_id, _fits(mod)).exists()
         result = await self.session.execute(
             select(Node).where(Node.active.is_(True), has_parts).order_by(_name_order(Node, lang))
         )
@@ -44,19 +57,19 @@ class CatalogRepository:
     async def get_node(self, node_id: int) -> Node | None:
         return await self.session.scalar(select(Node).where(Node.id == node_id, Node.active.is_(True)))
 
-    async def count_parts(self, model_id: int, node_id: int) -> int:
+    async def count_parts(self, model_id: int, node_id: int, mod: str | None = None) -> int:
         return await self.session.scalar(
             select(func.count(Part.id)).where(
-                Part.model_id == model_id, Part.node_id == node_id, Part.active.is_(True)
+                Part.model_id == model_id, Part.node_id == node_id, Part.active.is_(True), _fits(mod)
             )
         )
 
     async def list_parts(
-        self, model_id: int, node_id: int, lang: str | None, offset: int, limit: int
+        self, model_id: int, node_id: int, lang: str | None, offset: int, limit: int, mod: str | None = None
     ) -> list[Part]:
         result = await self.session.execute(
             select(Part)
-            .where(Part.model_id == model_id, Part.node_id == node_id, Part.active.is_(True))
+            .where(Part.model_id == model_id, Part.node_id == node_id, Part.active.is_(True), _fits(mod))
             .order_by(_name_order(Part, lang), Part.id)
             .offset(offset)
             .limit(limit)

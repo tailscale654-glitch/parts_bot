@@ -25,4 +25,4 @@ def test_profile_view():
                 region=Region(code="t", name_ru="Ташкент", name_en="Tashkent"))
     text, kb = profile_view(user)
     assert "Ivan" in text and "+998901234567" in text and "Region: Tashkent" in text and "Language: English" in text
-    assert [row[0].callback_data for row in kb.inline_keyboard] == ["profile:phone", "menu:region", "menu:language"]
+    assert [row[0].callback_data for row in kb.inline_keyboard] == ["car:start:0:", "profile:phone", "menu:region", "menu:language"]

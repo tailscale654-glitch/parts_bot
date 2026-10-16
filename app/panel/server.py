@@ -76,7 +76,8 @@ templates.env.globals.update(
     money=lambda v: money(v, LANG), fmt_date=fmt_date,
     status_text=lambda s: status_text(s, LANG).split(" —")[0],
     localized=lambda obj: localized_name(obj, LANG) if obj is not None else "—",
-    person_name=person_name, tabs=[(k, i18n.t(LANG, f"tab_{k}")) for k in ORDER_FILTERS],
+    person_name=person_name, car_text=lambda u: __import__("app.services.cars", fromlist=["car_text"]).car_text(u, LANG),
+    tabs=[(k, i18n.t(LANG, f"tab_{k}")) for k in ORDER_FILTERS],
     ROLES=ROLES, ROLE_HINTS=ROLE_HINTS, brand=BRAND,
     # «JAC Motors Parts» → «JAC <span>Motors Parts</span>» (второе и дальше слова — акцентным цветом)
     brand_html=(lambda w: f"{w[0]} <span>{' '.join(w[1:])}</span>" if len(w) > 1 else w[0])(

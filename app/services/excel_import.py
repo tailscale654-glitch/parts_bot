@@ -66,6 +66,7 @@ class ImportRow:
     delivery_days: int | None
     description: dict
     photo: str | None
+    mod_codes: str = ""  # коды модификаций через запятую; пусто — все модификации модели
 
 
 @dataclass
@@ -226,10 +227,10 @@ def _find_warehouse_header(path: Path) -> tuple[str, int] | None:
     return None
 
 
-def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
-    """'T9-P33Z3,T8-P30BF' → две модели; 'RF8-V9AA3,V9HA0' → RF8-V9AA3 и RF8-V9HA0; '—' → «Прочее»."""
+def _model_codes(raw: str | None) -> list[str]:
+    """'T9-P33Z3,T8-P30BF' → два кода; 'RF8-V9AA3,V9HA0' → RF8-V9AA3 и RF8-V9HA0; '—' → []."""
     if raw in EMPTY_MARKS:
-        return [mapping.ALL_MODELS]
+        return []
     codes, prefix = [], ""
     for token in (t.strip() for t in raw.split(",")):
         if not token:
@@ -239,8 +240,28 @@ def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
         elif prefix and token not in mapping.MODEL_NAMES:
             token = prefix + token  # продолжение списка без префикса
         codes.append(token)
-    names = dict.fromkeys(mapping.MODEL_NAMES.get(code, code) for code in codes)  # без повторов
+    return codes
+
+
+def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
+    """'T9-P33Z3,T8-P30BF' → две модели; 'RF8-V9AA3,V9HA0' → одна модель JAC RF8; '—' → «Прочее»."""
+    names = dict.fromkeys(mapping.MODEL_NAMES.get(code, code) for code in _model_codes(raw))  # без повторов
     return [(name, name, name) for name in names] or [mapping.ALL_MODELS]
+
+
+ANY_MOD = "*"
+
+
+def _mods_by_model(raw: str | None) -> dict[str, set[str]]:
+    """Модель → коды модификаций CarSale из строки. Код без модификации («RF8», «M3») → подходит ко всем."""
+    result: dict[str, set[str]] = {}
+    for code in _model_codes(raw):
+        result.setdefault(mapping.MODEL_NAMES.get(code, code), set()).add(code if "-" in code else ANY_MOD)
+    return result
+
+
+def _mods_text(mods: set[str]) -> str:
+    return "" if ANY_MOD in mods else ",".join(sorted(mods))[:255]
 
 
 def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row: int,
@@ -255,6 +276,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
     catalog = catalog or {}
     overrides = overrides or {}  # правки администратора (part_overrides.Override) — главнее файла
     from_catalog, hidden_by_admin = 0, 0
+    part_mods: dict[tuple[str, str], set[str]] = {}  # (модель, артикул) → модификации; «*» — все
     mapped_regions = {dealer_key(name): code for name, code in mapping.DEALER_REGIONS.items()}
     errors: list[ImportError_] = []
     warnings: list[ImportError_] = []
@@ -325,7 +347,10 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             raw_model = catalog[part_key(v["Код запчасти"])]
             from_catalog += 1
         models = override.models if override and override.models else _model_names(raw_model)
+        mods = {} if override and override.models else _mods_by_model(raw_model)
         for model in models:
+            part_mods.setdefault((model[0].lower(), v["Код запчасти"].lower()), set()).update(
+                mods.get(model[0], {ANY_MOD}))
             if model[0] not in known_names:
                 unknown_models.add(model[0])
             key = (model[0].lower(), v["Код запчасти"].lower(), key_d)
@@ -371,6 +396,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             part_number=o["number"], price=o["price"], stock=o["qty"], delivery_days=None,
             description=o["override"].description if o["override"] else {"ru": None, "en": None, "uz": None},
             photo=o["override"].photo if o["override"] else None,
+            mod_codes=_mods_text(part_mods.get((o["model"][0].lower(), o["number"].lower()), {ANY_MOD})),
         )
         for o in offers.values()
     ]
@@ -465,6 +491,7 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
         if r.photo:
             part.photo = r.photo
         part.active = True
+        part.mod_codes = r.mod_codes
     await session.flush()
     seen_parts = {parts[k].id for k in counted}
 

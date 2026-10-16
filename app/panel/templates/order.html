@@ -43,7 +43,8 @@
   </div>
   <div>
     <div class="card"><b>👤 Клиент</b><br>{{ person_name(order.user) }}{% if order.user.username %} · @{{ order.user.username }}{% endif %}<br>
-      📞 {{ order.user.phone or '—' }}<br>📍 {{ localized(order.user.region) }}</div>
+      📞 {{ order.user.phone or '—' }}<br>📍 {{ localized(order.user.region) }}
+      {% if order.car %}<br>🚗 {{ order.car }}{% endif %}</div>
     <div class="card"><b>🏢 Дилер</b><br>{{ order.dealer.name }}<br>📍 {{ localized(order.dealer.region) }}<br>
       📌 {{ order.dealer.address or '—' }}<br>📞 {{ order.dealer.phone or '—' }}</div>
     <div class="card muted">Создан: {{ fmt_date(order.created_at) }}<br>Изменён: {{ fmt_date(order.updated_at) }}</div>

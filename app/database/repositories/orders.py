@@ -89,7 +89,10 @@ class OrderRepository:
 
         orders = []
         for dealer_id, dealer_items in by_dealer.items():
-            order = Order(user_id=user.id, dealer_id=dealer_id, status="NEW", total_amount=Decimal(0))
+            from app.services.cars import car_text
+
+            order = Order(user_id=user.id, dealer_id=dealer_id, status="NEW", total_amount=Decimal(0),
+                          car=car_text(user, "ru"))
             for item in dealer_items:
                 stock = locked[item.stock_id]
                 part = stock.part

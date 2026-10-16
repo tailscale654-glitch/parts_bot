@@ -325,5 +325,17 @@
   "catalog_applied": "✅ Parts list updated\n\nCodes in file: {total} (new {new})\nTotal in the list: {catalog_total}\n\n🚗 Parts in the bot that will get their model: {in_bot} — on the next CarSale sync (started now if the service is running) or the next stock upload.",
   "warn_catalog_no_model": "⚠️ Rows without a model skipped: {n}",
   "warn_model_from_catalog": "📚 Model taken from the parts list: {n} rows",
-  "warn_admin_hidden": "🙈 Hidden by an admin (panel edit): {n} rows"
+  "warn_admin_hidden": "🙈 Hidden by an admin (panel edit): {n} rows",
+  "choose_car_model": "🚗 Choose your car model — the bot will show parts for it:",
+  "choose_car_color": "🎨 Car colour ({model}):",
+  "choose_car_mod": "⚙️ {model} version:\n\nThe code is in the vehicle registration or dealer documents. Not sure? Tap “I don't know”.",
+  "btn_mod_unknown": "🤷 I don't know",
+  "car_saved": "✅ Car: {car}",
+  "car_line": "🚗 Car: {car}",
+  "car_not_selected": "not selected",
+  "btn_change_car": "🚗 Change car",
+  "btn_other_parts": "🧰 Other (all models)",
+  "catalog_for_car": "🔧 Parts for {car}\n\nChoose a category:",
+  "catalog_car_empty": "No parts for {car} in stock right now.\n\nSee “Other” or message a manager (“📞 Manager” button).",
+  "order_car": "🚗 Car: {car}"
 }

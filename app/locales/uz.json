@@ -325,5 +325,17 @@
   "catalog_applied": "✅ Ehtiyot qismlar ro‘yxati yangilandi\n\nFayldagi artikullar: {total} (yangi {new})\nRo‘yxatda jami: {catalog_total}\n\n🚗 Botda modelini oladigan qismlar: {in_bot} — CarSale bilan navbatdagi sinxronizatsiyada yoki keyingi yuklashda.",
   "warn_catalog_no_model": "⚠️ Modelsiz qatorlar o‘tkazib yuborildi: {n}",
   "warn_model_from_catalog": "📚 Model ehtiyot qismlar ro‘yxatidan olindi: {n} qator",
-  "warn_admin_hidden": "🙈 Administrator yashirgan (paneldagi tahrir): {n} qator"
+  "warn_admin_hidden": "🙈 Administrator yashirgan (paneldagi tahrir): {n} qator",
+  "choose_car_model": "🚗 Avtomobilingiz modelini tanlang — bot aynan unga mos ehtiyot qismlarni ko‘rsatadi:",
+  "choose_car_color": "🎨 Avtomobil rangi ({model}):",
+  "choose_car_mod": "⚙️ {model} modifikatsiyasi:\n\nKod texpasportda yoki dilerning hujjatlarida ko‘rsatilgan. Bilmasangiz — «Bilmayman» tugmasini bosing.",
+  "btn_mod_unknown": "🤷 Bilmayman",
+  "car_saved": "✅ Avtomobil: {car}",
+  "car_line": "🚗 Avtomobil: {car}",
+  "car_not_selected": "tanlanmagan",
+  "btn_change_car": "🚗 Avtomobilni o‘zgartirish",
+  "btn_other_parts": "🧰 Boshqa (barcha modellar uchun)",
+  "catalog_for_car": "🔧 {car} uchun ehtiyot qismlar\n\nToifani tanlang:",
+  "catalog_car_empty": "Hozir {car} uchun ehtiyot qismlar mavjud emas.\n\n«Boshqa» bo‘limini ko‘ring yoki menejerga yozing («📞 Menejer» tugmasi).",
+  "order_car": "🚗 Avtomobil: {car}"
 }

@@ -27,6 +27,7 @@
     <p>Телефон: {{ client.phone or '—' }}<br>
     Telegram: {% if client.username %}<a href="https://t.me/{{ client.username }}" target="_blank">@{{ client.username }}</a>{% else %}—{% endif %} <span class="muted">(id {{ client.telegram_id }})</span><br>
     Регион: {{ localized(client.region) if client.region else '—' }}<br>
+    🚗 Автомобиль: {{ car_text(client) or 'не выбран' }}<br>
     Язык: {{ (client.language or '—')|upper }}<br>
     Зарегистрирован: {{ fmt_date(client.created_at) }}</p>
     {% if staff_dealer %}<p>🏢 Сотрудник дилера <a href="/dealers/{{ staff_dealer.id }}">{{ staff_dealer.name }}</a></p>{% endif %}
