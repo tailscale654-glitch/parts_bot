@@ -93,11 +93,11 @@ async def models_view(user: User, session: AsyncSession, full: bool = False) -> 
     if cars.needs_car(user):
         return car_prompt(user)
     car = cars.car_text(user, lang)
-    model = await repo.model_by_name(user.car_model)
+    model = await repo.model_by_name(cars.catalog_model(user))
     other = await repo.model_by_name(ALL_MODELS[0])
     if other is not None and not await repo.list_nodes(other.id, lang):
         other = None
-    nodes = await repo.list_nodes(model.id, lang, user.car_modification) if model else []
+    nodes = await repo.list_nodes(model.id, lang, cars.carsale_code(user)) if model else []
     if not nodes:
         return i18n.t(lang, "catalog_car_empty", car=car), InlineKeyboardMarkup(inline_keyboard=_car_buttons(lang, other))
     kb = nodes_keyboard(model.id, nodes, lang)
@@ -107,11 +107,11 @@ async def models_view(user: User, session: AsyncSession, full: bool = False) -> 
 
 async def _allowed(user: User, session: AsyncSession, model: CarModel | None, full: bool) -> bool:
     """Клиент открывает только свою модель и «Прочее» (даже по старой кнопке из другого сообщения)."""
-    return model is not None and (full or model.name_ru in (user.car_model, ALL_MODELS[0]))
+    return model is not None and (full or model.name_ru in (cars.catalog_model(user), ALL_MODELS[0]))
 
 
 def _mod(user: User, model: CarModel, full: bool) -> str | None:
-    return None if full or model.name_ru != user.car_model else user.car_modification
+    return None if full or model.name_ru != cars.catalog_model(user) else cars.carsale_code(user)
 
 
 @router.callback_query(F.data == "menu:catalog")
@@ -138,7 +138,7 @@ async def show_nodes(callback: CallbackQuery, callback_data: CatalogCB, user: Us
     if not await _allowed(user, session, model, full):
         await _unavailable(callback, lang)
         return
-    if not full and model.name_ru == user.car_model:  # своя модель — главный экран каталога клиента
+    if not full and model.name_ru == cars.catalog_model(user):  # своя модель — главный экран каталога клиента
         text, kb = await models_view(user, session)
         await _show(callback, text, kb)
         return

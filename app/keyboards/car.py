@@ -1,15 +1,13 @@
-"""Выбор автомобиля клиента: модель → цвет → модификация (если их несколько)."""
+"""Выбор автомобиля клиента: модель → комплектация (если их несколько) → цвет."""
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.services import cars
-from app.services.localization import i18n
 
 
 class CarCB(CallbackData, prefix="car"):
-    action: str  # start | model | color | mod
-    i: int = 0  # номер модели / модификации в списке (-1 — «не знаю»)
-    key: str = ""  # ключ цвета
+    action: str  # start | model | mod | color
+    i: int = 0  # номер модели / комплектации / цвета в списке
 
 
 def _grid(buttons, columns: int = 2):
@@ -22,15 +20,13 @@ def models_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=_grid(buttons))
 
 
-def colors_keyboard(lang: str | None) -> InlineKeyboardMarkup:
-    buttons = [InlineKeyboardButton(text=cars.color_name(key, lang), callback_data=CarCB(action="color", key=key).pack())
-               for key in cars.COLORS]
-    return InlineKeyboardMarkup(inline_keyboard=_grid(buttons))
-
-
 def mods_keyboard(model: str, lang: str | None) -> InlineKeyboardMarkup:
-    buttons = [InlineKeyboardButton(text=code, callback_data=CarCB(action="mod", i=i).pack())
-               for i, code in enumerate(cars.modifications(model))]
-    rows = _grid(buttons) + [[InlineKeyboardButton(text=i18n.t(lang, "btn_mod_unknown"),
-                                                   callback_data=CarCB(action="mod", i=-1).pack())]]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    buttons = [InlineKeyboardButton(text=cars.mod_name(key, lang), callback_data=CarCB(action="mod", i=i).pack())
+               for i, key in enumerate(cars.modifications(model))]
+    return InlineKeyboardMarkup(inline_keyboard=_grid(buttons, 1))
+
+
+def colors_keyboard(model: str, mod: str | None, lang: str | None) -> InlineKeyboardMarkup:
+    buttons = [InlineKeyboardButton(text=cars.color_name(key, lang), callback_data=CarCB(action="color", i=i).pack())
+               for i, key in enumerate(cars.colors(model, mod))]
+    return InlineKeyboardMarkup(inline_keyboard=_grid(buttons))

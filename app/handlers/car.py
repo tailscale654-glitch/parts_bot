@@ -1,4 +1,4 @@
-"""Автомобиль клиента: модель → цвет → модификация (если у модели их несколько).
+"""Автомобиль клиента: модель → комплектация (если у модели их несколько) → цвет.
 
 При регистрации — после региона, перед телефоном. Из профиля — «🚗 Изменить автомобиль».
 Каталог клиента показывает только запчасти его модели (и раздел «Прочее»)."""
@@ -33,31 +33,38 @@ async def set_model(callback: CallbackQuery, callback_data: CarCB, user: User, s
     model = models[callback_data.i]
     await UserRepository(session).set_car(user, model=model, modification=None, color=None)
     await callback.answer()
-    await callback.message.edit_text(i18n.t(user.language, "choose_car_color", model=model),
-                                     reply_markup=colors_keyboard(user.language))
-
-
-@router.callback_query(CarCB.filter(F.action == "color"))
-async def set_color(callback: CallbackQuery, callback_data: CarCB, user: User, session: AsyncSession) -> None:
-    if callback_data.key not in cars.COLORS or not user.car_model:
-        await callback.answer()
+    if len(cars.modifications(model)) > 1:
+        await callback.message.edit_text(i18n.t(user.language, "choose_car_mod", model=model),
+                                         reply_markup=mods_keyboard(model, user.language))
         return
-    await UserRepository(session).set_car(user, color=callback_data.key)
-    await callback.answer()
-    if len(cars.modifications(user.car_model)) > 1:
-        await callback.message.edit_text(i18n.t(user.language, "choose_car_mod", model=user.car_model),
-                                         reply_markup=mods_keyboard(user.car_model, user.language))
-        return
-    await _finish(callback, user, session)
+    await _ask_color(callback, user)
 
 
 @router.callback_query(CarCB.filter(F.action == "mod"))
 async def set_mod(callback: CallbackQuery, callback_data: CarCB, user: User, session: AsyncSession) -> None:
     mods = cars.modifications(user.car_model)
-    if callback_data.i != -1 and not 0 <= callback_data.i < len(mods):
+    if not 0 <= callback_data.i < len(mods):
         await callback.answer()
         return
-    await UserRepository(session).set_car(user, modification=mods[callback_data.i] if callback_data.i >= 0 else None)
+    await UserRepository(session).set_car(user, modification=mods[callback_data.i], color=None)
+    await callback.answer()
+    await _ask_color(callback, user)
+
+
+async def _ask_color(callback: CallbackQuery, user: User) -> None:
+    title = " · ".join(filter(None, [user.car_model, cars.mod_name(user.car_modification, user.language)]))
+    await callback.message.edit_text(
+        i18n.t(user.language, "choose_car_color", model=title),
+        reply_markup=colors_keyboard(user.car_model, user.car_modification, user.language))
+
+
+@router.callback_query(CarCB.filter(F.action == "color"))
+async def set_color(callback: CallbackQuery, callback_data: CarCB, user: User, session: AsyncSession) -> None:
+    colors = cars.colors(user.car_model, user.car_modification)
+    if not user.car_model or not 0 <= callback_data.i < len(colors):
+        await callback.answer()
+        return
+    await UserRepository(session).set_car(user, color=colors[callback_data.i])
     await callback.answer()
     await _finish(callback, user, session)
 
