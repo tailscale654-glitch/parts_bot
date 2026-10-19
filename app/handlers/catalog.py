@@ -64,6 +64,11 @@ def full_access(user: User, settings: Settings | None, staff_dealer_id: int | No
     return staff_dealer_id is not None or (settings is not None and user.telegram_id in settings.admin_ids)
 
 
+def _repo(session: AsyncSession, user: User, full: bool) -> CatalogRepository:
+    """Клиенту — только детали в наличии у дилеров его региона; админу и сотруднику — у любого дилера."""
+    return CatalogRepository(session, None if full else user.region_id)
+
+
 def car_prompt(user: User) -> tuple[str, InlineKeyboardMarkup]:
     from app.keyboards.car import models_keyboard as car_models_keyboard
 
@@ -84,7 +89,7 @@ def _car_buttons(lang: str | None, other: CarModel | None) -> list[list[InlineKe
 async def models_view(user: User, session: AsyncSession, full: bool = False) -> tuple[str, InlineKeyboardMarkup | None]:
     """Первый экран каталога. Клиенту — сразу категории его модели (+ «Прочее»), всем остальным — список моделей."""
     lang = user.language
-    repo = CatalogRepository(session)
+    repo = _repo(session, user, full)
     if full:
         models = await repo.list_models(lang)
         if not models:
@@ -132,8 +137,8 @@ async def show_models(callback: CallbackQuery, user: User, session: AsyncSession
 async def show_nodes(callback: CallbackQuery, callback_data: CatalogCB, user: User, session: AsyncSession,
                      settings: Settings | None = None, staff_dealer_id: int | None = None) -> None:
     lang = user.language
-    repo = CatalogRepository(session)
     full = full_access(user, settings, staff_dealer_id)
+    repo = _repo(session, user, full)
     model = await repo.get_model(callback_data.model_id)
     if not await _allowed(user, session, model, full):
         await _unavailable(callback, lang)
@@ -154,8 +159,8 @@ async def show_nodes(callback: CallbackQuery, callback_data: CatalogCB, user: Us
 async def show_parts(callback: CallbackQuery, callback_data: CatalogCB, user: User, session: AsyncSession,
                      settings: Settings | None = None, staff_dealer_id: int | None = None) -> None:
     lang = user.language
-    repo = CatalogRepository(session)
     full = full_access(user, settings, staff_dealer_id)
+    repo = _repo(session, user, full)
     model = await repo.get_model(callback_data.model_id)
     node = await repo.get_node(callback_data.node_id)
     if not await _allowed(user, session, model, full):
@@ -180,7 +185,8 @@ async def show_part(callback: CallbackQuery, callback_data: CatalogCB, user: Use
         await _unavailable(callback, lang)
         return
     stocks = StockRepository(session)
-    offers = await stocks.offers_in_region(part.id, user.region_id)  # только дилеры региона покупателя
+    # только дилеры региона покупателя, у которых деталь есть (без строк «нет в наличии»)
+    offers = [o for o in await stocks.offers_in_region(part.id, user.region_id) if o.quantity > 0]
     elsewhere = 0 if offers else await stocks.regions_elsewhere(part.id, user.region_id)
     text = part_card_text(part, lang, user.region, offers, elsewhere)
     photo = part.photo if len(text) <= 1024 else None  # подпись к фото — не длиннее 1024 символов

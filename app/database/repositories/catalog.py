@@ -1,8 +1,12 @@
-"""Чтение каталога: модели → узлы → детали. Показываем только активные записи."""
+"""Чтение каталога: модели → узлы → детали.
+
+Показываем только детали, которые сейчас есть в наличии (остаток > 0) у работающего дилера:
+у клиента — у дилеров его региона (заказать можно только там), у администратора и сотрудника — у любого.
+Модель или категория без таких деталей в списке не появляется."""
 from sqlalchemy import func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import CarModel, Node, Part
+from app.database.models import CarModel, Dealer, Node, Part, Stock
 from app.services.import_mapping import ALL_MODELS
 
 
@@ -12,8 +16,13 @@ def _name_order(table, lang: str | None):
     return func.coalesce(column, table.name_ru) if column is not None else table.name_ru
 
 
-def _active_parts():
-    return select(Part.id).where(Part.active.is_(True))
+def _in_stock(region_id: int | None):
+    """У детали есть остаток у включённого дилера (из последней выгрузки) — в регионе или у любого."""
+    offer = (select(Stock.id).join(Dealer, Dealer.id == Stock.dealer_id)
+             .where(Stock.part_id == Part.id, Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True)))
+    if region_id is not None:
+        offer = offer.where(Dealer.region_id == region_id)
+    return offer.exists()
 
 
 def _fits(mod: str | None):
@@ -24,12 +33,20 @@ def _fits(mod: str | None):
 
 
 class CatalogRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, region_id: int | None = None):
+        """region_id — показывать детали в наличии у дилеров этого региона; None — у любого дилера."""
         self.session = session
+        self.region_id = region_id
+
+    def _shown(self):
+        return Part.active.is_(True), _in_stock(self.region_id)
+
+    def _active_parts(self):
+        return select(Part.id).where(*self._shown())
 
     async def list_models(self, lang: str | None) -> list[CarModel]:
         """Только модели, у которых есть хотя бы одна активная деталь."""
-        has_parts = _active_parts().where(Part.model_id == CarModel.id).exists()
+        has_parts = self._active_parts().where(Part.model_id == CarModel.id).exists()
         result = await self.session.execute(
             select(CarModel).where(CarModel.active.is_(True), has_parts).order_by(CarModel.name_ru == ALL_MODELS[0], _name_order(CarModel, lang))  # «Прочее» — в конце
         )
@@ -48,7 +65,7 @@ class CatalogRepository:
 
     async def list_nodes(self, model_id: int, lang: str | None, mod: str | None = None) -> list[Node]:
         """Узлы, в которых у этой модели есть активные детали."""
-        has_parts = _active_parts().where(Part.node_id == Node.id, Part.model_id == model_id, _fits(mod)).exists()
+        has_parts = self._active_parts().where(Part.node_id == Node.id, Part.model_id == model_id, _fits(mod)).exists()
         result = await self.session.execute(
             select(Node).where(Node.active.is_(True), has_parts).order_by(_name_order(Node, lang))
         )
@@ -60,7 +77,7 @@ class CatalogRepository:
     async def count_parts(self, model_id: int, node_id: int, mod: str | None = None) -> int:
         return await self.session.scalar(
             select(func.count(Part.id)).where(
-                Part.model_id == model_id, Part.node_id == node_id, Part.active.is_(True), _fits(mod)
+                Part.model_id == model_id, Part.node_id == node_id, *self._shown(), _fits(mod)
             )
         )
 
@@ -69,7 +86,7 @@ class CatalogRepository:
     ) -> list[Part]:
         result = await self.session.execute(
             select(Part)
-            .where(Part.model_id == model_id, Part.node_id == node_id, Part.active.is_(True), _fits(mod))
+            .where(Part.model_id == model_id, Part.node_id == node_id, *self._shown(), _fits(mod))
             .order_by(_name_order(Part, lang), Part.id)
             .offset(offset)
             .limit(limit)
@@ -82,7 +99,7 @@ class CatalogRepository:
     async def count_parts_by_node(self, model_id: int) -> dict[int, int]:
         result = await self.session.execute(
             select(Part.node_id, func.count(Part.id))
-            .where(Part.model_id == model_id, Part.active.is_(True))
+            .where(Part.model_id == model_id, *self._shown())
             .group_by(Part.node_id)
         )
         return dict(result.all())
