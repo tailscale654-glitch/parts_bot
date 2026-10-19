@@ -2,6 +2,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
 from app.services.localization import i18n
+from app.keyboards.car import CarCB
 
 MENU_LAYOUT = [
     ["btn_catalog", "btn_cart"],
@@ -34,7 +35,7 @@ def menu_action(text: str | None) -> str | None:
 
 def profile_keyboard(lang: str) -> InlineKeyboardMarkup:
     rows = [
-        ("btn_change_car", "car:start:0:"),  # = CarCB(action="start").pack()
+        ("btn_change_car", CarCB(action="start").pack()),
         ("btn_change_phone", "profile:phone"),
         ("btn_change_region", "menu:region"),
         ("btn_change_language", "menu:language"),

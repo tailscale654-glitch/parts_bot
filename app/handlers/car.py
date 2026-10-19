@@ -18,7 +18,7 @@ from app.services.localization import i18n
 router = Router(name="car")
 
 
-@router.callback_query(CarCB.filter(F.action == "start"))
+@router.callback_query(F.data.startswith("car:start"))  # и кнопки из старых сообщений профиля
 async def start_car(callback: CallbackQuery, user: User) -> None:
     await callback.answer()
     await callback.message.answer(i18n.t(user.language, "choose_car_model"), reply_markup=car_models_keyboard())

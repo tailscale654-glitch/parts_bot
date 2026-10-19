@@ -144,3 +144,16 @@ def test_order_card_shows_car():
     order.items = []
     assert "🚗 Автомобиль: JAC M3 · VAN (фургон) · Белый" in order_text(order, "ru", for_admin=True)
     assert "Автомобиль" not in order_text(order, "ru")  # клиенту — его же данные не повторяем
+
+
+def test_change_car_button_routes_to_handler():
+    """«🚗 Изменить автомобиль» из профиля — и новая кнопка, и из старых сообщений (car:start:0:)."""
+    from aiogram import F
+
+    from app.keyboards.main import profile_keyboard
+
+    data = profile_keyboard("ru").inline_keyboard[0][0].callback_data
+    flt = F.data.startswith("car:start")
+    for value in (data, "car:start:0:", "car:start"):
+        assert flt.resolve(SimpleNamespace(data=value))
+    assert not flt.resolve(SimpleNamespace(data=CarCB(action="model", i=1).pack()))
