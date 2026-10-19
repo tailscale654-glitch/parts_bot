@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -54,7 +54,7 @@ from app.database.repositories.stats import StatsRepository, period_start
 from app.database.repositories.web_users import WebUserRepository
 from app.keyboards.orders import reply_keyboard
 from app.panel.charts import bar_chart
-from app.services import audit, bot_settings, import_flow, support
+from app.services import audit, bot_settings, chat_files, import_flow, support
 from app.services import broadcast as broadcast_service
 from app.services import orders as orders_service
 from app.services.catalog import money, paginate
@@ -79,7 +79,8 @@ templates.env.globals.update(
     money=lambda v: money(v, LANG), fmt_date=fmt_date,
     status_text=lambda s: status_text(s, LANG).split(" —")[0],
     localized=lambda obj: localized_name(obj, LANG) if obj is not None else "—",
-    person_name=person_name, today=lambda: datetime.now(orders_service.TIMEZONE).strftime("%d.%m.%Y"),
+    person_name=person_name, file_view=lambda m: __import__("app.services.chat_files", fromlist=["view_of"]).view_of(m),
+    today=lambda: datetime.now(orders_service.TIMEZONE).strftime("%d.%m.%Y"),
     car_text=lambda u: __import__("app.services.cars", fromlist=["car_text"]).car_text(u, LANG),
     tabs=[(k, i18n.t(LANG, f"tab_{k}")) for k in ORDER_FILTERS],
     ROLES=ROLES, ROLE_HINTS=ROLE_HINTS, brand=BRAND,
@@ -1031,32 +1032,36 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         await session.commit()
         return RedirectResponse(f"/chat/{chat.id}", status_code=303)
 
-    @app.get("/chat/file/{msg_id}")
-    async def chat_file(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
-                        session: AsyncSession = Depends(get_session)):
-        """Фото и файлы из переписки — берём у Telegram по file_id (в базе хранится только ссылка)."""
-        import mimetypes
-        from urllib.parse import quote
-
+    async def _chat_file(request: Request, session: AsyncSession, msg_id: int):
         msg = await session.get(SupportMessage, msg_id)
         if msg is None or not msg.file_id:
             raise HTTPException(404, "Файл не найден.")
-        bot = request.app.state.bot
         try:
-            tg_file = await bot.get_file(msg.file_id)
-            data = await bot.download_file(tg_file.file_path)
+            path = await chat_files.local_copy(request.app.state.bot, msg)
         except TelegramAPIError as e:
             logger.warning("Cannot download chat file %s: %s", msg_id, e)
-            raise HTTPException(502, "Telegram не отдал файл (больше 20 МБ или устарел).") from e
+            raise HTTPException(502, "Telegram не отдал файл: боты получают файлы только до 20 МБ.") from e
+        return msg, path
+
+    @app.get("/chat/file/{msg_id}")
+    async def chat_file(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                        session: AsyncSession = Depends(get_session)):
+        """Файл из переписки. Фото, видео, аудио, PDF и текст браузер показывает сам (в чате),
+        остальное — только скачать. ?download=1 — всегда скачать. Перемотка видео работает (Range)."""
+        msg, path = await _chat_file(request, session, msg_id)
+        view = chat_files.view_of(msg)
+        inline = view.inline and request.query_params.get("download") != "1"
         name = msg.file_name or f"{msg.file_kind or 'file'}_{msg.id}"
-        types = {"photo": "image/jpeg", "voice": "audio/ogg", "video": "video/mp4", "video_note": "video/mp4",
-                 "sticker": "image/webp"}
-        media = types.get(msg.file_kind or "") or mimetypes.guess_type(name)[0] or "application/octet-stream"
-        inline = msg.file_kind in types and media.startswith(("image/", "audio/", "video/"))
-        disposition = "inline" if inline else "attachment"  # документы — только скачать (без открытия в браузере)
-        return Response(data.read() if hasattr(data, "read") else data, media_type=media, headers={
-            "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(name)}",
-            "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"})
+        return FileResponse(path, media_type=view.mime if inline else "application/octet-stream", filename=name,
+                            content_disposition_type="inline" if inline else "attachment",
+                            headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"})
+
+    @app.get("/chat/preview/{msg_id}", response_class=HTMLResponse)
+    async def chat_preview(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                           session: AsyncSession = Depends(get_session)):
+        """Предпросмотр таблиц (Excel, CSV), документов Word и текстовых файлов — HTML для окна просмотра."""
+        msg, path = await _chat_file(request, session, msg_id)
+        return HTMLResponse(_fragment("chat_preview.html", p=chat_files.preview(path, msg), msg=msg))
 
     @app.get("/chat/{chat_id}", response_class=HTMLResponse)
     async def chat_view(chat_id: int, request: Request, web: WebUser = Depends(require("chat.view")),

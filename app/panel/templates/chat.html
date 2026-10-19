@@ -84,6 +84,70 @@
   {% endif %}
 </div>
 
+<div class="viewer" id="viewer" hidden>
+  <div class="vbar">
+    <span class="vname" id="vname"></span>
+    <span class="vnav"><button type="button" class="btn small" id="vprev" title="Предыдущее фото (←)">‹</button>
+      <button type="button" class="btn small" id="vnext" title="Следующее фото (→)">›</button></span>
+    <a class="btn small" id="vdown" href="#">⬇ Скачать</a>
+    <button type="button" class="btn small" id="vclose" title="Закрыть (Esc)">✕</button>
+  </div>
+  <div class="vbody" id="vbody"></div>
+</div>
+
+<script>
+(() => {  // просмотр фото и документов поверх чата, без перехода на другую страницу
+  const viewer = document.getElementById('viewer'), body = document.getElementById('vbody');
+  const nameEl = document.getElementById('vname'), down = document.getElementById('vdown');
+  const prev = document.getElementById('vprev'), next = document.getElementById('vnext');
+  let images = [], index = -1;
+
+  function show(el) {
+    const kind = el.dataset.view, url = el.dataset.url;
+    nameEl.textContent = el.dataset.name || '';
+    down.href = url + '?download=1';
+    images = [...document.querySelectorAll('#msgs img[data-view="image"]')];
+    index = kind === 'image' ? images.indexOf(el) : -1;
+    prev.hidden = next.hidden = index < 0 || images.length < 2;
+    body.className = 'vbody v-' + kind;
+    if (kind === 'image') body.innerHTML = `<img src="${url}" alt="">`;
+    else if (kind === 'pdf') body.innerHTML = `<iframe src="${url}" title="PDF"></iframe>`;
+    else {
+      body.innerHTML = '<p class="muted">Загружаю…</p>';
+      fetch(el.dataset.preview, {credentials: 'same-origin'})
+        .then(r => r.ok ? r.text() : Promise.reject(r.status))
+        .then(html => { body.innerHTML = `<div class="pv">${html}</div>`; })
+        .catch(() => { body.innerHTML = '<p class="pv-error">Не удалось открыть файл — скачайте его.</p>'; });
+    }
+    viewer.hidden = false;
+  }
+  function close() { viewer.hidden = true; body.innerHTML = ''; }
+  function step(d) { if (index >= 0 && images.length) show(images[(index + d + images.length) % images.length]); }
+
+  // видео не воспроизвелось — показываем карточку со скачиванием (ошибки медиа не всплывают — ловим на захвате)
+  document.addEventListener('error', e => {
+    const v = e.target;
+    if (v.tagName === 'VIDEO' && v.dataset.fallback) {
+      const fb = document.getElementById(v.dataset.fallback); if (fb) { fb.hidden = false; v.remove(); }
+    }
+  }, true);
+
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-view]');
+    if (el && el.closest('#msgs')) { e.preventDefault(); show(el); }
+  });
+  document.getElementById('vclose').addEventListener('click', close);
+  prev.addEventListener('click', () => step(-1)); next.addEventListener('click', () => step(1));
+  viewer.addEventListener('click', e => { if (e.target === viewer || e.target === body) close(); });
+  document.addEventListener('keydown', e => {
+    if (viewer.hidden) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowLeft') step(-1);
+    if (e.key === 'ArrowRight') step(1);
+  });
+})();
+</script>
+
 <script>
 (() => {
   const root = document.querySelector('.chat');

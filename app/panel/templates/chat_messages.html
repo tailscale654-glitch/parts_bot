@@ -1,13 +1,27 @@
 {% for m in messages %}
 <div class="bubble {{ m.direction }}{{ ' failed' if not m.delivered }}" data-id="{{ m.id }}">
-  {% if m.file_kind == 'photo' and m.file_id %}
-    <a href="/chat/file/{{ m.id }}" target="_blank" rel="noopener"><img src="/chat/file/{{ m.id }}" alt="фото" loading="lazy" onerror="this.replaceWith('📷 Фото — не удалось загрузить из Telegram')"></a>
-  {% elif m.file_kind in ('voice', 'audio') and m.file_id %}
-    <audio controls preload="none" src="/chat/file/{{ m.id }}"></audio>
-  {% elif m.file_kind and m.file_id %}
-    <a class="file" href="/chat/file/{{ m.id }}" target="_blank" rel="noopener">📎 {{ m.file_name or {'video': 'Видео', 'video_note': 'Видеосообщение', 'sticker': 'Стикер', 'document': 'Файл'}.get(m.file_kind, 'Файл') }}</a>
-  {% elif m.file_kind %}
-    <span class="file">📎 {{ m.file_name or 'Файл' }}</span>
+  {% if m.file_kind %}{% set v = file_view(m) %}{% set url = '/chat/file/' ~ m.id %}
+    {% if not m.file_id %}
+      <span class="file">{{ v.icon }} {{ m.file_name or 'Файл' }}</span>
+    {% elif v.kind == 'image' %}
+      <img class="media" src="{{ url }}" alt="фото" loading="lazy" data-view="image" data-url="{{ url }}"
+           data-name="{{ m.file_name or 'Фото' }}" onerror="this.replaceWith('📷 Фото — не удалось загрузить из Telegram')">
+    {% elif v.kind == 'video' %}
+      <video class="media" controls preload="metadata" src="{{ url }}" data-fallback="fb{{ m.id }}"></video>
+      <div class="doc" id="fb{{ m.id }}" hidden><span class="ic">🎬</span>
+        <span class="nm">{{ m.file_name or 'Видео' }}<br><span class="muted">Не воспроизводится здесь: файл больше 20 МБ или формат не поддерживается браузером</span></span>
+        <a class="btn small" href="{{ url }}?download=1" title="Скачать">⬇</a></div>
+    {% elif v.kind == 'audio' %}
+      <audio controls preload="metadata" src="{{ url }}"></audio>
+    {% else %}
+      <div class="doc">
+        <span class="ic">{{ v.icon }}</span>
+        <span class="nm">{{ m.file_name or 'Файл' }}</span>
+        {% if v.previewable %}<button type="button" class="btn small" data-view="{{ v.kind }}" data-url="{{ url }}"
+                data-preview="/chat/preview/{{ m.id }}" data-name="{{ m.file_name or 'Файл' }}">👁 Открыть</button>{% endif %}
+        <a class="btn small" href="{{ url }}?download=1" title="Скачать">⬇</a>
+      </div>
+    {% endif %}
   {% endif %}
   {% if m.text %}<div class="t">{{ m.text }}</div>{% endif %}
   <div class="meta">

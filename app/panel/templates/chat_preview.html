@@ -1,0 +1,13 @@
+{% if p.kind == 'table' %}
+  {% for title, rows, cut in p.sheets %}
+  {% if p.sheets|length > 1 %}<h3 class="pv-sheet">{{ title }}</h3>{% endif %}
+  <div class="pv-table"><table>
+    {% for row in rows %}<tr>{% for c in row %}<td>{{ c }}</td>{% endfor %}</tr>{% else %}<tr><td class="muted">Лист пустой</td></tr>{% endfor %}
+  </table></div>
+  {% if cut %}<p class="muted">Показаны первые 200 строк — весь файл можно скачать.</p>{% endif %}
+  {% endfor %}
+{% elif p.kind == 'text' %}
+  <pre class="pv-text">{{ p.text or 'Документ пустой.' }}</pre>
+{% else %}
+  <p class="pv-error">{{ p.error }}</p>
+{% endif %}

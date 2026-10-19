@@ -100,7 +100,9 @@ async def test_panel_chat_reply_note_poll_and_status(env):  # noqa: F811
     assert empty.json()["ok"] is False
 
 
-async def test_roles_client_card_and_files(env):  # noqa: F811
+async def test_roles_client_card_and_files(env, tmp_path, monkeypatch):  # noqa: F811
+    from app.services import chat_files
+    monkeypatch.setattr(chat_files, "CACHE_DIR", tmp_path / "cache")
     user = await client(env.db)
     await login(env.client, *env.creds["admin"])
     r = await env.client.get(f"/chat/open/{user.id}")  # из карточки клиента — диалог создаётся
@@ -121,7 +123,9 @@ async def test_roles_client_card_and_files(env):  # noqa: F811
     env.bot.get_file, env.bot.download_file = get_file, download_file
     r = await env.client.get(f"/chat/file/{got.message.id}")
     assert r.status_code == 200 and r.content == b"%PDF-1.4" and r.headers["content-type"] == "application/pdf"
-    assert r.headers["content-disposition"].startswith("attachment")  # документ — только скачать
+    assert r.headers["content-disposition"].startswith("inline")  # PDF открывается прямо в чате
+    r = await env.client.get(f"/chat/file/{got.message.id}?download=1")
+    assert r.headers["content-disposition"].startswith("attachment")  # кнопка «⬇ Скачать»
 
     await login(env.client, *env.creds["operator"])  # оператор: видит и отвечает
     page = (await env.client.get(f"/chat/{chat_id}")).text
@@ -171,3 +175,55 @@ async def test_live_updates_endpoint(env):  # noqa: F811
     assert "Второе" in d["html"] and "list" in d and d["unread"] == 1 and d["counts"]["unread"] == 1
     d = (await env.client.get("/chat/updates")).json()  # страница без открытого диалога — только список и счётчики
     assert "html" not in d and "Азиз" in d["list"]
+
+
+async def test_media_shown_inside_chat(env, tmp_path, monkeypatch):  # noqa: F811
+    """Фото, видео, голос — прямо в переписке; таблицы, Word, текст — предпросмотр; HTML — только скачать."""
+    import zipfile
+
+    import openpyxl
+
+    from app.services import chat_files
+    monkeypatch.setattr(chat_files, "CACHE_DIR", tmp_path / "cache")
+    xlsx, docx = tmp_path / "price.xlsx", tmp_path / "letter.docx"
+    book = openpyxl.Workbook()
+    book.active.append(["Артикул", "Цена"])
+    book.active.append(["2803101V6571", 1074400])
+    book.save(xlsx)
+    with zipfile.ZipFile(docx, "w") as z:
+        z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                   '<w:body><w:p><w:r><w:t>Счёт на оплату</w:t></w:r></w:p><w:p><w:r><w:t>Итого: 85 000</w:t></w:r></w:p>'
+                   '</w:body></w:document>')
+    files = {"V": b"\x00\x00\x00\x18ftypmp4", "X": xlsx.read_bytes(), "W": docx.read_bytes(),
+             "C": "Код;Цена\nA1;100\n".encode(), "H": b"<script>alert(1)</script>"}
+
+    async def get_file(file_id):
+        return SimpleNamespace(file_path=file_id)
+
+    async def download_file(path):
+        return io.BytesIO(files[path])
+    env.bot.get_file, env.bot.download_file = get_file, download_file
+
+    user = await client(env.db)
+    video = (await support.add_incoming(env.db, user, "", "V", "video", "JAC M3 Van.mp4")).message
+    table = (await support.add_incoming(env.db, user, "", "X", "document", "price.xlsx")).message
+    word = (await support.add_incoming(env.db, user, "", "W", "document", "letter.docx")).message
+    csv_ = (await support.add_incoming(env.db, user, "", "C", "document", "list.csv")).message
+    html = (await support.add_incoming(env.db, user, "", "H", "document", "page.html")).message
+    await support.add_incoming(env.db, user, "", "VO", "voice")
+    await login(env.client, *env.creds["admin"])
+
+    page = (await env.client.get(f"/chat/{video.chat_id}")).text
+    assert f'<video class="media" controls preload="metadata" src="/chat/file/{video.id}"' in page
+    assert "<audio controls" in page and 'data-view="table"' in page and 'data-view="word"' in page
+    assert 'id="viewer"' in page and 'data-view="other"' not in page  # HTML — без «Открыть», только скачать
+
+    r = await env.client.get(f"/chat/file/{video.id}", headers={"Range": "bytes=0-3"})
+    assert r.status_code == 206 and r.content == files["V"][:4] and r.headers["content-type"] == "video/mp4"  # перемотка
+    pv = (await env.client.get(f"/chat/preview/{table.id}")).text
+    assert "2803101V6571" in pv and "1074400" in pv and "<table>" in pv
+    assert "Итого: 85 000" in (await env.client.get(f"/chat/preview/{word.id}")).text
+    assert "A1" in (await env.client.get(f"/chat/preview/{csv_.id}")).text
+    r = await env.client.get(f"/chat/file/{html.id}")
+    assert r.headers["content-disposition"].startswith("attachment") and "html" not in r.headers["content-type"]
+    assert chat_files.view_of(html).kind == "other"
