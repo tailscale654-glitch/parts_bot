@@ -35,14 +35,16 @@
     const b = document.getElementById('chatbadge');
     const tick = async () => {
       try {
-        const r = await fetch('/chat/counts', {credentials: 'same-origin'});
+        const r = await fetch('/chat/counts', {credentials: 'same-origin', cache: 'no-store'});
         if (!r.ok) return;
         const d = await r.json();
         b.hidden = !d.unread; b.textContent = d.unread;
         document.title = (d.unread ? `(${d.unread}) ` : '') + document.title.replace(/^\(\d+\) /, '');
       } catch (e) {}
     };
-    tick(); setInterval(tick, 15000);
+    if (location.pathname.startsWith('/chat')) return;  // на странице чата счётчик обновляет сама страница
+    tick(); setInterval(tick, 5000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
   })();
   </script>
   {% endif %}

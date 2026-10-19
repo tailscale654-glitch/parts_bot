@@ -5,13 +5,15 @@
   <aside class="chat-list">
     <div class="chat-tabs">
       {% for key, label in tabs.items() %}
-      <a class="{{ 'on' if tab == key }}" href="/chat{{ '/' ~ selected if selected }}?{{ urlencode({'tab': key, 'q': q}) }}">{{ label }}{% if counts[key] and key != 'all' %} <span class="n">{{ counts[key] }}</span>{% endif %}</a>
+      <a class="{{ 'on' if tab == key }}" href="/chat{{ '/' ~ selected if selected }}?{{ urlencode({'tab': key, 'q': q}) }}">{{ label }}{% if key != 'all' %} <span class="n" data-count="{{ key }}">{{ counts[key] or '' }}</span>{% endif %}</a>
       {% endfor %}
     </div>
     <form class="chat-search" method="get" action="/chat{{ '/' ~ selected if selected }}">
       <input type="hidden" name="tab" value="{{ tab }}">
       <input name="q" value="{{ q }}" placeholder="🔍 Имя, @username или телефон">
     </form>
+    <div class="live"><span id="live" class="dot" title="Обновляется само каждые 3 секунды">● обновляется само</span>
+      <button type="button" class="chip" id="notify" hidden>🔔 Включить уведомления</button></div>
     <div id="chatlist" class="items">{% include "chat_list.html" %}</div>
   </aside>
 
@@ -87,38 +89,85 @@
   const root = document.querySelector('.chat');
   const chatId = +root.dataset.chat;
   const msgs = document.getElementById('msgs');
-  const nearBottom = () => !msgs || msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
+  const live = document.getElementById('live');
+  const badge = document.getElementById('chatbadge');
+  let version = '', unread = null, busy = false, failures = 0;
+
+  const nearBottom = () => !msgs || msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 150;
   const toBottom = () => { if (msgs) msgs.scrollTop = msgs.scrollHeight; };
   toBottom();
   document.querySelectorAll('.bubble img').forEach(img => img.addEventListener('load', () => nearBottom() && toBottom()));
 
   function append(html) {
-    if (!html.trim()) return;
+    if (!msgs || !html.trim()) return;
     const empty = msgs.querySelector('.empty'); if (empty) empty.remove();
     const stick = nearBottom();
     msgs.insertAdjacentHTML('beforeend', html);
     if (stick) toBottom();
   }
 
-  async function poll() {
-    if (!chatId) return;
-    try {
-      const seen = document.visibilityState === 'visible' ? 1 : 0;
-      const r = await fetch(`/chat/${chatId}/poll?after=${msgs.dataset.last || 0}&seen=${seen}`, {credentials: 'same-origin'});
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d.last) { append(d.html); msgs.dataset.last = d.last; }
-      document.getElementById('chatstatus').textContent = d.status === 'open' ? 'открыт' : 'закрыт';
-      document.getElementById('assignee').textContent = d.assignee ? '👤 ' + d.assignee : 'без ответственного';
-    } catch (e) {}
+  function setLive(ok, text) {
+    live.className = 'dot ' + (ok ? 'ok' : 'bad');
+    live.textContent = text;
   }
 
-  async function refreshList() {
+  // звук и уведомление браузера о новом сообщении клиента
+  function beep() {
     try {
-      const p = new URLSearchParams({tab: root.dataset.tab, q: root.dataset.q, sel: chatId});
-      const r = await fetch('/chat/sidebar?' + p, {credentials: 'same-origin'});
-      if (r.ok) document.getElementById('chatlist').innerHTML = await r.text();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)(), o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.15);
     } catch (e) {}
+  }
+  function notify(text) {
+    beep();
+    if (window.Notification && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+      const n = new Notification('💬 Чат JAC Motors', {body: text, tag: 'jac-chat'});
+      n.onclick = () => { window.focus(); n.close(); };
+    }
+  }
+  const nb = document.getElementById('notify');
+  if (window.Notification && Notification.permission === 'default') {
+    nb.hidden = false;
+    nb.addEventListener('click', () => Notification.requestPermission().then(() => { nb.hidden = true; }));
+  }
+
+  async function update() {
+    if (busy) return;
+    busy = true;
+    try {
+      const p = new URLSearchParams({tab: root.dataset.tab, q: root.dataset.q, v: version,
+                                     seen: document.visibilityState === 'visible' ? 1 : 0});
+      if (chatId) { p.set('chat', chatId); p.set('after', msgs.dataset.last || 0); }
+      const r = await fetch('/chat/updates?' + p, {credentials: 'same-origin', cache: 'no-store'});
+      if (r.redirected && r.url.includes('/login')) { setLive(false, '⚠️ Вход истёк — обновите страницу и войдите'); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      let notified = false;
+      if (chatId && d.last) {
+        append(d.html); msgs.dataset.last = d.last;
+        if (d.incoming) { notify('Новое сообщение в открытом диалоге'); notified = true; }
+      }
+      if (chatId && d.status) {
+        document.getElementById('chatstatus').textContent = d.status === 'open' ? 'открыт' : 'закрыт';
+        document.getElementById('assignee').textContent = d.assignee ? '👤 ' + d.assignee : 'без ответственного';
+      }
+      if (d.list !== undefined) { document.getElementById('chatlist').innerHTML = d.list; version = d.v; }
+      if (!notified && unread !== null && d.unread > unread) notify('Новое сообщение от клиента');
+      unread = d.unread;
+      if (badge) { badge.hidden = !d.unread; badge.textContent = d.unread; }
+      document.title = (d.unread ? `(${d.unread}) ` : '') + document.title.replace(/^\(\d+\) /, '');
+      for (const [k, n] of Object.entries(d.counts || {})) {
+        const el = document.querySelector(`[data-count="${k}"]`); if (el) el.textContent = n || '';
+      }
+      failures = 0;
+      setLive(true, '● обновляется само');
+    } catch (e) {
+      failures += 1;
+      if (failures >= 2) setLive(false, '⚠️ Нет связи с сервером — повторяю…');
+    } finally {
+      busy = false;
+    }
   }
 
   const form = document.getElementById('composer');
@@ -126,7 +175,7 @@
     const text = document.getElementById('text'), file = document.getElementById('file');
     const info = document.getElementById('sendinfo'), btn = document.getElementById('sendbtn');
     const note = document.getElementById('note');
-    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.chip[data-text]').forEach(c => c.addEventListener('click', () => {
       text.value = text.value ? text.value + '\n' + c.dataset.text : c.dataset.text; text.focus();
     }));
     file.addEventListener('change', () => { document.getElementById('fname').textContent = file.files[0]?.name.slice(0, 24) || 'Файл'; });
@@ -141,18 +190,22 @@
                                             headers: {'X-Requested-With': 'fetch'}});
         const d = await r.json();
         if (d.ok) {
-          append(d.html); msgs.dataset.last = Math.max(+msgs.dataset.last || 0, d.last);
+          // ответ мог уже прийти через обновление — не дублируем
+          if (!msgs.querySelector(`[data-id="${d.last}"]`)) append(d.html);
+          msgs.dataset.last = Math.max(+msgs.dataset.last || 0, d.last);
           text.value = ''; file.value = ''; document.getElementById('fname').textContent = 'Файл';
           info.textContent = d.delivered ? '' : '⚠️ Не доставлено: клиент заблокировал бота или нет связи с Telegram';
-          toBottom(); refreshList();
+          toBottom(); version = ''; update();
         } else { info.textContent = '⚠️ ' + (d.error || 'Не отправлено'); }
       } catch (err) { info.textContent = '⚠️ Нет связи с сервером — попробуйте ещё раз'; }
       btn.disabled = false; text.focus();
     });
   }
 
-  setInterval(poll, 4000);
-  setInterval(refreshList, 10000);
+  update();  // сразу при открытии — счётчики и индикатор, дальше каждые 3 секунды
+  setInterval(update, 3000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') update(); });
+  window.addEventListener('focus', update);
 })();
 </script>
 {% endblock %}

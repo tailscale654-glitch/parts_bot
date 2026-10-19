@@ -152,3 +152,22 @@ def test_chat_permissions():
     from app.services.roles import can
     assert can("operator", "chat.reply") and can("manager", "chat.reply") and can("admin", "chat.reply")
     assert can("viewer", "chat.view") and not can("viewer", "chat.reply")
+
+
+async def test_live_updates_endpoint(env):  # noqa: F811
+    """Одним запросом: новые сообщения открытого диалога, список (только если изменился), счётчики; без кэша."""
+    user = await client(env.db)
+    got = await support.add_incoming(env.db, user, "Первое")
+    await login(env.client, *env.creds["admin"])
+    r = await env.client.get(f"/chat/updates?chat={got.chat.id}&after=0&seen=1")
+    d = r.json()
+    assert r.headers["cache-control"] == "no-store"
+    assert "Первое" in d["html"] and d["incoming"] == 1 and "Азиз" in d["list"] and d["unread"] == 0  # открыт — прочитан
+    v, last = d["v"], d["last"]
+    d = (await env.client.get(f"/chat/updates?chat={got.chat.id}&after={last}&seen=1&v={v}")).json()
+    assert d["last"] is None and "list" not in d  # ничего нового — список не пересылаем
+    await support.add_incoming(env.db, user, "Второе")
+    d = (await env.client.get(f"/chat/updates?chat={got.chat.id}&after={last}&seen=0&v={v}")).json()
+    assert "Второе" in d["html"] and "list" in d and d["unread"] == 1 and d["counts"]["unread"] == 1
+    d = (await env.client.get("/chat/updates")).json()  # страница без открытого диалога — только список и счётчики
+    assert "html" not in d and "Азиз" in d["list"]

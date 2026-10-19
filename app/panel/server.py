@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
@@ -72,6 +72,7 @@ BRAND = os.getenv("PANEL_NAME", "JAC Motors Parts")  # название в ша�
 PAGE = 50
 UPLOAD_DIR = Path(os.getenv("PANEL_UPLOAD_DIR", "/tmp/jac_imports"))  # файлы до «Применить»
 STATUS_ORDER = ["CONFIRMED", "READY", "COMPLETED", "CANCELLED"]
+NO_STORE = {"Cache-Control": "no-store"}  # живые данные чата — браузер и прокси не должны их кэшировать
 
 templates = Jinja2Templates(directory=HERE / "templates")
 templates.env.globals.update(
@@ -984,7 +985,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
     @app.get("/chat/counts")
     async def chat_counts(web: WebUser = Depends(require("chat.view")), session: AsyncSession = Depends(get_session)):
         c = await support.counts(session, web.id)
-        return {"unread": c["unread"], "messages": c["unread_messages"]}
+        return JSONResponse({"unread": c["unread"], "messages": c["unread_messages"]}, headers=NO_STORE)
 
     @app.get("/chat/sidebar", response_class=HTMLResponse)
     async def chat_sidebar(request: Request, web: WebUser = Depends(require("chat.view")),
@@ -992,7 +993,35 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         tab, q = _chat_query(request)
         return HTMLResponse(_fragment("chat_list.html", chats=await support.chats(session, tab, web.id, q),
                                       selected=parse_int(request.query_params.get("sel")) or 0, tab=tab, q=q,
-                                      urlencode=urlencode))
+                                      urlencode=urlencode), headers=NO_STORE)
+
+    @app.get("/chat/updates")
+    async def chat_updates(request: Request, web: WebUser = Depends(require("chat.view")),
+                           session: AsyncSession = Depends(get_session)):
+        """Живое обновление страницы чата одним запросом (раз в 3 с): новые сообщения открытого диалога,
+        список диалогов (только если изменился) и счётчики."""
+        p = request.query_params
+        tab, q = _chat_query(request)
+        out: dict = {}
+        chat_id, after = parse_int(p.get("chat")), parse_int(p.get("after")) or 0
+        chat = await session.get(SupportChat, chat_id) if chat_id else None
+        if chat is not None:
+            if p.get("seen") == "1":
+                await support.mark_read(session, chat)  # диалог открыт на экране — новые сообщения прочитаны
+            msgs = await support.messages(session, chat.id, after)
+            await session.refresh(chat)
+            out.update(html=_fragment("chat_messages.html", messages=msgs), last=msgs[-1].id if msgs else None,
+                       incoming=sum(m.direction == "in" for m in msgs), status=chat.status,
+                       assignee=person_name(chat.assignee.user) if chat.assignee else "")
+        chats_ = await support.chats(session, tab, web.id, q)
+        version = hashlib.md5(repr([(c.id, c.unread, str(c.last_message_at), c.status, c.assigned_to)
+                                    for c in chats_]).encode()).hexdigest()[:12]
+        if p.get("v") != version:
+            out.update(v=version, list=_fragment("chat_list.html", chats=chats_, selected=chat_id or 0, tab=tab, q=q,
+                                                 urlencode=urlencode))
+        c = await support.counts(session, web.id)
+        out.update(unread=c["unread"], counts={k: c[k] for k in support.TABS})
+        return JSONResponse(out, headers=NO_STORE)
 
     @app.get("/chat/open/{user_id}")
     async def chat_open(user_id: int, web: WebUser = Depends(require("chat.view")),
@@ -1044,9 +1073,10 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             await support.mark_read(session, chat)
         await session.refresh(chat)
         c = await support.counts(session, web.id)
-        return {"html": _fragment("chat_messages.html", messages=msgs), "last": msgs[-1].id if msgs else None,
-                "status": chat.status, "assignee": person_name(chat.assignee.user) if chat.assignee else "",
-                "unread": c["unread"]}
+        return JSONResponse({"html": _fragment("chat_messages.html", messages=msgs),
+                             "last": msgs[-1].id if msgs else None, "status": chat.status,
+                             "assignee": person_name(chat.assignee.user) if chat.assignee else "",
+                             "unread": c["unread"]}, headers=NO_STORE)
 
     @app.post("/chat/{chat_id}/send")
     async def chat_send(chat_id: int, request: Request, web: WebUser = Depends(require("chat.reply")),

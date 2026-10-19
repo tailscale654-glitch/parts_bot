@@ -104,3 +104,5 @@ main:has(.chat){padding:0}
 .chat-empty{margin:auto;text-align:center;padding:40px}.chat-empty div{font-size:48px}
 @media (max-width:1200px){.chat{grid-template-columns:280px 1fr}.chat-info{display:none}}
 @media (max-width:900px){.chat{grid-template-columns:1fr;height:auto}.chat-list{max-height:45vh}.msgs{min-height:50vh}}
+.chat .live{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:4px 12px 6px;font-size:12px}
+.chat .dot{color:var(--muted)}.chat .dot.ok{color:var(--ok)}.chat .dot.bad{color:var(--bad);font-weight:600}
