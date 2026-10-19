@@ -34,11 +34,9 @@
     {% if is_admin %}<p>🔑 Администратор бота (ADMIN_IDS)</p>{% endif %}
   </div>
   {% if can('clients.edit') %}
-  <div class="card"><b>Написать в Telegram</b>
-    <p class="muted">Сообщение придёт от бота с подписью «Сообщение от JAC Motors». По конкретному заказу лучше писать со страницы заказа — тогда клиент сможет ответить.</p>
-    <form method="post" action="/clients/{{ client.id }}/message"><input type="hidden" name="csrf" value="{{ csrf }}">
-      <textarea name="text" required maxlength="3500" placeholder="Текст сообщения"></textarea>
-      <div style="margin-top:8px"><button class="btn primary">Отправить</button></div></form>
+  <div class="card"><b>💬 Переписка</b>
+    <p class="muted">Вся переписка с клиентом — в разделе «Чат»: сообщения клиента боту и ваши ответы. Клиент отвечает прямо в Telegram.</p>
+    <a class="btn primary" href="/chat/open/{{ client.id }}">💬 Открыть чат с клиентом</a>
   </div>
   {% if not is_admin and client.id != me.user.id %}
   <div class="card"><b>{{ 'Разблокировать' if client.blocked else 'Заблокировать' }}</b>

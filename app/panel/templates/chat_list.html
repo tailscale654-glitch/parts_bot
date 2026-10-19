@@ -1,0 +1,9 @@
+{% for c in chats %}
+<a class="chat-item{{ ' on' if c.id == selected }}{{ ' unread' if c.unread }}" href="/chat/{{ c.id }}?{{ urlencode({'tab': tab, 'q': q}) }}">
+  <div class="top"><b>{{ person_name(c.user) }}</b><span class="time">{{ fmt_date(c.last_message_at)[-5:] if fmt_date(c.last_message_at)[:10] == today() else fmt_date(c.last_message_at)[:5] }}</span></div>
+  <div class="bottom"><span class="snip">{{ c.last_text or '—' }}</span>{% if c.unread %}<span class="badge">{{ c.unread }}</span>{% endif %}</div>
+  <div class="sub">{{ c.user.phone or '' }}{% if c.assignee %} · 👤 {{ person_name(c.assignee.user) }}{% endif %}{% if c.status == 'closed' %} · закрыт{% endif %}</div>
+</a>
+{% else %}
+<p class="muted" style="padding:12px">Диалогов нет. Когда клиент напишет боту, диалог появится здесь.</p>
+{% endfor %}

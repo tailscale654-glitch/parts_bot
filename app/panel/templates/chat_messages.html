@@ -1,0 +1,18 @@
+{% for m in messages %}
+<div class="bubble {{ m.direction }}{{ ' failed' if not m.delivered }}" data-id="{{ m.id }}">
+  {% if m.file_kind == 'photo' and m.file_id %}
+    <a href="/chat/file/{{ m.id }}" target="_blank" rel="noopener"><img src="/chat/file/{{ m.id }}" alt="фото" loading="lazy" onerror="this.replaceWith('📷 Фото — не удалось загрузить из Telegram')"></a>
+  {% elif m.file_kind in ('voice', 'audio') and m.file_id %}
+    <audio controls preload="none" src="/chat/file/{{ m.id }}"></audio>
+  {% elif m.file_kind and m.file_id %}
+    <a class="file" href="/chat/file/{{ m.id }}" target="_blank" rel="noopener">📎 {{ m.file_name or {'video': 'Видео', 'video_note': 'Видеосообщение', 'sticker': 'Стикер', 'document': 'Файл'}.get(m.file_kind, 'Файл') }}</a>
+  {% elif m.file_kind %}
+    <span class="file">📎 {{ m.file_name or 'Файл' }}</span>
+  {% endif %}
+  {% if m.text %}<div class="t">{{ m.text }}</div>{% endif %}
+  <div class="meta">
+    {% if m.direction != 'in' %}{{ person_name(m.author.user) if m.author else 'Сотрудник' }} · {% endif %}{{ fmt_date(m.created_at) }}
+    {% if m.direction == 'note' %} · 🔒 заметка{% elif m.direction == 'out' %}{{ ' · ⚠️ не доставлено' if not m.delivered else ' · ✓' }}{% endif %}
+  </div>
+</div>
+{% endfor %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Чат — {{ brand }}{% endblock %}
+{% block content %}
+<div class="chat" data-chat="{{ selected }}" data-tab="{{ tab }}" data-q="{{ q }}">
+  <aside class="chat-list">
+    <div class="chat-tabs">
+      {% for key, label in tabs.items() %}
+      <a class="{{ 'on' if tab == key }}" href="/chat{{ '/' ~ selected if selected }}?{{ urlencode({'tab': key, 'q': q}) }}">{{ label }}{% if counts[key] and key != 'all' %} <span class="n">{{ counts[key] }}</span>{% endif %}</a>
+      {% endfor %}
+    </div>
+    <form class="chat-search" method="get" action="/chat{{ '/' ~ selected if selected }}">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input name="q" value="{{ q }}" placeholder="🔍 Имя, @username или телефон">
+    </form>
+    <div id="chatlist" class="items">{% include "chat_list.html" %}</div>
+  </aside>
+
+  <section class="chat-thread">
+    {% if chat %}
+    <header class="chat-head">
+      <div>
+        <b>{{ person_name(chat.user) }}</b>
+        {% if chat.user.username %}<a href="https://t.me/{{ chat.user.username }}" target="_blank" rel="noopener" class="muted">@{{ chat.user.username }}</a>{% endif %}
+        <div class="muted">{{ chat.user.phone or 'без телефона' }} · {{ localized(chat.user.region) if chat.user.region else 'регион не выбран' }}{% if car %} · 🚗 {{ car }}{% endif %}</div>
+      </div>
+      <div class="actions">
+        <span class="st {{ 'st-COMPLETED' if chat.status == 'open' else '' }}" id="chatstatus">{{ 'открыт' if chat.status == 'open' else 'закрыт' }}</span>
+        <span class="muted" id="assignee">{% if chat.assignee %}👤 {{ person_name(chat.assignee.user) }}{% else %}без ответственного{% endif %}</span>
+        {% if can('chat.reply') %}
+        <form method="post" action="/chat/{{ chat.id }}/status" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+          {% if chat.assigned_to != me.id %}<button class="btn small" name="action" value="assign_me">Взять себе</button>
+          {% else %}<button class="btn small" name="action" value="unassign">Снять с себя</button>{% endif %}
+          {% if chat.status == 'open' %}<button class="btn small" name="action" value="close">✓ Закрыть</button>
+          {% else %}<button class="btn small" name="action" value="open">Открыть</button>{% endif %}
+        </form>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="msgs" id="msgs" data-last="{{ last_id }}">
+      {% if messages %}{% include "chat_messages.html" %}{% else %}<p class="muted empty">Сообщений пока нет. Напишите клиенту первым — ответ придёт ему в Telegram.</p>{% endif %}
+    </div>
+
+    {% if can('chat.reply') %}
+    <form id="composer" class="composer" method="post" action="/chat/{{ chat.id }}/send" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="quick">{% for t in quick %}<button type="button" class="chip" data-text="{{ t }}">{{ t[:38] }}{{ '…' if t|length > 38 }}</button>{% endfor %}</div>
+      <textarea name="text" id="text" maxlength="3500" placeholder="Сообщение клиенту… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+      <div class="bar">
+        <label class="btn small attach" title="Фото или файл до 10 МБ">📎 <span id="fname">Файл</span><input type="file" name="file" id="file" hidden></label>
+        <label class="note"><input type="checkbox" name="note" value="1" id="note"> 🔒 Заметка (клиент не увидит)</label>
+        <span class="muted" id="sendinfo"></span>
+        <button class="btn primary" id="sendbtn">Отправить</button>
+      </div>
+    </form>
+    {% endif %}
+    {% else %}
+    <div class="chat-empty"><div>💬</div><p>Выберите диалог слева.</p>
+      <p class="muted">Всё, что клиент пишет боту (кроме кнопок меню), попадает сюда. Ответ придёт ему в Telegram.</p></div>
+    {% endif %}
+  </section>
+
+  {% if chat %}
+  <aside class="chat-info">
+    <div class="card">
+      <b>Клиент</b>
+      <p>{{ person_name(chat.user) }}<br>
+      📞 {{ chat.user.phone or '—' }}<br>
+      📍 {{ localized(chat.user.region) if chat.user.region else '—' }}<br>
+      🚗 {{ car or 'не выбран' }}<br>
+      🌐 {{ (chat.user.language or '—')|upper }}<br>
+      <span class="muted">в боте с {{ fmt_date(chat.user.created_at)[:10] }}</span></p>
+      <a class="btn small" href="/clients/{{ chat.user.id }}">Карточка клиента →</a>
+    </div>
+    <div class="card">
+      <b>Последние заказы</b>
+      {% for o in orders %}
+      <div class="person"><a href="/orders/{{ o.id }}">№{{ o.id }}</a><span class="st st-{{ o.status }}">{{ status_text(o.status) }}</span><span>{{ money(o.total_amount) }}</span></div>
+      {% else %}<p class="muted">Заказов нет.</p>{% endfor %}
+    </div>
+  </aside>
+  {% endif %}
+</div>
+
+<script>
+(() => {
+  const root = document.querySelector('.chat');
+  const chatId = +root.dataset.chat;
+  const msgs = document.getElementById('msgs');
+  const nearBottom = () => !msgs || msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
+  const toBottom = () => { if (msgs) msgs.scrollTop = msgs.scrollHeight; };
+  toBottom();
+  document.querySelectorAll('.bubble img').forEach(img => img.addEventListener('load', () => nearBottom() && toBottom()));
+
+  function append(html) {
+    if (!html.trim()) return;
+    const empty = msgs.querySelector('.empty'); if (empty) empty.remove();
+    const stick = nearBottom();
+    msgs.insertAdjacentHTML('beforeend', html);
+    if (stick) toBottom();
+  }
+
+  async function poll() {
+    if (!chatId) return;
+    try {
+      const seen = document.visibilityState === 'visible' ? 1 : 0;
+      const r = await fetch(`/chat/${chatId}/poll?after=${msgs.dataset.last || 0}&seen=${seen}`, {credentials: 'same-origin'});
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.last) { append(d.html); msgs.dataset.last = d.last; }
+      document.getElementById('chatstatus').textContent = d.status === 'open' ? 'открыт' : 'закрыт';
+      document.getElementById('assignee').textContent = d.assignee ? '👤 ' + d.assignee : 'без ответственного';
+    } catch (e) {}
+  }
+
+  async function refreshList() {
+    try {
+      const p = new URLSearchParams({tab: root.dataset.tab, q: root.dataset.q, sel: chatId});
+      const r = await fetch('/chat/sidebar?' + p, {credentials: 'same-origin'});
+      if (r.ok) document.getElementById('chatlist').innerHTML = await r.text();
+    } catch (e) {}
+  }
+
+  const form = document.getElementById('composer');
+  if (form) {
+    const text = document.getElementById('text'), file = document.getElementById('file');
+    const info = document.getElementById('sendinfo'), btn = document.getElementById('sendbtn');
+    const note = document.getElementById('note');
+    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+      text.value = text.value ? text.value + '\n' + c.dataset.text : c.dataset.text; text.focus();
+    }));
+    file.addEventListener('change', () => { document.getElementById('fname').textContent = file.files[0]?.name.slice(0, 24) || 'Файл'; });
+    note.addEventListener('change', () => form.classList.toggle('is-note', note.checked));
+    text.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!text.value.trim() && !file.files.length) { text.focus(); return; }
+      btn.disabled = true; info.textContent = 'Отправляю…';
+      try {
+        const r = await fetch(form.action, {method: 'POST', body: new FormData(form), credentials: 'same-origin',
+                                            headers: {'X-Requested-With': 'fetch'}});
+        const d = await r.json();
+        if (d.ok) {
+          append(d.html); msgs.dataset.last = Math.max(+msgs.dataset.last || 0, d.last);
+          text.value = ''; file.value = ''; document.getElementById('fname').textContent = 'Файл';
+          info.textContent = d.delivered ? '' : '⚠️ Не доставлено: клиент заблокировал бота или нет связи с Telegram';
+          toBottom(); refreshList();
+        } else { info.textContent = '⚠️ ' + (d.error || 'Не отправлено'); }
+      } catch (err) { info.textContent = '⚠️ Нет связи с сервером — попробуйте ещё раз'; }
+      btn.disabled = false; text.focus();
+    });
+  }
+
+  setInterval(poll, 4000);
+  setInterval(refreshList, 10000);
+})();
+</script>
+{% endblock %}

@@ -336,5 +336,8 @@
   "btn_other_parts": "🧰 Boshqa (barcha modellar uchun)",
   "catalog_for_car": "🔧 {car} uchun ehtiyot qismlar\n\nToifani tanlang:",
   "catalog_car_empty": "Hozir {car} uchun ehtiyot qismlar mavjud emas.\n\n«Boshqa» bo‘limini ko‘ring yoki menejerga yozing («📞 Menejer» tugmasi).",
-  "order_car": "🚗 Avtomobil: {car}"
+  "order_car": "🚗 Avtomobil: {car}",
+  "support_received": "✅ Xabaringiz menejerga yuborildi. Javob shu chatga keladi.",
+  "support_reply_header": "💬 JAC Motors menejeri:",
+  "support_hint": "💬 Yoki savolingizni shu chatga yozing — menejer shu yerda javob beradi. Ehtiyot qism rasmini ham yuborishingiz mumkin."
 }

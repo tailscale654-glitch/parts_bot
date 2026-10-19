@@ -336,5 +336,8 @@
   "btn_other_parts": "🧰 Other (all models)",
   "catalog_for_car": "🔧 Parts for {car}\n\nChoose a category:",
   "catalog_car_empty": "No parts for {car} in stock right now.\n\nSee “Other” or message a manager (“📞 Manager” button).",
-  "order_car": "🚗 Car: {car}"
+  "order_car": "🚗 Car: {car}",
+  "support_received": "✅ Your message has been passed to a manager. The reply will come here, in this chat.",
+  "support_reply_header": "💬 JAC Motors manager:",
+  "support_hint": "💬 Or just type your question in this chat — a manager will reply here. You can send a photo of the part."
 }

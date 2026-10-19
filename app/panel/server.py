@@ -40,6 +40,8 @@ from app.database.models import (
     OrderMessage,
     Part,
     Region,
+    SupportChat,
+    SupportMessage,
     SyncRun,
     User,
     WebUser,
@@ -52,7 +54,7 @@ from app.database.repositories.stats import StatsRepository, period_start
 from app.database.repositories.web_users import WebUserRepository
 from app.keyboards.orders import reply_keyboard
 from app.panel.charts import bar_chart
-from app.services import audit, bot_settings, import_flow
+from app.services import audit, bot_settings, import_flow, support
 from app.services import broadcast as broadcast_service
 from app.services import orders as orders_service
 from app.services.catalog import money, paginate
@@ -76,7 +78,8 @@ templates.env.globals.update(
     money=lambda v: money(v, LANG), fmt_date=fmt_date,
     status_text=lambda s: status_text(s, LANG).split(" —")[0],
     localized=lambda obj: localized_name(obj, LANG) if obj is not None else "—",
-    person_name=person_name, car_text=lambda u: __import__("app.services.cars", fromlist=["car_text"]).car_text(u, LANG),
+    person_name=person_name, today=lambda: datetime.now(orders_service.TIMEZONE).strftime("%d.%m.%Y"),
+    car_text=lambda u: __import__("app.services.cars", fromlist=["car_text"]).car_text(u, LANG),
     tabs=[(k, i18n.t(LANG, f"tab_{k}")) for k in ORDER_FILTERS],
     ROLES=ROLES, ROLE_HINTS=ROLE_HINTS, brand=BRAND,
     # «JAC Motors Parts» → «JAC <span>Motors Parts</span>» (второе и дальше слова — акцентным цветом)
@@ -577,11 +580,11 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         text = text.strip()[:3500]
         if not text:
             return RedirectResponse(f"/clients/{client.id}", status_code=303)
-        header = i18n.t(client.language, "direct_message_header")
-        ok = await send(request.app.state.bot, client.telegram_id, f"{header}\n\n{text}")
-        logger.info("Panel %s messaged user %s (ok=%s)", web.login, client.id, ok)
+        chat = await support.chat_for(session, client)  # письмо из карточки — в чат, чтобы история была в одном месте
+        msg = await support.reply(request.app.state.bot, session, chat, web, text)
+        logger.info("Panel %s messaged user %s (ok=%s)", web.login, client.id, msg.delivered)
         await audit.log(session, web, "client.message", person_name(client), text[:300])
-        return back(f"/clients/{client.id}", "Сообщение отправлено в Telegram." if ok
+        return back(f"/chat/{chat.id}", "Сообщение отправлено в Telegram." if msg.delivered
                     else "Не удалось доставить: клиент заблокировал бота или ни разу его не запускал.")
 
     @app.post("/clients/{user_id}/blocked")
@@ -942,6 +945,147 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         await session.commit()
         await audit.log(session, web, "sync.run", "CarSale")
         return back("/sync", "Запрос отправлен. Синхронизация начнётся в течение минуты и займёт 3–5 минут.")
+
+    # --- чат с клиентами (как в CRM) ---
+
+    async def _chat(session: AsyncSession, chat_id: int) -> SupportChat:
+        chat = await session.get(SupportChat, chat_id)
+        if chat is None:
+            raise HTTPException(404, "Диалог не найден.")
+        return chat
+
+    def _fragment(name: str, **context) -> str:
+        return templates.env.get_template(name).render(**context)
+
+    def _chat_query(request: Request) -> tuple[str, str]:
+        tab = request.query_params.get("tab", "open")
+        return (tab if tab in support.TABS else "open"), (request.query_params.get("q") or "")[:100]
+
+    async def _chat_page(request: Request, web: WebUser, session: AsyncSession, chat: SupportChat | None):
+        tab, q = _chat_query(request)
+        if chat is not None:
+            await support.mark_read(session, chat)  # открыли диалог — прочитан (до подсчёта счётчиков)
+        context = dict(tab=tab, q=q, tabs=support.TABS, chats=await support.chats(session, tab, web.id, q),
+                       counts=await support.counts(session, web.id), chat=chat, selected=chat.id if chat else 0,
+                       quick=support.QUICK_REPLIES, messages=[], last_id=0, orders=[], car="", urlencode=urlencode)
+        if chat is not None:
+            msgs = await support.messages(session, chat.id)
+            orders_, _ = await AdminRepository(session).orders_page("all", 0, 5, user_id=chat.user_id)
+            from app.services.cars import car_text
+            context.update(messages=msgs, last_id=msgs[-1].id if msgs else 0, orders=orders_,
+                           car=car_text(chat.user, LANG) or "")
+        return render(request, "chat.html", web, **context)
+
+    @app.get("/chat", response_class=HTMLResponse)
+    async def chat_index(request: Request, web: WebUser = Depends(require("chat.view")),
+                         session: AsyncSession = Depends(get_session)):
+        return await _chat_page(request, web, session, None)
+
+    @app.get("/chat/counts")
+    async def chat_counts(web: WebUser = Depends(require("chat.view")), session: AsyncSession = Depends(get_session)):
+        c = await support.counts(session, web.id)
+        return {"unread": c["unread"], "messages": c["unread_messages"]}
+
+    @app.get("/chat/sidebar", response_class=HTMLResponse)
+    async def chat_sidebar(request: Request, web: WebUser = Depends(require("chat.view")),
+                           session: AsyncSession = Depends(get_session)):
+        tab, q = _chat_query(request)
+        return HTMLResponse(_fragment("chat_list.html", chats=await support.chats(session, tab, web.id, q),
+                                      selected=parse_int(request.query_params.get("sel")) or 0, tab=tab, q=q,
+                                      urlencode=urlencode))
+
+    @app.get("/chat/open/{user_id}")
+    async def chat_open(user_id: int, web: WebUser = Depends(require("chat.view")),
+                        session: AsyncSession = Depends(get_session)):
+        client = await _client(session, user_id)
+        chat = await support.chat_for(session, client)
+        await session.commit()
+        return RedirectResponse(f"/chat/{chat.id}", status_code=303)
+
+    @app.get("/chat/file/{msg_id}")
+    async def chat_file(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                        session: AsyncSession = Depends(get_session)):
+        """Фото и файлы из переписки — берём у Telegram по file_id (в базе хранится только ссылка)."""
+        import mimetypes
+        from urllib.parse import quote
+
+        msg = await session.get(SupportMessage, msg_id)
+        if msg is None or not msg.file_id:
+            raise HTTPException(404, "Файл не найден.")
+        bot = request.app.state.bot
+        try:
+            tg_file = await bot.get_file(msg.file_id)
+            data = await bot.download_file(tg_file.file_path)
+        except TelegramAPIError as e:
+            logger.warning("Cannot download chat file %s: %s", msg_id, e)
+            raise HTTPException(502, "Telegram не отдал файл (больше 20 МБ или устарел).") from e
+        name = msg.file_name or f"{msg.file_kind or 'file'}_{msg.id}"
+        types = {"photo": "image/jpeg", "voice": "audio/ogg", "video": "video/mp4", "video_note": "video/mp4",
+                 "sticker": "image/webp"}
+        media = types.get(msg.file_kind or "") or mimetypes.guess_type(name)[0] or "application/octet-stream"
+        inline = msg.file_kind in types and media.startswith(("image/", "audio/", "video/"))
+        disposition = "inline" if inline else "attachment"  # документы — только скачать (без открытия в браузере)
+        return Response(data.read() if hasattr(data, "read") else data, media_type=media, headers={
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(name)}",
+            "X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"})
+
+    @app.get("/chat/{chat_id}", response_class=HTMLResponse)
+    async def chat_view(chat_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                        session: AsyncSession = Depends(get_session)):
+        return await _chat_page(request, web, session, await _chat(session, chat_id))
+
+    @app.get("/chat/{chat_id}/poll")
+    async def chat_poll(chat_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                        session: AsyncSession = Depends(get_session)):
+        """Живое обновление открытого диалога: новые сообщения после after=…"""
+        chat = await _chat(session, chat_id)
+        msgs = await support.messages(session, chat.id, parse_int(request.query_params.get("after")) or 0)
+        if request.query_params.get("seen") == "1":
+            await support.mark_read(session, chat)
+        await session.refresh(chat)
+        c = await support.counts(session, web.id)
+        return {"html": _fragment("chat_messages.html", messages=msgs), "last": msgs[-1].id if msgs else None,
+                "status": chat.status, "assignee": person_name(chat.assignee.user) if chat.assignee else "",
+                "unread": c["unread"]}
+
+    @app.post("/chat/{chat_id}/send")
+    async def chat_send(chat_id: int, request: Request, web: WebUser = Depends(require("chat.reply")),
+                        session: AsyncSession = Depends(get_session)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        chat = await _chat(session, chat_id)
+        is_fetch = request.headers.get("x-requested-with") == "fetch"
+        upload, file = None, form.get("file")
+        if file is not None and getattr(file, "filename", ""):
+            data = await file.read(10 * 1024 * 1024 + 1)
+            if len(data) > 10 * 1024 * 1024:
+                error = "Файл больше 10 МБ."
+                return {"ok": False, "error": error} if is_fetch else back(f"/chat/{chat.id}", error)
+            upload = support.Upload(data, file.filename, file.content_type or "application/octet-stream")
+        try:
+            msg = await support.reply(request.app.state.bot, session, chat, web, str(form.get("text", "")),
+                                      upload, note=bool(form.get("note")))
+        except ValueError:
+            error = "Напишите текст или прикрепите файл."
+            return {"ok": False, "error": error} if is_fetch else back(f"/chat/{chat.id}", error)
+        logger.info("Panel %s wrote to chat %s (%s, delivered=%s)", web.login, chat.id, msg.direction, msg.delivered)
+        if is_fetch:
+            await session.refresh(msg)
+            return {"ok": True, "delivered": msg.delivered, "last": msg.id,
+                    "html": _fragment("chat_messages.html", messages=[msg])}
+        flash = "" if msg.delivered else "Не доставлено: клиент заблокировал бота или ни разу его не запускал."
+        return back(f"/chat/{chat.id}", flash) if flash else RedirectResponse(f"/chat/{chat.id}", status_code=303)
+
+    @app.post("/chat/{chat_id}/status")
+    async def chat_status(chat_id: int, request: Request, action: str = Form(""), csrf: str = Form(""),
+                          web: WebUser = Depends(require("chat.reply")), session: AsyncSession = Depends(get_session)):
+        check_csrf(request, csrf)
+        chat = await _chat(session, chat_id)
+        try:
+            note = await support.set_status(session, chat, action, web)
+        except ValueError:
+            raise HTTPException(400, "Неизвестное действие.")
+        return back(f"/chat/{chat.id}", note)
 
     # --- журнал действий ---
 

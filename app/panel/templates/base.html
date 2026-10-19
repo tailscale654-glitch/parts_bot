@@ -12,6 +12,7 @@
     <div class="brand">{{ brand_html | safe }}</div>
     <a href="/" class="{{ 'on' if path == '/' }}">📊 Главная</a>
     <a href="/orders" class="{{ 'on' if path.startswith('/orders') }}">🧾 Заказы</a>
+    {% if can('chat.view') %}<a href="/chat" class="{{ 'on' if path.startswith('/chat') }}">💬 Чат <span class="navbadge" id="chatbadge" hidden></span></a>{% endif %}
     {% if can('stats') %}<a href="/stats" class="{{ 'on' if path.startswith('/stats') }}">📈 Статистика</a>{% endif %}
     {% if can('dealers.view') %}<a href="/dealers" class="{{ 'on' if path.startswith('/dealers') }}">🏢 Дилеры</a>{% endif %}
     {% if can('clients.view') %}<a href="/clients" class="{{ 'on' if path.startswith('/clients') }}">👥 Клиенты</a>{% endif %}
@@ -28,6 +29,23 @@
     </div>
     {% endif %}
   </nav>
+  {% if me and can('chat.view') %}
+  <script>
+  (() => {  // счётчик непрочитанных диалогов в меню — на всех страницах
+    const b = document.getElementById('chatbadge');
+    const tick = async () => {
+      try {
+        const r = await fetch('/chat/counts', {credentials: 'same-origin'});
+        if (!r.ok) return;
+        const d = await r.json();
+        b.hidden = !d.unread; b.textContent = d.unread;
+        document.title = (d.unread ? `(${d.unread}) ` : '') + document.title.replace(/^\(\d+\) /, '');
+      } catch (e) {}
+    };
+    tick(); setInterval(tick, 15000);
+  })();
+  </script>
+  {% endif %}
   <main>
     {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
     {% block content %}{% endblock %}

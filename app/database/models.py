@@ -426,3 +426,40 @@ class PartOverride(Base):
     @property
     def model_list(self) -> list[str]:
         return [m for m in (self.models or "").split("|") if m]
+
+
+class SupportChat(Base):
+    """Диалог клиента с менеджерами (раздел «💬 Чат» веб-панели). Один диалог на клиента."""
+
+    __tablename__ = "support_chats"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    status: Mapped[str] = mapped_column(String(8), default="open", server_default="open", index=True)  # open | closed
+    assigned_to: Mapped[int | None] = mapped_column(ForeignKey("web_users.id", ondelete="SET NULL"))
+    unread: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # сообщений клиента не прочитано
+    last_text: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    last_message_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(lazy="joined")
+    assignee: Mapped["WebUser | None"] = relationship(lazy="joined")
+
+
+class SupportMessage(Base):
+    """Сообщение в диалоге: in — от клиента, out — ответ сотрудника, note — заметка (клиент не видит)."""
+
+    __tablename__ = "support_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[int] = mapped_column(ForeignKey("support_chats.id", ondelete="CASCADE"), index=True)
+    direction: Mapped[str] = mapped_column(String(8))  # in | out | note
+    text: Mapped[str] = mapped_column(Text, default="", server_default="")
+    file_id: Mapped[str | None] = mapped_column(String(255))  # file_id Telegram (фото, файл, голосовое)
+    file_kind: Mapped[str | None] = mapped_column(String(16))  # photo | document | voice | video | sticker
+    file_name: Mapped[str | None] = mapped_column(String(255))
+    web_user_id: Mapped[int | None] = mapped_column(ForeignKey("web_users.id", ondelete="SET NULL"))
+    delivered: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    author: Mapped["WebUser | None"] = relationship(lazy="joined")

@@ -50,8 +50,9 @@ def contact_view(values: dict[str, str], lang: str | None) -> tuple[str, InlineK
     username = telegram_username(values.get("contact_telegram"))
     if username:
         lines.append(f"Telegram: @{username}")
+    hint = "\n\n" + i18n.t(lang, "support_hint")  # писать можно прямо боту — сообщение попадёт в чат панели
     if not lines:
-        return i18n.t(lang, "contact_manager_text"), None
+        return i18n.t(lang, "contact_manager_text") + hint, None
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=i18n.t(lang, "contact_write_btn"), url=f"https://t.me/{username}")]]) if username else None
-    return i18n.t(lang, "contact_card_title") + "\n\n" + "\n".join(lines), kb
+    return i18n.t(lang, "contact_card_title") + "\n\n" + "\n".join(lines) + hint, kb
