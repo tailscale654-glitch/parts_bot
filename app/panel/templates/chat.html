@@ -224,6 +224,13 @@
         append(d.html); msgs.dataset.last = d.last;
         if (d.incoming) { notify('Новое сообщение в открытом диалоге'); notified = true; }
       }
+      if (chatId && d.seen) {  // клиент был в боте — ответы до этого момента он видел: ✓✓
+        document.querySelectorAll('#msgs .tick[data-ts]').forEach(t => {
+          if (+t.dataset.ts <= d.seen && !t.classList.contains('read')) {
+            t.classList.add('read'); t.textContent = '✓✓'; t.title = 'Клиент был в боте после этого сообщения — видел';
+          }
+        });
+      }
       if (chatId && d.status) {
         document.getElementById('chatstatus').textContent = d.status === 'open' ? 'открыт' : 'закрыт';
         document.getElementById('assignee').textContent = d.assignee ? '👤 ' + d.assignee : 'без ответственного';

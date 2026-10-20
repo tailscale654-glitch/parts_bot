@@ -35,7 +35,10 @@
   {% if m.text %}<div class="t">{{ m.text }}</div>{% endif %}
   <div class="meta">
     {% if m.direction != 'in' %}{{ person_name(m.author.user) if m.author else 'Сотрудник' }} · {% endif %}{{ fmt_date(m.created_at) }}
-    {% if m.direction == 'note' %} · 🔒 заметка{% elif m.direction == 'out' %}{{ ' · ⚠️ не доставлено' if not m.delivered else ' · ✓' }}{% endif %}
+    {% if m.direction == 'note' %} · 🔒 заметка
+    {% elif m.direction == 'out' %}{% if not m.delivered %} · ⚠️ не доставлено{% else %}{% set ts = epoch(m.created_at) %}{% set read = seen and seen >= ts %}
+      · <span class="tick{{ ' read' if read }}" data-ts="{{ ts }}" title="{{ 'Клиент был в боте после этого сообщения — видел' if read else 'Доставлено в Telegram' }}">{{ '✓✓' if read else '✓' }}</span>{% endif %}
+    {% endif %}
   </div>
 </div>
 {% endfor %}

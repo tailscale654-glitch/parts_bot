@@ -67,6 +67,7 @@ async def add_incoming(session: AsyncSession, user: User, text: str = "", file_i
                          thumb_id=thumb_id)
     session.add(msg)
     chat.status, chat.unread = "open", chat.unread + 1
+    chat.client_seen_at = datetime.now(timezone.utc)  # написал — значит, видел всё, что было до этого
     chat.last_text, chat.last_message_at = snippet(text, kind), datetime.now(timezone.utc)
     await session.commit()
     return Incoming(chat, msg, first)

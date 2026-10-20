@@ -12,6 +12,21 @@ from app.database.repositories.users import UserRepository
 from app.services.localization import i18n
 
 
+async def mark_seen(session, user) -> None:
+    """Клиент что-то сделал в боте — значит, видел наши ответы в чате (для ✓✓ в веб-панели).
+    Telegram не сообщает ботам о прочтении, поэтому это лучшее, что можно узнать."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import update
+
+    from app.database.models import SupportChat
+
+    result = await session.execute(update(SupportChat).where(SupportChat.user_id == user.id)
+                                   .values(client_seen_at=datetime.now(timezone.utc)))
+    if result.rowcount:
+        await session.commit()
+
+
 class DbSessionMiddleware(BaseMiddleware):
     def __init__(self, session_factory: async_sessionmaker):
         self.session_factory = session_factory
@@ -37,6 +52,7 @@ class DbSessionMiddleware(BaseMiddleware):
                 if user.blocked and user.telegram_id not in admin_ids:
                     return await self._refuse(event, user.language)
                 data["user"] = user
+                await mark_seen(session, user)
                 # id дилера, если пользователь — сотрудник дилера (иначе None)
                 data["staff_dealer_id"] = await StaffRepository(session).dealer_id_for(user)
             return await handler(event, data)

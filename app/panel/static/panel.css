@@ -132,3 +132,4 @@ main:has(.chat){padding:0}
 .pv-text{white-space:pre-wrap;font:inherit;margin:0}
 .bubble .doc .thumb{width:96px;height:64px;object-fit:cover;border-radius:6px}
 .bubble .doc.big{max-width:420px}
+.bubble .tick{letter-spacing:-3px;margin-left:2px}.bubble .tick.read{color:#2b8ae2;font-weight:700}

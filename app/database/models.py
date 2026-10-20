@@ -440,6 +440,8 @@ class SupportChat(Base):
     unread: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # сообщений клиента не прочитано
     last_text: Mapped[str] = mapped_column(String(200), default="", server_default="")
     last_message_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    # когда клиент последний раз что-то делал в боте (написал, нажал кнопку) — ответы до этого он видел: ✓✓
+    client_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped[User] = relationship(lazy="joined")

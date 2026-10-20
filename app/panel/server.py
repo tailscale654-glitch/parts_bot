@@ -74,12 +74,19 @@ UPLOAD_DIR = Path(os.getenv("PANEL_UPLOAD_DIR", "/tmp/jac_imports"))  # файл
 STATUS_ORDER = ["CONFIRMED", "READY", "COMPLETED", "CANCELLED"]
 NO_STORE = {"Cache-Control": "no-store"}  # живые данные чата — браузер и прокси не должны их кэшировать
 
+def _epoch(dt: datetime | None) -> int:
+    """Секунды с 1970 года (SQLite в тестах хранит время без часового пояса — это UTC)."""
+    if dt is None:
+        return 0
+    return int((dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp())
+
+
 templates = Jinja2Templates(directory=HERE / "templates")
 templates.env.globals.update(
     money=lambda v: money(v, LANG), fmt_date=fmt_date,
     status_text=lambda s: status_text(s, LANG).split(" —")[0],
     localized=lambda obj: localized_name(obj, LANG) if obj is not None else "—",
-    person_name=person_name, too_big=lambda m: __import__("app.services.chat_files", fromlist=["x"]).too_big(m),
+    person_name=person_name, epoch=lambda dt: _epoch(dt), too_big=lambda m: __import__("app.services.chat_files", fromlist=["x"]).too_big(m),
     human_size=lambda n: __import__("app.services.chat_files", fromlist=["x"]).human_size(n),
     file_view=lambda m: __import__("app.services.chat_files", fromlist=["view_of"]).view_of(m),
     today=lambda: datetime.now(orders_service.TIMEZONE).strftime("%d.%m.%Y"),
@@ -976,7 +983,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             msgs = await support.messages(session, chat.id)
             orders_, _ = await AdminRepository(session).orders_page("all", 0, 5, user_id=chat.user_id)
             from app.services.cars import car_text
-            context.update(messages=msgs, last_id=msgs[-1].id if msgs else 0, orders=orders_,
+            context.update(messages=msgs, last_id=msgs[-1].id if msgs else 0, orders=orders_, seen=_epoch(chat.client_seen_at),
                            car=car_text(chat.user, LANG) or "")
         return render(request, "chat.html", web, **context)
 
@@ -1013,8 +1020,9 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
                 await support.mark_read(session, chat)  # диалог открыт на экране — новые сообщения прочитаны
             msgs = await support.messages(session, chat.id, after)
             await session.refresh(chat)
-            out.update(html=_fragment("chat_messages.html", messages=msgs), last=msgs[-1].id if msgs else None,
-                       incoming=sum(m.direction == "in" for m in msgs), status=chat.status,
+            seen = _epoch(chat.client_seen_at)
+            out.update(html=_fragment("chat_messages.html", messages=msgs, seen=seen), last=msgs[-1].id if msgs else None,
+                       incoming=sum(m.direction == "in" for m in msgs), status=chat.status, seen=seen,
                        assignee=person_name(chat.assignee.user) if chat.assignee else "")
         chats_ = await support.chats(session, tab, web.id, q)
         version = hashlib.md5(repr([(c.id, c.unread, str(c.last_message_at), c.status, c.assigned_to)
@@ -1142,7 +1150,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         if is_fetch:
             await session.refresh(msg)
             return {"ok": True, "delivered": msg.delivered, "last": msg.id,
-                    "html": _fragment("chat_messages.html", messages=[msg])}
+                    "html": _fragment("chat_messages.html", messages=[msg], seen=_epoch(chat.client_seen_at))}
         flash = "" if msg.delivered else "Не доставлено: клиент заблокировал бота или ни разу его не запускал."
         return back(f"/chat/{chat.id}", flash) if flash else RedirectResponse(f"/chat/{chat.id}", status_code=303)
 

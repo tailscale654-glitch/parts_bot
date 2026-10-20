@@ -1,4 +1,5 @@
 """Чат с клиентами: сообщения клиента боту → раздел «Чат» панели → ответ уходит клиенту в Telegram."""
+import asyncio
 import io
 from types import SimpleNamespace
 
@@ -260,3 +261,30 @@ async def test_big_video_explained(env, tmp_path, monkeypatch):  # noqa: F811
     assert chat_files.too_big(old)  # запомнили — дальше сразу карточка
     assert (await env.client.get(f"/chat/file/{ok.id}/check")).json()["reason"] == "codec"
     assert (await env.client.get(f"/chat/file/{old.id}")).status_code == 413
+
+
+async def test_read_ticks_after_client_activity(env):  # noqa: F811
+    """✓ — доставлено в Telegram; ✓✓ — клиент после ответа что-то сделал в боте (Telegram не сообщает о прочтении)."""
+    import re
+
+    from app.middlewares.db import mark_seen
+
+    user = await client(env.db)
+    got = await support.add_incoming(env.db, user, "Есть фильтр?")
+    await login(env.client, *env.creds["admin"])
+    page = (await env.client.get(f"/chat/{got.chat.id}")).text
+    token = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    await asyncio.sleep(1.1)  # ответ — позже последней активности клиента
+    sent = (await env.client.post(f"/chat/{got.chat.id}/send", data={"csrf": token, "text": "Да, есть"},
+                                  headers={"X-Requested-With": "fetch"})).json()
+    assert 'class="tick"' in sent["html"] and "✓✓" not in sent["html"]
+    d = (await env.client.get(f"/chat/updates?chat={got.chat.id}&after={sent['last']}")).json()
+    ts = int(re.search(r'data-ts="(\d+)"', sent["html"]).group(1))
+    assert d["seen"] < ts  # клиент ещё ничего не делал после ответа
+
+    await asyncio.sleep(1.1)
+    await mark_seen(env.db, user)  # клиент нажал кнопку / написал — так делает middleware бота
+    d = (await env.client.get(f"/chat/updates?chat={got.chat.id}&after={sent['last']}")).json()
+    assert d["seen"] >= ts
+    page = (await env.client.get(f"/chat/{got.chat.id}")).text
+    assert 'class="tick read"' in page and "✓✓" in page
