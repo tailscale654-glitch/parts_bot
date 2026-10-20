@@ -37,7 +37,7 @@ async def test_client_messages_land_in_chat_and_staff_is_notified_once(env):  # 
     first = FakeMessage("Есть передний бампер на T9?")
     assert support_handlers.registered(first, user)
     await support_handlers.client_writes(first, user, env.db, env.bot, settings)
-    photo = FakeMessage(photo=[SimpleNamespace(file_id="small"), SimpleNamespace(file_id="BIG")], caption="вот такой")
+    photo = FakeMessage(photo=[SimpleNamespace(file_id="small", file_size=900), SimpleNamespace(file_id="BIG", file_size=85_000)], caption="вот такой")
     await support_handlers.client_writes(photo, user, env.db, env.bot, settings)
 
     assert first.answers and "передано менеджеру" in first.answers[0] and photo.answers == []  # подтверждение — один раз
@@ -227,3 +227,36 @@ async def test_media_shown_inside_chat(env, tmp_path, monkeypatch):  # noqa: F81
     r = await env.client.get(f"/chat/file/{html.id}")
     assert r.headers["content-disposition"].startswith("attachment") and "html" not in r.headers["content-type"]
     assert chat_files.view_of(html).kind == "other"
+
+
+async def test_big_video_explained(env, tmp_path, monkeypatch):  # noqa: F811
+    """Видео больше 20 МБ: сразу понятная карточка с размером и кадром-превью; для старых сообщений —
+    проверка /check называет причину (too_big / codec)."""
+    from aiogram.exceptions import TelegramBadRequest
+
+    from app.services import chat_files
+    monkeypatch.setattr(chat_files, "CACHE_DIR", tmp_path / "cache")
+
+    async def get_file(file_id):
+        if file_id == "HUGE":
+            raise TelegramBadRequest(method=None, message="Bad Request: file is too big")
+        return SimpleNamespace(file_path=file_id)
+
+    async def download_file(path):
+        return io.BytesIO(b"thumb-or-video")
+    env.bot.get_file, env.bot.download_file = get_file, download_file
+    user = await client(env.db)
+    big = (await support.add_incoming(env.db, user, "", "HUGE", "video", "promo.mp4", file_size=48 * 1024 * 1024,
+                                      thumb_id="TH")).message
+    old = (await support.add_incoming(env.db, user, "", "HUGE", "video", "old.mp4")).message  # размер не знаем
+    ok = (await support.add_incoming(env.db, user, "", "SMALL", "video", "hevc.mp4", file_size=5_000_000)).message
+    await login(env.client, *env.creds["admin"])
+    page = (await env.client.get(f"/chat/{big.chat_id}")).text
+    assert "promo.mp4 · 48 МБ" in page and "Больше 20 МБ" in page and f"/chat/thumb/{big.id}" in page
+    assert f'src="/chat/file/{big.id}"' not in page  # не пытаемся проигрывать
+    assert (await env.client.get(f"/chat/thumb/{big.id}")).content == b"thumb-or-video"
+    assert (await env.client.get(f"/chat/file/{old.id}/check")).json()["reason"] == "too_big"
+    await env.db.refresh(old)
+    assert chat_files.too_big(old)  # запомнили — дальше сразу карточка
+    assert (await env.client.get(f"/chat/file/{ok.id}/check")).json()["reason"] == "codec"
+    assert (await env.client.get(f"/chat/file/{old.id}")).status_code == 413

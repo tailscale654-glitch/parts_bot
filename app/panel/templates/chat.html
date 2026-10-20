@@ -125,11 +125,23 @@
   function step(d) { if (index >= 0 && images.length) show(images[(index + d + images.length) % images.length]); }
 
   // видео не воспроизвелось — показываем карточку со скачиванием (ошибки медиа не всплывают — ловим на захвате)
+  const WHY = {
+    too_big: 'Видео больше 20 МБ — Telegram не даёт ботам такие файлы, ни посмотреть, ни скачать в панели нельзя. ' +
+             'Попросите клиента прислать видео поменьше или ссылкой.',
+    telegram: 'Telegram сейчас не отдал файл — попробуйте обновить страницу позже.',
+    codec: 'Файл получен, но браузер не умеет воспроизводить этот формат видео (часто HEVC с iPhone). ' +
+           'Скачайте ⬇ и откройте плеером на компьютере.',
+  };
   document.addEventListener('error', e => {
     const v = e.target;
-    if (v.tagName === 'VIDEO' && v.dataset.fallback) {
-      const fb = document.getElementById(v.dataset.fallback); if (fb) { fb.hidden = false; v.remove(); }
-    }
+    if (v.tagName !== 'VIDEO' || !v.dataset.fallback) return;
+    const fb = document.getElementById(v.dataset.fallback);
+    if (!fb) return;
+    fb.hidden = false; v.remove();
+    fetch(v.dataset.check, {credentials: 'same-origin', cache: 'no-store'}).then(r => r.json()).then(d => {
+      fb.querySelector('.why').textContent = WHY[d.reason] || WHY.telegram;
+      if (d.reason === 'too_big') fb.querySelector('.dl').remove();
+    }).catch(() => { fb.querySelector('.why').textContent = WHY.telegram; });
   }, true);
 
   document.addEventListener('click', e => {

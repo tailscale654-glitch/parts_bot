@@ -79,7 +79,9 @@ templates.env.globals.update(
     money=lambda v: money(v, LANG), fmt_date=fmt_date,
     status_text=lambda s: status_text(s, LANG).split(" —")[0],
     localized=lambda obj: localized_name(obj, LANG) if obj is not None else "—",
-    person_name=person_name, file_view=lambda m: __import__("app.services.chat_files", fromlist=["view_of"]).view_of(m),
+    person_name=person_name, too_big=lambda m: __import__("app.services.chat_files", fromlist=["x"]).too_big(m),
+    human_size=lambda n: __import__("app.services.chat_files", fromlist=["x"]).human_size(n),
+    file_view=lambda m: __import__("app.services.chat_files", fromlist=["view_of"]).view_of(m),
     today=lambda: datetime.now(orders_service.TIMEZONE).strftime("%d.%m.%Y"),
     car_text=lambda u: __import__("app.services.cars", fromlist=["car_text"]).car_text(u, LANG),
     tabs=[(k, i18n.t(LANG, f"tab_{k}")) for k in ORDER_FILTERS],
@@ -1040,7 +1042,9 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             path = await chat_files.local_copy(request.app.state.bot, msg)
         except TelegramAPIError as e:
             logger.warning("Cannot download chat file %s: %s", msg_id, e)
-            raise HTTPException(502, "Telegram не отдал файл: боты получают файлы только до 20 МБ.") from e
+            if chat_files.is_too_big_error(e):
+                raise HTTPException(413, "Файл больше 20 МБ: Telegram не отдаёт ботам такие файлы.") from e
+            raise HTTPException(502, "Telegram не отдал файл — попробуйте позже.") from e
         return msg, path
 
     @app.get("/chat/file/{msg_id}")
@@ -1055,6 +1059,37 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         return FileResponse(path, media_type=view.mime if inline else "application/octet-stream", filename=name,
                             content_disposition_type="inline" if inline else "attachment",
                             headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"})
+
+    @app.get("/chat/thumb/{msg_id}")
+    async def chat_thumb(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                         session: AsyncSession = Depends(get_session)):
+        """Кадр-превью видео (маленькая картинка) — есть и у видео больше 20 МБ."""
+        msg = await session.get(SupportMessage, msg_id)
+        if msg is None or not msg.thumb_id:
+            raise HTTPException(404, "Превью нет.")
+        try:
+            path = await chat_files.local_copy(request.app.state.bot, msg, thumb=True)
+        except TelegramAPIError as e:
+            raise HTTPException(502, "Telegram не отдал превью.") from e
+        return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+    @app.get("/chat/file/{msg_id}/check")
+    async def chat_file_check(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),
+                              session: AsyncSession = Depends(get_session)):
+        """Почему видео не проигралось: файл больше 20 МБ, Telegram недоступен или формат не для браузера."""
+        msg = await session.get(SupportMessage, msg_id)
+        if msg is None or not msg.file_id:
+            raise HTTPException(404, "Файл не найден.")
+        try:
+            path = await chat_files.local_copy(request.app.state.bot, msg)
+        except TelegramAPIError as e:
+            reason = "too_big" if chat_files.is_too_big_error(e) else "telegram"
+            if reason == "too_big" and not msg.file_size:
+                msg.file_size = chat_files.TELEGRAM_LIMIT + 1  # запомним: больше не пытаться
+                await session.commit()
+            return JSONResponse({"ok": False, "reason": reason}, headers=NO_STORE)
+        return JSONResponse({"ok": True, "reason": "codec", "size": chat_files.human_size(path.stat().st_size)},
+                            headers=NO_STORE)
 
     @app.get("/chat/preview/{msg_id}", response_class=HTMLResponse)
     async def chat_preview(msg_id: int, request: Request, web: WebUser = Depends(require("chat.view")),

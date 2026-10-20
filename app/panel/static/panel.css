@@ -130,3 +130,5 @@ main:has(.chat){padding:0}
 .pv-table tr:first-child td{background:#fafafa;font-weight:600}
 .pv-sheet{font-size:14px;margin:12px 0 6px}
 .pv-text{white-space:pre-wrap;font:inherit;margin:0}
+.bubble .doc .thumb{width:96px;height:64px;object-fit:cover;border-radius:6px}
+.bubble .doc.big{max-width:420px}

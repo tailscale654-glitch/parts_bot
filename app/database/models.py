@@ -458,6 +458,8 @@ class SupportMessage(Base):
     file_id: Mapped[str | None] = mapped_column(String(255))  # file_id Telegram (фото, файл, голосовое)
     file_kind: Mapped[str | None] = mapped_column(String(16))  # photo | document | voice | video | sticker
     file_name: Mapped[str | None] = mapped_column(String(255))
+    file_size: Mapped[int | None] = mapped_column(Integer)  # байт; Telegram отдаёт ботам файлы до 20 МБ
+    thumb_id: Mapped[str | None] = mapped_column(String(255))  # маленькая картинка-превью видео / документа
     web_user_id: Mapped[int | None] = mapped_column(ForeignKey("web_users.id", ondelete="SET NULL"))
     delivered: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

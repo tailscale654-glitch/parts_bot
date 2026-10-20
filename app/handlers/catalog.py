@@ -65,8 +65,10 @@ def full_access(user: User, settings: Settings | None, staff_dealer_id: int | No
 
 
 def _repo(session: AsyncSession, user: User, full: bool) -> CatalogRepository:
-    """Клиенту — только детали в наличии у дилеров его региона; админу и сотруднику — у любого дилера."""
-    return CatalogRepository(session, None if full else user.region_id)
+    """Всем — только детали в наличии у дилеров региона из профиля (заказать можно только там).
+    Администратор и сотрудник видят все модели, но тоже только наличие своего региона —
+    другой регион можно посмотреть, сменив регион в профиле."""
+    return CatalogRepository(session, user.region_id)
 
 
 def car_prompt(user: User) -> tuple[str, InlineKeyboardMarkup]:

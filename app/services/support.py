@@ -58,11 +58,13 @@ class Incoming:
 
 
 async def add_incoming(session: AsyncSession, user: User, text: str = "", file_id: str | None = None,
-                       kind: str | None = None, file_name: str | None = None) -> Incoming:
+                       kind: str | None = None, file_name: str | None = None, file_size: int | None = None,
+                       thumb_id: str | None = None) -> Incoming:
     chat = await chat_for(session, user)
     first = chat.unread == 0 or chat.status == "closed"
     msg = SupportMessage(chat_id=chat.id, direction="in", text=(text or "")[:4000], file_id=file_id,
-                         file_kind=kind, file_name=(file_name or None) and file_name[:255])
+                         file_kind=kind, file_name=(file_name or None) and file_name[:255], file_size=file_size,
+                         thumb_id=thumb_id)
     session.add(msg)
     chat.status, chat.unread = "open", chat.unread + 1
     chat.last_text, chat.last_message_at = snippet(text, kind), datetime.now(timezone.utc)
@@ -85,7 +87,7 @@ async def reply(bot: Bot, session: AsyncSession, chat: SupportChat, author: WebU
         raise ValueError("Пустое сообщение")
     msg = SupportMessage(chat_id=chat.id, direction="note" if note else "out", text=text, web_user_id=author.id)
     if upload is not None:
-        msg.file_name = upload.name[:255]
+        msg.file_name, msg.file_size = upload.name[:255], len(upload.data)
         msg.file_kind = "photo" if upload.content_type.startswith("image/") and not upload.name.lower().endswith(
             (".gif", ".svg")) else "document"
     if not note:

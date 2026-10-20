@@ -25,24 +25,27 @@ def registered(message: Message, user: User) -> bool:
     return not text.startswith("/")  # неизвестные команды — как раньше, подсказка с меню
 
 
-def attachment(message: Message) -> tuple[str | None, str | None, str | None]:
-    """(file_id, вид, имя файла)"""
+def attachment(message: Message) -> dict:
+    """Вложение сообщения: file_id, вид, имя, размер и превью (кадр видео / значок документа)."""
     if message.photo:
-        return message.photo[-1].file_id, "photo", None
+        best = message.photo[-1]
+        return {"file_id": best.file_id, "kind": "photo", "file_size": best.file_size}
     for kind in ("document", "video", "voice", "audio", "video_note", "sticker"):
         obj = getattr(message, kind, None)
         if obj is not None:
-            return obj.file_id, kind, getattr(obj, "file_name", None)
-    return None, None, None
+            thumb = getattr(obj, "thumbnail", None)
+            return {"file_id": obj.file_id, "kind": kind, "file_name": getattr(obj, "file_name", None),
+                    "file_size": getattr(obj, "file_size", None), "thumb_id": thumb.file_id if thumb else None}
+    return {}
 
 
 @router.message(StateFilter(None), ~F.contact, registered)
 async def client_writes(message: Message, user: User, session: AsyncSession, bot: Bot, settings: Settings) -> None:
-    file_id, kind, name = attachment(message)
+    file = attachment(message)
     text = message.text or message.caption or ""
-    if not text and not file_id:
+    if not text and not file:
         return  # служебные сообщения (опрос, геопозиция и т. п.) — не сохраняем
-    got = await support.add_incoming(session, user, text, file_id, kind, name)
+    got = await support.add_incoming(session, user, text, **file)
     if not got.first_unread:
         return  # клиент пишет подряд — подтверждение и уведомление уже были
     await message.answer(i18n.t(user.language, "support_received"))

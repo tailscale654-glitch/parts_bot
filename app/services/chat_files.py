@@ -24,6 +24,7 @@ from aiogram import Bot
 from app.database.models import SupportMessage
 
 CACHE_DIR = Path(os.getenv("CHAT_CACHE_DIR", "/tmp/jac_chat_files"))
+TELEGRAM_LIMIT = 20 * 1024 * 1024  # больше этого Telegram ботам файлы не отдаёт (getFile)
 KEEP_SECONDS = 7 * 24 * 3600
 MAX_ROWS, MAX_COLS, MAX_TEXT = 200, 30, 200_000
 
@@ -57,6 +58,23 @@ class View:
     @property
     def previewable(self) -> bool:
         return self.kind in ("pdf", "table", "word", "text", "image")
+
+
+def human_size(size: int | None) -> str:
+    if not size:
+        return ""
+    if size >= 1024 * 1024:
+        return f"{size / 1024 / 1024:.1f} МБ".replace(".0 ", " ")
+    return f"{max(1, size // 1024)} КБ"
+
+
+def too_big(msg: SupportMessage) -> bool:
+    """Файл больше 20 МБ — Telegram не отдаст его боту, ни посмотреть, ни скачать из панели нельзя."""
+    return bool(msg.file_size and msg.file_size > TELEGRAM_LIMIT and msg.direction == "in")
+
+
+def is_too_big_error(error: Exception) -> bool:
+    return "too big" in str(error).lower()
 
 
 def _ext(name: str | None) -> str:
@@ -95,13 +113,14 @@ def _cleanup() -> None:
             pass
 
 
-async def local_copy(bot: Bot, msg: SupportMessage) -> Path:
-    """Файл сообщения на диске (скачивается у Telegram один раз). Ошибки Telegram пробрасываются."""
+async def local_copy(bot: Bot, msg: SupportMessage, thumb: bool = False) -> Path:
+    """Файл сообщения (или его превью) на диске — скачивается у Telegram один раз. Ошибки Telegram пробрасываются."""
+    file_id = msg.thumb_id if thumb else msg.file_id
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = CACHE_DIR / f"msg_{msg.id}_{hashlib.sha1(msg.file_id.encode()).hexdigest()[:10]}"
+    path = CACHE_DIR / f"msg_{msg.id}{'_thumb' if thumb else ''}_{hashlib.sha1(file_id.encode()).hexdigest()[:10]}"
     if path.exists() and path.stat().st_size > 0:
         return path
-    tg_file = await bot.get_file(msg.file_id)
+    tg_file = await bot.get_file(file_id)
     data = await bot.download_file(tg_file.file_path)
     content = data.read() if hasattr(data, "read") else data
     tmp = path.with_name(f"{path.name}.{os.getpid()}.part")

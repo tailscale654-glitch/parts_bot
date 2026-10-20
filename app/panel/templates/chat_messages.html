@@ -3,20 +3,29 @@
   {% if m.file_kind %}{% set v = file_view(m) %}{% set url = '/chat/file/' ~ m.id %}
     {% if not m.file_id %}
       <span class="file">{{ v.icon }} {{ m.file_name or 'Файл' }}</span>
+    {% elif too_big(m) %}
+      <div class="doc big">
+        {% if m.thumb_id %}<img class="thumb" src="/chat/thumb/{{ m.id }}" alt="" onerror="this.remove()">{% else %}<span class="ic">{{ v.icon }}</span>{% endif %}
+        <span class="nm">{{ m.file_name or ('Видео' if v.kind == 'video' else 'Файл') }} · {{ human_size(m.file_size) }}<br>
+          <span class="muted">Больше 20 МБ — Telegram не даёт ботам такие файлы, открыть или скачать в панели нельзя.
+          Попросите клиента прислать файл поменьше или ссылкой.</span></span>
+      </div>
     {% elif v.kind == 'image' %}
       <img class="media" src="{{ url }}" alt="фото" loading="lazy" data-view="image" data-url="{{ url }}"
            data-name="{{ m.file_name or 'Фото' }}" onerror="this.replaceWith('📷 Фото — не удалось загрузить из Telegram')">
     {% elif v.kind == 'video' %}
-      <video class="media" controls preload="metadata" src="{{ url }}" data-fallback="fb{{ m.id }}"></video>
+      <video class="media" controls preload="metadata" src="{{ url }}" data-fallback="fb{{ m.id }}"
+             data-check="{{ url }}/check" {% if m.thumb_id %}poster="/chat/thumb/{{ m.id }}"{% endif %}></video>
       <div class="doc" id="fb{{ m.id }}" hidden><span class="ic">🎬</span>
-        <span class="nm">{{ m.file_name or 'Видео' }}<br><span class="muted">Не воспроизводится здесь: файл больше 20 МБ или формат не поддерживается браузером</span></span>
-        <a class="btn small" href="{{ url }}?download=1" title="Скачать">⬇</a></div>
+        <span class="nm">{{ m.file_name or 'Видео' }}{% if m.file_size %} · {{ human_size(m.file_size) }}{% endif %}<br>
+          <span class="muted why">Проверяю, почему видео не воспроизводится…</span></span>
+        <a class="btn small dl" href="{{ url }}?download=1" title="Скачать">⬇</a></div>
     {% elif v.kind == 'audio' %}
       <audio controls preload="metadata" src="{{ url }}"></audio>
     {% else %}
       <div class="doc">
         <span class="ic">{{ v.icon }}</span>
-        <span class="nm">{{ m.file_name or 'Файл' }}</span>
+        <span class="nm">{{ m.file_name or 'Файл' }}{% if m.file_size %}<br><span class="muted">{{ human_size(m.file_size) }}</span>{% endif %}</span>
         {% if v.previewable %}<button type="button" class="btn small" data-view="{{ v.kind }}" data-url="{{ url }}"
                 data-preview="/chat/preview/{{ m.id }}" data-name="{{ m.file_name or 'Файл' }}">👁 Открыть</button>{% endif %}
         <a class="btn small" href="{{ url }}?download=1" title="Скачать">⬇</a>

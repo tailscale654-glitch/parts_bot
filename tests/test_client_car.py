@@ -157,3 +157,19 @@ def test_change_car_button_routes_to_handler():
     for value in (data, "car:start:0:", "car:start"):
         assert flt.resolve(SimpleNamespace(data=value))
     assert not flt.resolve(SimpleNamespace(data=CarCB(action="model", i=1).pack()))
+
+
+async def test_admin_also_sees_only_region_stock(session):
+    """Администратор видит все модели, но только то, что есть у дилеров его региона."""
+    sam = Region(id=2, code="samarkand", name_ru="Самарканд")
+    t8 = CarModel(name_ru="JAC T8")
+    session.add(Stock(part=Part(name_ru="Кузов T8", part_number="Z1", model=t8, node=Node(name_ru="Кузов T8")),
+                      dealer=Dealer(region=sam, name="Самарканд дилер"), price=Decimal(1), quantity=5))
+    await session.commit()
+    user = await session.get(User, 1)  # регион — Ташкент
+    _, kb = await models_view(user, session, full=True)
+    assert "JAC T8" not in texts(kb) and "JAC RF8" in texts(kb)  # T8 есть только в Самарканде
+    user.region_id = 2
+    await session.commit()
+    _, kb = await models_view(user, session, full=True)
+    assert texts(kb) == ["JAC T8"]
