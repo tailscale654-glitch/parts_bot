@@ -5,12 +5,16 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-echo "Будут удалены: заказы, чат с клиентами, корзины, дилеры, каталог, списки запчастей,"
+echo "Будут удалены: клиенты бота, заказы, чат с клиентами, корзины, дилеры, каталог, списки запчастей,"
 echo "переводы и правки деталей, история синхронизаций и рассылок, журнал действий."
-echo "Останутся: пользователи бота, сотрудники веб-панели, регионы, контакты менеджера."
+echo "Останутся: сотрудники веб-панели, сотрудники дилеров, администраторы (ADMIN_IDS), регионы, контакты менеджера."
 printf "Чтобы продолжить, напишите yes и нажмите Enter: "
 read -r answer
 [ "$answer" = "yes" ] || { echo "Отменено — ничего не изменено."; exit 1; }
+
+# Telegram ID администраторов из .env — только цифры и запятые (их не удаляем)
+ids=$(sed -n 's/^ADMIN_IDS=//p' .env 2>/dev/null | tr -c '0-9' ',' | tr -s ',' | sed 's/^,//; s/,$//')
+[ -n "$ids" ] || ids=0
 
 name="jac_parts_$(date +%Y-%m-%d_%H%M)_before_reset.sql.gz"
 echo "1/4 Резервная копия: backups/$name"
@@ -26,6 +30,10 @@ if ! docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRE
   echo "Ошибка — база не изменена (всё или ничего). Запускаю бота обратно."
   docker compose start bot web sync
   exit 1
+fi
+echo "    Удаляю клиентов (сотрудники остаются)"
+if ! docker compose exec -T postgres sh -c "psql -v ON_ERROR_STOP=1 -v admin_ids=$ids -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"" < scripts/delete_clients.sql; then
+  echo "Ошибка при удалении клиентов — клиенты остались, остальная очистка сделана. Повторить: sh scripts/delete_clients.sh"
 fi
 
 echo "4/4 Запускаю бота, панель и синхронизацию"
