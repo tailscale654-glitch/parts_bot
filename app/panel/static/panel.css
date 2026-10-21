@@ -102,6 +102,7 @@ main:has(.chat){padding:0}
 .chip:hover{background:#f3f4f6}
 .chat-info{border-left:1px solid var(--line);padding:12px;overflow-y:auto;background:#fafafa}
 .chat-info .card{padding:12px}.chat-info .person{font-size:13px}
+.chat-info .person{flex-wrap:wrap;row-gap:2px}.chat-info .person > span:last-child{white-space:nowrap;margin-left:auto}
 .chat-empty{margin:auto;text-align:center;padding:40px}.chat-empty div{font-size:48px}
 @media (max-width:1200px){.chat{grid-template-columns:280px 1fr}.chat-info{display:none}}
 @media (max-width:900px){.chat{grid-template-columns:1fr;height:auto}.chat-list{max-height:45vh}.msgs{min-height:50vh}}
@@ -112,9 +113,9 @@ main:has(.chat){padding:0}
 .bubble .media{display:block;max-width:320px;max-height:280px;border-radius:10px;margin-bottom:4px;background:#000}
 .bubble img.media{cursor:zoom-in;background:none}
 .bubble video.media{width:320px}
-.bubble .doc{display:flex;align-items:center;gap:8px;background:#f3f4f6;border-radius:10px;padding:8px 10px;margin-bottom:4px;min-width:240px}
+.bubble .doc{display:flex;align-items:center;gap:8px;background:#f3f4f6;border-radius:10px;padding:8px 10px;margin-bottom:4px;min-width:min(300px,60vw)}
 .bubble.out .doc,.bubble.note .doc{background:#ffffff99}
-.bubble .doc .ic{font-size:22px}.bubble .doc .nm{flex:1;word-break:break-all;font-size:13px}
+.bubble .doc .ic{font-size:22px}.bubble .doc .nm{flex:1;overflow-wrap:anywhere;font-size:13px}
 .viewer{position:fixed;inset:0;background:#0b0f19e6;z-index:100;display:flex;flex-direction:column}
 .viewer[hidden]{display:none}
 .vbar{display:flex;gap:8px;align-items:center;padding:10px 16px;color:#fff}

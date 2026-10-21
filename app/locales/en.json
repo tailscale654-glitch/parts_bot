@@ -86,7 +86,7 @@
   "btn_template": "📄 Excel template",
   "btn_apply": "✅ Apply",
   "template_caption": "📄 Catalog template.\n\nFill in the “parts” sheet (tips are on the “инструкция” sheet) and send the file: /admin → 📥 Upload Excel.",
-  "import_ask_file": "📥 Send the catalog Excel file (.xlsx).\n\nThe file is a full price list: parts missing from it will be hidden in the bot.",
+  "import_ask_file": "📥 Send an Excel file (.xlsx): the dealer directory, a factory parts list or a warehouse export — the bot detects the format itself.\n\nA warehouse export is a full price list: parts missing from it will be hidden in the bot. Stock is usually updated by the CarSale sync.",
   "import_checking": "⏳ Checking the file…",
   "import_bad_extension": "❌ An Excel file with the .xlsx extension is required",
   "import_too_big": "❌ The file is larger than {mb} MB",

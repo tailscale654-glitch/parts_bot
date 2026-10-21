@@ -86,7 +86,7 @@
   "btn_template": "📄 Excel shabloni",
   "btn_apply": "✅ Qo‘llash",
   "template_caption": "📄 Katalog shabloni.\n\n«parts» varag‘ini to‘ldiring (ko‘rsatmalar «инструкция» varag‘ida) va faylni yuboring: /admin → 📥 Excel yuklash.",
-  "import_ask_file": "📥 Katalogli Excel faylni (.xlsx) yuboring.\n\nFayl — to‘liq narxlar ro‘yxati: unda yo‘q ehtiyot qismlar botda yashiriladi.",
+  "import_ask_file": "📥 Excel faylni (.xlsx) yuboring: dilerlar ma’lumotnomasi, zavod ehtiyot qismlar ro‘yxati yoki ombor hisoboti — formatni bot o‘zi aniqlaydi.\n\nOmbor hisoboti — to‘liq narxlar ro‘yxati: unda yo‘q ehtiyot qismlar botda yashiriladi. Qoldiqlarni odatda CarSale bilan sinxronlash yangilaydi.",
   "import_checking": "⏳ Fayl tekshirilmoqda…",
   "import_bad_extension": "❌ .xlsx kengaytmali Excel fayl kerak",
   "import_too_big": "❌ Fayl {mb} MB dan katta",

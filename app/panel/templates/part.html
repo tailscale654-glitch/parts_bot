@@ -46,7 +46,7 @@
       <div><span class="muted">Модели автомобиля</span><br>
         {% set chosen = ov.model_list if ov else [] %}
         {% for m in model_choices %}
-        <label style="display:inline-flex;align-items:center;gap:4px;margin:4px 12px 4px 0;font-size:14px;color:inherit">
+        <label style="display:inline-flex;flex-direction:row;align-items:center;gap:4px;margin:4px 12px 4px 0;font-size:14px;color:inherit">
           <input type="checkbox" name="models" value="{{ m }}" {{ 'checked' if m in chosen }}> {{ m }}</label>
         {% endfor %}
         <div class="muted" style="font-size:12px">Не отмечено ничего — модели из CarSale / справочника запчастей. Сейчас: {{ part.model.name_ru }}.</div>

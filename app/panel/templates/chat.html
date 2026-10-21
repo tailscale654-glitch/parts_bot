@@ -171,14 +171,23 @@
 
   const nearBottom = () => !msgs || msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 150;
   const toBottom = () => { if (msgs) msgs.scrollTop = msgs.scrollHeight; };
+  // «прилип» к низу: фото грузятся позже текста и сдвигают переписку — после загрузки снова прокручиваем вниз,
+  // если сотрудник сам не листал вверх
+  let stuck = true;
+  if (msgs) msgs.addEventListener('scroll', () => { stuck = nearBottom(); });
+  const watchImages = () => (msgs ? msgs.querySelectorAll('.bubble img:not([data-watched])') : []).forEach(img => {
+    img.dataset.watched = '1';
+    img.addEventListener('load', () => stuck && toBottom());
+  });
   toBottom();
-  document.querySelectorAll('.bubble img').forEach(img => img.addEventListener('load', () => nearBottom() && toBottom()));
+  watchImages();
 
   function append(html) {
     if (!msgs || !html.trim()) return;
     const empty = msgs.querySelector('.empty'); if (empty) empty.remove();
     const stick = nearBottom();
     msgs.insertAdjacentHTML('beforeend', html);
+    watchImages();
     if (stick) toBottom();
   }
 
