@@ -18,6 +18,7 @@
   "choose_node": "🔧 {model}\n\nKategoriyani tanlang:",
   "choose_part": "📦 {model} → {node}\n\nEhtiyot qismni tanlang:",
   "catalog_empty": "📭 Katalog hozircha bo‘sh. Keyinroq qarang.",
+  "catalog_region_empty": "📭 «{region}» dilerlarida hozir ehtiyot qismlar mavjud emas.\n\nBoshqa viloyatni ko‘rish: 👤 Profil → 📍 Viloyatni o‘zgartirish.",
   "item_unavailable": "⚠️ Bu bo‘lim endi mavjud emas. Katalogni qaytadan oching.",
   "part_model": "Model: {model}",
   "part_node": "Kategoriya: {node}",

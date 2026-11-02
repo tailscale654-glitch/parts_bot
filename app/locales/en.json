@@ -18,6 +18,7 @@
   "choose_node": "🔧 {model}\n\nChoose a category:",
   "choose_part": "📦 {model} → {node}\n\nChoose a part:",
   "catalog_empty": "📭 The catalog is empty for now. Please check back later.",
+  "catalog_region_empty": "📭 Dealers in “{region}” have no parts in stock right now.\n\nTo see another region: 👤 Profile → 📍 Change region.",
   "item_unavailable": "⚠️ This section is no longer available. Please open the catalog again.",
   "part_model": "Model: {model}",
   "part_node": "Category: {node}",

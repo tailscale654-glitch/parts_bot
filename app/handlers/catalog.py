@@ -94,8 +94,9 @@ async def models_view(user: User, session: AsyncSession, full: bool = False) -> 
     repo = _repo(session, user, full)
     if full:
         models = await repo.list_models(lang)
-        if not models:
-            return i18n.t(lang, "catalog_empty"), None
+        if not models:  # в регионе из профиля ни у одного дилера нет наличия (или каталог ещё не загружен)
+            region = localized_name(user.region, lang) if user.region else i18n.t(lang, "region_not_selected")
+            return i18n.t(lang, "catalog_region_empty", region=region), None
         return i18n.t(lang, "choose_model"), models_keyboard(models, lang)
     if cars.needs_car(user):
         return car_prompt(user)

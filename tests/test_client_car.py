@@ -173,3 +173,14 @@ async def test_admin_also_sees_only_region_stock(session):
     await session.commit()
     _, kb = await models_view(user, session, full=True)
     assert texts(kb) == ["JAC T8"]
+
+
+async def test_empty_region_names_the_region(session):
+    """Нет наличия в регионе — сотрудник видит, какой регион смотрит, и как сменить его."""
+    user = await session.get(User, 1)
+    user.region_id = 2
+    session.add(Region(id=2, code="navoi", name_ru="Навоийская область"))
+    await session.commit()
+    await session.refresh(user, ["region"])  # в боте пользователь загружается заново на каждое сообщение
+    text, kb = await models_view(user, session, full=True)
+    assert kb is None and "Навоийская область" in text and "Изменить регион" in text
