@@ -17,7 +17,7 @@
   <tr><th>Дилер</th><th>Регион</th><th>Телефон</th><th>Состояние</th><th class="num">В наличии</th><th class="num">Заказы</th><th class="num">Открытые</th><th class="num">Сотрудники</th></tr>
   {% for x in lines %}{% set d = x.dealer %}
   <tr>
-    <td><a href="/dealers/{{ d.id }}">{{ d.name }}</a>{% if d.code %}<br><span class="muted">код {{ d.code }}</span>{% endif %}</td>
+    <td><a href="/dealers/{{ d.id }}">{{ d.name }}</a>{% if d.is_warehouse %} <span class="st st-READY">🏬 склад JAC · предзаказ</span>{% endif %}{% if d.code %}<br><span class="muted">код {{ d.code }}</span>{% endif %}</td>
     <td>{{ localized(d.region) }}</td>
     <td>{{ d.phone or '—' }}</td>
     <td>{% if not d.enabled %}<span class="st st-CANCELLED">выключен</span>

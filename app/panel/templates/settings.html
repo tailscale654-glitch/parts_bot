@@ -21,9 +21,11 @@
 
 <h2 id="regions">🗺 Регионы</h2>
 <p class="muted">Клиент выбирает регион при регистрации. Скрытый регион не показывается в списке, но уже выбравшие его клиенты и дилеры остаются.
-«Порядок» — чем меньше число, тем выше в списке.</p>
+«Порядок» — чем меньше число, тем выше в списке.<br>
+«🚚 Предзаказ, дней» — за сколько дней деталь со склада JAC доедет до дилера этого региона (например «1-2» или «3»).
+Клиент видит это в карточке детали «под заказ».</p>
 <div class="tablewrap"><table>
-  <tr><th>Порядок</th><th>Русский</th><th>Узбекский</th><th>English</th><th>Показывать</th><th class="num">Клиентов</th><th class="num">Дилеров</th><th></th></tr>
+  <tr><th>Порядок</th><th>Русский</th><th>Узбекский</th><th>English</th><th>Показывать</th><th>🚚 Предзаказ, дней</th><th class="num">Клиентов</th><th class="num">Дилеров</th><th></th></tr>
   {% for r in regions %}
   <tr>{% set f = 'rg' ~ r.id %}
     <td><input form="{{ f }}" name="sort_order" value="{{ r.sort_order }}" size="3"></td>
@@ -31,6 +33,7 @@
     <td><input form="{{ f }}" name="name_uz" value="{{ r.name_uz or '' }}"></td>
     <td><input form="{{ f }}" name="name_en" value="{{ r.name_en or '' }}"></td>
     <td><input form="{{ f }}" type="checkbox" name="active" value="1" {{ 'checked' if r.active }}></td>
+    <td><input form="{{ f }}" name="preorder_days" value="{{ r.preorder_days or '' }}" size="5" placeholder="3-5" pattern="\d{1,2}(\s*[-–]\s*\d{1,2})?"></td>
     <td class="num">{{ users.get(r.id, 0) }}</td><td class="num">{{ dealers.get(r.id, 0) }}</td>
     <td><form id="{{ f }}" method="post" action="/settings/regions/{{ r.id }}"><input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="btn small">Сохранить</button></form></td>

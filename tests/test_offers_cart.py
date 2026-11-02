@@ -56,15 +56,40 @@ async def test_offers_sorted_and_filtered_by_region(db):
 
 
 async def test_part_card(db):
+    """Простая карточка: лучшая цена и одна кнопка «В корзину»; остальные дилеры — по кнопке «Все дилеры»."""
     user = await db.get(User, 1)
     offers = await StockRepository(db).offers_in_region(1, 1)
     part = offers[0].part
     text = part_card_text(part, "ru", user.region, offers)
-    assert "📍 ТАШКЕНТ" in text and "💰 82 000 сум" in text and "🟢 В наличии: 4 шт." in text and "🔴 Нет в наличии" in text
-    assert text.index("Ташкент №2") < text.index("Ташкент №1") < text.index("Ташкент №3")
+    assert "📍 ТАШКЕНТ" in text and "В наличии у дилеров: 2 · от 82 000 сум" in text
+    assert "🏢 JAC Ташкент №2" in text and "💰 82 000 сум · 🟢 В наличии: 4 шт." in text
+    assert "Ташкент №1" not in text and "Нет в наличии" not in text  # остальные — на экране «Все дилеры»
     kb = part_card_keyboard(part, 1, "ru", offers)
     buttons = [row[0].text for row in kb.inline_keyboard]
-    assert buttons == ["🛒 JAC Ташкент №2 · 82 000 сум", "🛒 JAC Ташкент №1 · 85 000 сум", "◀️ Назад"]  # без «нет в наличии»
+    assert buttons == ["🛒 В корзину · 82 000 сум", "🏢 Все дилеры (2)", "◀️ Назад"]
+    assert kb.inline_keyboard[0][0].callback_data == "cart:add:2"
+
+    kb = part_card_keyboard(part, 1, "ru", offers, cart_qty=3)  # в корзине уже что-то есть
+    assert [row[0].text for row in kb.inline_keyboard][-2] == "🛒 Корзина · 3 шт. →"
+
+    from app.keyboards.catalog import offers_keyboard
+    from app.services.catalog import offers_text
+    in_stock = [o for o in offers if o.quantity > 0]
+    text = offers_text(part, "ru", user.region, in_stock)
+    assert text.index("Ташкент №2") < text.index("Ташкент №1")
+    kb = offers_keyboard(part, 1, "ru", in_stock)
+    assert [row[0].text for row in kb.inline_keyboard] == [
+        "🛒 JAC Ташкент №2 · 82 000 сум", "🛒 JAC Ташкент №1 · 85 000 сум", "◀️ Назад"]
+
+
+def test_cart_button_refresh():
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from app.keyboards.catalog import with_cart_qty
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="add", callback_data="cart:add:2")],
+                                               [InlineKeyboardButton(text="◀️ Назад", callback_data="cat:parts:1:1:0:1")]])
+    kb = with_cart_qty(kb, "ru", 1)
+    kb = with_cart_qty(kb, "ru", 2)  # кнопка не дублируется — обновляется
+    assert [r[0].text for r in kb.inline_keyboard] == ["add", "🛒 Корзина · 2 шт. →", "◀️ Назад"]
 
 
 async def test_card_when_region_has_no_dealers(db):

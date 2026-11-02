@@ -71,7 +71,10 @@ def test_warehouse_export(tmp_path):
     unknown = next(w for w in warnings if w.key == "warn_unknown_models")
     assert unknown.params["models"] == "XYZ-9"
     keys = {(w.key, w.params.get("status")) for w in warnings}
-    assert ("warn_skipped_status", "Бронь для заказа") in keys and ("warn_skipped_status", "На складе") in keys
+    assert ("warn_skipped_status", "Бронь для заказа") in keys and ("warn_skipped_status", "На складе") not in keys
+    bsm = next(r for r in rows if r.part_number == "3608100V670001")  # «На складе» — склад JAC, для предзаказа
+    assert bsm.warehouse and bsm.dealer == "Склад JAC" and bsm.stock == 15 and bsm.region_id == 1
+    assert not ecu[0].warehouse
     default = next(w for w in warnings if w.key == "warn_default_region")
     assert "China Group" in default.params["dealers"] and "Navoiy" not in default.params["dealers"]
 

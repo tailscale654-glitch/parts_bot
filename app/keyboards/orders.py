@@ -4,11 +4,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.database.models import Order
 from app.database.repositories.orders import TRANSITIONS
 from app.keyboards.cart import CartCB
+from app.services.catalog import map_url
 from app.services.localization import i18n
 
 
 class OrderCB(CallbackData, prefix="ord"):
-    action: str  # confirm | list | show | cancel
+    action: str  # confirm | list | show | cancel | repeat
     id: int = 0
 
 
@@ -49,6 +50,12 @@ def orders_list_keyboard(orders: list[Order], lang: str) -> InlineKeyboardMarkup
 
 def order_keyboard(order: Order, lang: str) -> InlineKeyboardMarkup:
     rows = []
+    url = map_url(order.dealer) if order.status in ("NEW", "CONFIRMED", "READY") else None
+    if url:  # «Как добраться» — пока заказ не забран
+        rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_route"), url=url)])
+    if order.status in ("COMPLETED", "CANCELLED"):  # те же детали ещё раз — одной кнопкой
+        rows.append([InlineKeyboardButton(text=i18n.t(lang, "btn_repeat_order"),
+                                          callback_data=OrderCB(action="repeat", id=order.id).pack())])
     if order.status != "CANCELLED":
         rows.append([InlineKeyboardButton(
             text=i18n.t(lang, "btn_chat_dealer"), callback_data=ChatCB(to="dealer", id=order.id).pack()

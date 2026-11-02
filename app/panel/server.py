@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -122,6 +123,15 @@ async def lifespan(app: FastAPI):
     await app.state.bot.session.close()
     if engine is not None:
         await engine.dispose()
+
+
+def parse_point(text: str) -> tuple[float, float] | None:
+    """«41.311081, 69.240562» (как копируют из Яндекс/Google Карт) → (широта, долгота). Пусто или ошибка → None."""
+    numbers = re.findall(r"-?\d+(?:[.,]\d+)?", text or "")
+    if len(numbers) != 2:
+        return None
+    lat, lng = (float(n.replace(",", ".")) for n in numbers)
+    return (lat, lng) if -90 <= lat <= 90 and -180 <= lng <= 180 else None
 
 
 def create_app(settings: Settings | None = None, session_factory=None, bot: Bot | None = None) -> FastAPI:
@@ -498,14 +508,19 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
 
     @app.post("/dealers/{dealer_id}")
     async def dealer_save(dealer_id: int, request: Request, phone: str = Form(""), address: str = Form(""),
-                          region_id: int = Form(...), csrf: str = Form(""),
+                          region_id: int = Form(...), location: str = Form(""), csrf: str = Form(""),
                           web: WebUser = Depends(require("dealers.edit")), session: AsyncSession = Depends(get_session)):
         check_csrf(request, csrf)
         dealer = await _dealer(session, dealer_id)
         if await session.get(Region, region_id) is None:
             raise HTTPException(400, "Неизвестный регион.")
+        point = parse_point(location)
+        if location.strip() and point is None:
+            return back(f"/dealers/{dealer.id}", "Точка на карте: две цифры через запятую, например «41.311081, 69.240562» "
+                                                 "(в Яндекс или Google Картах: правая кнопка мыши на здании → координаты).")
         dealer.phone, dealer.address = phone.strip()[:32] or None, address.strip()[:512] or None
         dealer.region_id = region_id
+        dealer.latitude, dealer.longitude = point or (None, None)
         await session.commit()
         logger.info("Panel %s edited dealer %s", web.login, dealer.id)
         await audit.log(session, web, "dealer.edit", dealer.name, f"тел. {dealer.phone or '—'}; адрес: {dealer.address or '—'}; регион id {dealer.region_id}")
@@ -520,6 +535,9 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         await session.commit()
         logger.info("Panel %s set dealer %s enabled=%s", web.login, dealer.id, dealer.enabled)
         await audit.log(session, web, "dealer.enabled", dealer.name, "включён" if dealer.enabled else "выключен")
+        if dealer.is_warehouse:
+            return back(f"/dealers/{dealer.id}", "Предзаказ со склада включён." if dealer.enabled
+                        else "Предзаказ со склада выключен: детали «под заказ» скрыты из бота. Открытые заказы остаются.")
         return back(f"/dealers/{dealer.id}", "Дилер включён: его детали снова видны клиентам." if dealer.enabled
                     else "Дилер выключен: его детали скрыты из бота. Открытые заказы остаются.")
 
@@ -889,6 +907,7 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
     @app.post("/settings/regions/{region_id}")
     async def settings_region(region_id: int, request: Request, name_ru: str = Form(""), name_uz: str = Form(""),
                               name_en: str = Form(""), sort_order: str = Form("0"), active: str = Form(""),
+                              preorder_days: str = Form(""),
                               csrf: str = Form(""), web: WebUser = Depends(require("settings")),
                               session: AsyncSession = Depends(get_session)):
         check_csrf(request, csrf)
@@ -901,10 +920,14 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
             name_en.strip()[:128] or None
         region.sort_order = int(sort_order) if sort_order.lstrip("-").isdigit() else region.sort_order
         region.active = active == "1"
+        days = re.sub(r"\s+", "", preorder_days).replace("–", "-")
+        if days and not re.fullmatch(r"\d{1,2}(-\d{1,2})?", days):
+            return back("/settings#regions", "Срок предзаказа — число дней или диапазон, например «3» или «1-2».")
+        region.preorder_days = days or None
         await session.commit()
         await audit.log(session, web, "region.edit", region.name_ru,
                         f"UZ: {region.name_uz or '—'}; EN: {region.name_en or '—'}; порядок {region.sort_order}; "
-                        f"{'показывается' if region.active else 'скрыт'}")
+                        f"{'показывается' if region.active else 'скрыт'}; предзаказ {region.preorder_days or '—'} дн.")
         return back("/settings#regions", f"Регион «{region.name_ru}» сохранён.")
 
     # --- синхронизация с CarSale ---

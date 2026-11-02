@@ -8,6 +8,7 @@ from app.database.models import User
 from app.database.repositories.cart import CartRepository
 from app.database.repositories.stocks import StockRepository
 from app.keyboards.cart import CartCB, cart_keyboard
+from app.keyboards.catalog import with_cart_qty
 from app.services.catalog import cart_text
 from app.services.localization import i18n
 
@@ -23,8 +24,16 @@ async def cart_view(user: User, session: AsyncSession) -> tuple[str, InlineKeybo
 
 async def _refresh(callback: CallbackQuery, user: User, session: AsyncSession) -> None:
     text, kb = await cart_view(user, session)
+    message = callback.message
+    if message.photo:  # «🛒 Корзина» из карточки с фото: фото в текст не превратить — новое сообщение
+        await message.answer(text, reply_markup=kb)
+        try:
+            await message.delete()
+        except TelegramBadRequest:
+            pass
+        return
     try:
-        await callback.message.edit_text(text, reply_markup=kb)
+        await message.edit_text(text, reply_markup=kb)
     except TelegramBadRequest as e:
         if "message is not modified" not in str(e):
             raise
@@ -43,6 +52,12 @@ async def cart_action(callback: CallbackQuery, callback_data: CartCB, user: User
             return
         ok, qty = await cart.add(user, stock)
         await callback.answer(i18n.t(lang, "added_to_cart" if ok else "cart_limit", qty=qty), show_alert=not ok)
+        if ok:  # в карточке появляется (или обновляется) кнопка «🛒 Корзина · N шт.»
+            kb = with_cart_qty(callback.message.reply_markup, lang, await cart.total_qty(user))
+            try:
+                await callback.message.edit_reply_markup(reply_markup=kb)
+            except TelegramBadRequest:
+                pass  # та же клавиатура или сообщение слишком старое — не важно
         return
 
     if action in ("inc", "dec"):

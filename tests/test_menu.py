@@ -14,9 +14,9 @@ def test_menu_buttons_recognized_in_all_languages():
 def test_reply_keyboard_layout():
     kb = main_reply_keyboard("uz")
     assert [[b.text for b in row] for row in kb.keyboard] == [
-        ["🛍 Katalog", "🛒 Savat"],
-        ["📦 Buyurtmalarim", "👤 Profil"],
-        ["📞 Menejer"],
+        ["🛍 Katalog", "🔎 Qidiruv"],
+        ["🛒 Savat", "📦 Buyurtmalarim"],
+        ["👤 Profil", "📞 Menejer"],
     ]
 
 

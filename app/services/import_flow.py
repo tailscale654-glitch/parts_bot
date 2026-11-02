@@ -34,19 +34,20 @@ async def validate_path(session: AsyncSession, path: Path):
                         await part_catalog.load(session), await part_overrides.load(session))
 
 
-async def run_import(db: AsyncSession, rows, fmt: str) -> ImportStats | DirectoryStats:
+async def run_import(db: AsyncSession, rows, fmt: str, keep_warehouse: bool | None = None) -> ImportStats | DirectoryStats:
     if fmt == "directory":
         return await apply_directory(db, rows)
     if fmt == "catalog":
         return await part_catalog.apply_catalog(db, rows)
-    return await apply_import(db, rows)
+    return await apply_import(db, rows, keep_warehouse)
 
 
-async def dry_run(session_factory: async_sessionmaker, rows, fmt: str) -> ImportStats | DirectoryStats:
+async def dry_run(session_factory: async_sessionmaker, rows, fmt: str,
+                  keep_warehouse: bool | None = None) -> ImportStats | DirectoryStats:
     """Пробный прогон: считаем, что изменится, и откатываем — база не меняется."""
     async with session_factory() as dry:
         try:
-            return await run_import(dry, rows, fmt)
+            return await run_import(dry, rows, fmt, keep_warehouse)
         finally:
             await dry.rollback()
 

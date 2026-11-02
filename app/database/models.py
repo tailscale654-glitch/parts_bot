@@ -3,7 +3,7 @@ from datetime import datetime
 
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.utils.names import dealer_key
@@ -25,6 +25,8 @@ class Region(Base):
     name_uz: Mapped[str | None] = mapped_column(String(128))
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # срок предзаказа со склада JAC до дилера этого региона, дней: «2» или «3-5» (задаётся в панели)
+    preorder_days: Mapped[str | None] = mapped_column(String(16))
 
 
 class User(Base):
@@ -121,6 +123,11 @@ class Dealer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # есть в последней выгрузке
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")  # «Активный» в справочнике
     in_directory: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # склад JAC (CarSale «На складе»): клиентам не показывается как дилер, его детали — для предзаказа
+    is_warehouse: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # точка на карте (необязательно): с ней клиент получает метку дилера в Telegram
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
 
     region: Mapped[Region] = relationship(lazy="joined")
 
@@ -155,9 +162,21 @@ class CartItem(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id", ondelete="CASCADE"))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
+    # предзаказ со склада JAC: у какого дилера клиент заберёт деталь (None — обычная покупка у дилера stock)
+    pickup_dealer_id: Mapped[int | None] = mapped_column(ForeignKey("dealers.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     stock: Mapped[Stock] = relationship(lazy="joined")
+    pickup_dealer: Mapped["Dealer | None"] = relationship(lazy="joined", foreign_keys=[pickup_dealer_id])
+
+    @property
+    def preorder(self) -> bool:
+        return self.pickup_dealer_id is not None
+
+    @property
+    def dealer(self) -> "Dealer":
+        """Дилер, у которого клиент заберёт деталь."""
+        return self.pickup_dealer if self.pickup_dealer_id else self.stock.dealer
 
 
 ORDER_STATUSES = ("NEW", "CONFIRMED", "READY", "COMPLETED", "CANCELLED")
@@ -174,13 +193,18 @@ class Order(Base):
     status: Mapped[str] = mapped_column(String(16), default="NEW", index=True)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     car: Mapped[str | None] = mapped_column(String(128))  # автомобиль клиента на момент заказа
+    # предзаказ: детали едут со склада JAC (source_dealer) к дилеру выдачи (dealer)
+    preorder: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    source_dealer_id: Mapped[int | None] = mapped_column(ForeignKey("dealers.id", ondelete="SET NULL"))
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # напоминание «заберите заказ»
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     user: Mapped[User] = relationship(lazy="joined")
-    dealer: Mapped[Dealer] = relationship(lazy="joined")
+    dealer: Mapped[Dealer] = relationship(lazy="joined", foreign_keys=[dealer_id])
+    source_dealer: Mapped["Dealer | None"] = relationship(lazy="joined", foreign_keys=[source_dealer_id])
     items: Mapped[list["OrderItem"]] = relationship(
         lazy="selectin", back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
     )

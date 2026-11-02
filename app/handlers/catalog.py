@@ -5,19 +5,31 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
-from app.database.models import CarModel, User
+from app.database.models import CarModel, Part, User
+from app.database.repositories.cart import CartRepository
 from app.database.repositories.catalog import CatalogRepository
 from app.database.repositories.stocks import StockRepository
 from app.keyboards.catalog import (
     CatalogCB,
+    PreorderCB,
     models_keyboard,
     nodes_keyboard,
+    offers_keyboard,
     part_card_keyboard,
     parts_keyboard,
+    pickup_keyboard,
 )
 from app.keyboards.phone import phone_keyboard
 from app.services import cars
-from app.services.catalog import PAGE_SIZE, paginate, part_card_text
+from app.services.catalog import (
+    PAGE_SIZE,
+    Preorder,
+    offers_text,
+    paginate,
+    part_card_text,
+    pickup_text,
+    region_days,
+)
 from app.services.import_mapping import ALL_MODELS
 from app.services.localization import i18n, localized_name
 
@@ -192,6 +204,30 @@ async def show_parts(callback: CallbackQuery, callback_data: CatalogCB, user: Us
     await _show(callback, text, parts_keyboard(model.id, node.id, parts, page, lang))
 
 
+async def preorder_for(session: AsyncSession, part: Part, user: User) -> Preorder | None:
+    """Деталь есть на складе JAC и в регионе покупателя есть дилер, к которому её привезут."""
+    stocks = StockRepository(session)
+    stock = await stocks.warehouse_offer(part.id)
+    if stock is None:
+        return None
+    dealers = await stocks.pickup_dealers(user.region_id)
+    return Preorder(stock, dealers, region_days(user.region, user.language)) if dealers else None
+
+
+async def card_view(part: Part, user: User, session: AsyncSession, page: int):
+    """Карточка детали → (текст, кнопки, фото). Только дилеры региона покупателя, у которых деталь есть;
+    у них её нет — предзаказ со склада JAC."""
+    lang = user.language
+    stocks = StockRepository(session)
+    offers = [o for o in await stocks.offers_in_region(part.id, user.region_id) if o.quantity > 0]
+    preorder = None if offers else await preorder_for(session, part, user)
+    elsewhere = 0 if offers or preorder else await stocks.regions_elsewhere(part.id, user.region_id)
+    text = part_card_text(part, lang, user.region, offers, elsewhere, preorder)
+    kb = part_card_keyboard(part, page, lang, offers, preorder, await CartRepository(session).total_qty(user))
+    photo = part.photo if len(text) <= 1024 else None  # подпись к фото — не длиннее 1024 символов
+    return text, kb, photo
+
+
 @router.callback_query(CatalogCB.filter(F.action == "part"))
 async def show_part(callback: CallbackQuery, callback_data: CatalogCB, user: User, session: AsyncSession) -> None:
     lang = user.language
@@ -199,13 +235,67 @@ async def show_part(callback: CallbackQuery, callback_data: CatalogCB, user: Use
     if part is None:
         await _unavailable(callback, lang)
         return
+    text, kb, photo = await card_view(part, user, session, callback_data.page)
+    await _show(callback, text, kb, photo=photo)
+
+
+@router.callback_query(CatalogCB.filter(F.action == "offers"))
+async def show_offers(callback: CallbackQuery, callback_data: CatalogCB, user: User, session: AsyncSession) -> None:
+    """«🏢 Все дилеры»: у кого в регионе деталь есть, с адресами и кнопкой «В корзину» у каждого."""
+    lang = user.language
+    part = await CatalogRepository(session).get_part(callback_data.part_id)
+    offers = [o for o in await StockRepository(session).offers_in_region(part.id, user.region_id)
+              if o.quantity > 0] if part else []
+    if not offers:
+        await _unavailable(callback, lang)
+        return
+    qty = await CartRepository(session).total_qty(user)
+    await _show(callback, offers_text(part, lang, user.region, offers),
+                offers_keyboard(part, callback_data.page, lang, offers, qty))
+
+
+@router.callback_query(PreorderCB.filter(F.action == "pick"))
+async def preorder_pick(callback: CallbackQuery, callback_data: PreorderCB, user: User, session: AsyncSession) -> None:
+    """Предзаказ: в регионе несколько дилеров — спрашиваем, у кого клиент заберёт деталь."""
+    lang = user.language
+    stock = await StockRepository(session).get(callback_data.stock_id)
+    preorder = await preorder_for(session, stock.part, user) if stock is not None else None
+    if preorder is None:
+        await _unavailable(callback, lang)
+        return
+    await _show(callback, pickup_text(stock.part, lang, preorder), pickup_keyboard(stock.part, callback_data.page, lang, preorder))
+
+
+@router.callback_query(PreorderCB.filter(F.action == "add"))
+async def preorder_add(callback: CallbackQuery, callback_data: PreorderCB, user: User, session: AsyncSession) -> None:
+    lang = user.language
     stocks = StockRepository(session)
-    # только дилеры региона покупателя, у которых деталь есть (без строк «нет в наличии»)
-    offers = [o for o in await stocks.offers_in_region(part.id, user.region_id) if o.quantity > 0]
-    elsewhere = 0 if offers else await stocks.regions_elsewhere(part.id, user.region_id)
-    text = part_card_text(part, lang, user.region, offers, elsewhere)
-    photo = part.photo if len(text) <= 1024 else None  # подпись к фото — не длиннее 1024 символов
-    await _show(callback, text, part_card_keyboard(part, callback_data.page, lang, offers), photo=photo)
+    stock = await stocks.get(callback_data.stock_id)
+    dealer = await stocks.get_dealer(callback_data.dealer_id)
+    if stock is None or dealer is None:
+        await _unavailable(callback, lang)
+        return
+    ok, qty = await CartRepository(session).add(user, stock, pickup=dealer)
+    if not ok:
+        limit = qty and qty >= stock.quantity
+        await callback.answer(i18n.t(lang, "cart_limit_preorder" if limit else "item_unavailable", qty=qty),
+                              show_alert=True)
+        return
+    await callback.answer(i18n.t(lang, "added_preorder", qty=qty, dealer=dealer.name))
+    # вернуть карточку (с кнопкой «🛒 Корзина · N шт.»): с экрана выбора дилера или обновить на месте
+    text, kb, photo = await card_view(stock.part, user, session, callback_data.page)
+    message = callback.message
+    try:
+        if message.photo:
+            await message.edit_caption(caption=text[:1024], reply_markup=kb)
+        elif photo:
+            await message.answer_photo(photo, caption=text[:1024], reply_markup=kb)
+            await _safe_delete(message)
+        else:
+            await message.edit_text(text, reply_markup=kb)
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            await message.answer(text, reply_markup=kb)  # битая ссылка на фото и т.п. — карточка текстом
 
 
 @router.callback_query(CatalogCB.filter(F.action == "noop"))

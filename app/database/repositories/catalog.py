@@ -1,9 +1,10 @@
 """Чтение каталога: модели → узлы → детали.
 
-Показываем только детали, которые сейчас есть в наличии (остаток > 0) у работающего дилера региона
-пользователя (заказать можно только там) — у клиентов, администраторов и сотрудников одинаково.
+Показываем только детали, которые сейчас можно заказать в регионе пользователя:
+  • есть в наличии (остаток > 0) у работающего дилера региона, или
+  • есть на складе JAC (предзаказ), а в регионе есть дилер, к которому их привезут.
 Модель или категория без таких деталей в списке не появляется."""
-from sqlalchemy import func, or_, select, true
+from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarModel, Dealer, Node, Part, Region, Stock
@@ -16,13 +17,27 @@ def _name_order(table, lang: str | None):
     return func.coalesce(column, table.name_ru) if column is not None else table.name_ru
 
 
+def _offer(warehouse: bool):
+    """Остаток детали у включённого дилера из последней выгрузки (warehouse — на складе JAC)."""
+    return (select(Stock.id).join(Dealer, Dealer.id == Stock.dealer_id)
+            .where(Stock.part_id == Part.id, Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True),
+                   Dealer.is_warehouse.is_(warehouse)))
+
+
+def pickup_conditions():
+    """Дилер, к которому можно привезти предзаказ: включён, не склад, есть в выгрузке или в справочнике."""
+    return (Dealer.enabled.is_(True), Dealer.is_warehouse.is_(False),
+            or_(Dealer.active.is_(True), Dealer.in_directory.is_(True)))
+
+
 def _in_stock(region_id: int | None):
-    """У детали есть остаток у включённого дилера (из последней выгрузки) — в регионе или у любого."""
-    offer = (select(Stock.id).join(Dealer, Dealer.id == Stock.dealer_id)
-             .where(Stock.part_id == Part.id, Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True)))
-    if region_id is not None:
-        offer = offer.where(Dealer.region_id == region_id)
-    return offer.exists()
+    """Деталь можно заказать: в наличии у дилера региона или на складе JAC (если в регионе есть дилер)."""
+    warehouse = _offer(True).exists()
+    if region_id is None:
+        return or_(_offer(False).exists(), warehouse)
+    local = _offer(False).where(Dealer.region_id == region_id).exists()
+    pickup = select(Dealer.id).where(Dealer.region_id == region_id, *pickup_conditions()).exists()
+    return or_(local, and_(warehouse, pickup))
 
 
 def _fits(mod: str | None):
@@ -58,7 +73,8 @@ class CatalogRepository:
         rows = await self.session.execute(
             select(Region, parts).join(Dealer, Dealer.region_id == Region.id).join(Stock, Stock.dealer_id == Dealer.id)
             .join(Part, Part.id == Stock.part_id)
-            .where(Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True), Part.active.is_(True))
+            .where(Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True), Part.active.is_(True),
+                   Dealer.is_warehouse.is_(False))
             .group_by(Region.id).order_by(parts.desc(), Region.sort_order).limit(limit))
         return [(region, n) for region, n in rows.unique().all()]
 
@@ -114,25 +130,29 @@ class CatalogRepository:
         )
         return dict(result.all())
 
-    async def search_parts(self, query: str, lang: str | None, limit: int = 30) -> list[Part]:
-        """Поиск по названию (на всех трёх языках) и по артикулу."""
-        pattern = f"%{query}%"
-        result = await self.session.execute(
-            select(Part)
-            .join(CarModel, CarModel.id == Part.model_id)
-            .join(Node, Node.id == Part.node_id)
-            .where(
-                Part.active.is_(True),
-                CarModel.active.is_(True),
-                Node.active.is_(True),
-                or_(
-                    Part.name_ru.ilike(pattern),
-                    Part.name_en.ilike(pattern),
-                    Part.name_uz.ilike(pattern),
-                    Part.part_number.ilike(pattern),
-                ),
-            )
-            .order_by(_name_order(Part, lang), Part.id)
-            .limit(limit)
-        )
-        return list(result.scalars())
+    async def search(self, query: str, lang: str | None, models: set[str] | None = None,
+                     mod: str | None = None, limit: int = 30) -> list[Part]:
+        """Поиск по названию (на всех трёх языках) и артикулу среди деталей, которые можно заказать.
+        models — только эти модели (клиенту: его автомобиль и «Прочее»); None — все.
+        Сравниваем в Python: так «ФИЛЬТР» = «фильтр», «o‘» = «o'» и в PostgreSQL, и в тестах (SQLite)."""
+        from app.services.search import matches, rank
+
+        conditions = [*self._shown(), CarModel.active.is_(True), Node.active.is_(True), _fits(mod)]
+        if models is not None:
+            conditions.append(CarModel.name_ru.in_(models))
+        rows = (await self.session.execute(
+            select(Part.id, Part.name_ru, Part.name_en, Part.name_uz, Part.part_number)
+            .join(CarModel, CarModel.id == Part.model_id).join(Node, Node.id == Part.node_id).where(*conditions)
+        )).all()
+        found = sorted((rank(query, r, lang), r.id) for r in rows if matches(query, r))[:limit]
+        if not found:
+            return []
+        parts = {p.id: p for p in (await self.session.scalars(select(Part).where(Part.id.in_([i for _, i in found])))).unique()}
+        return [parts[i] for _, i in found if i in parts]
+
+    async def with_local_stock(self, part_ids: list[int]) -> set[int]:
+        """Какие из деталей есть в наличии у дилеров региона (остальные — только под заказ со склада)."""
+        if not part_ids or self.region_id is None:
+            return set()
+        local = _offer(False).where(Dealer.region_id == self.region_id).exists()
+        return set(await self.session.scalars(select(Part.id).where(Part.id.in_(part_ids), local)))

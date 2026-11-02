@@ -7,7 +7,7 @@ from aiogram.types import ErrorEvent
 
 from app.config import load_settings
 from app.database.database import create_engine, create_session_factory
-from app.handlers import admin, admin_panel, car, cart, catalog, chat, support, dealer, orders, panel_access, fallback, language, phone, profile, region, start
+from app.handlers import admin, admin_panel, car, cart, catalog, chat, support, dealer, orders, panel_access, fallback, language, phone, profile, region, search, start
 from app.middlewares.db import DbSessionMiddleware
 from app.services.alerts import ErrorAlerts
 from app.services.localization import i18n
@@ -46,6 +46,7 @@ async def main() -> None:
     dp.include_router(profile.router)
     dp.include_router(car.router)
     dp.include_router(catalog.router)
+    dp.include_router(search.router)  # «🔎 Поиск»: текст в режиме поиска — до чата с менеджером
     dp.include_router(orders.router)  # до cart: перехватывает «Оформить заказ»
     dp.include_router(cart.router)
     dp.include_router(support.router)  # всё, что клиент пишет (не кнопки), — в чат веб-панели
@@ -67,12 +68,16 @@ async def main() -> None:
                 pass
         return True
 
+    from app.services.notify import reminders_loop
+
+    reminders = asyncio.create_task(reminders_loop(bot, session_factory))  # «заказ ждёт вас» через сутки
     me = await bot.get_me()
     logger.info("Bot @%s started (long polling). Admins: %d", me.username, len(settings.admin_ids))
     try:
         # allowed_updates — только нужные типы обновлений (меньше лишнего трафика)
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        reminders.cancel()
         await bot.session.close()
         await engine.dispose()
 

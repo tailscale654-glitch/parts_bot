@@ -2,6 +2,7 @@
 from aiogram import F, Router
 from aiogram import Bot
 from aiogram.filters import CommandObject, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,7 @@ from app.keyboards.region import region_keyboard
 from app.services import bot_settings, cars
 from app.services.bot_settings import contact_view
 from app.services.localization import i18n, localized_name
+from app.states.search import SearchStates
 
 router = Router(name="start")
 
@@ -97,20 +99,36 @@ async def start_invite(
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, user: User, session: AsyncSession) -> None:
+async def cmd_start(message: Message, user: User, session: AsyncSession, state: FSMContext | None = None) -> None:
+    await leave_search(state)
     await next_step(message, user, session)
+
+
+async def leave_search(state: FSMContext | None) -> None:
+    """Нажали другую кнопку меню — выходим из режима поиска (последний запрос остаётся в данных)."""
+    if state is not None and await state.get_state() == SearchStates.query.state:
+        await state.set_state(None)
 
 
 @router.message(F.text.func(menu_action))
 async def menu_button(message: Message, user: User, session: AsyncSession, staff_dealer_id: int | None,
-                      settings: Settings | None = None) -> None:
+                      settings: Settings | None = None, state: FSMContext | None = None) -> None:
     """Нажата кнопка нижнего меню (на любом языке)."""
+    await leave_search(state)
     if not (user.language and user.region_id and user.phone):
         await next_step(message, user, session)  # регистрация не закончена
         return
     lang = user.language
     action = menu_action(message.text)
-    if action == "btn_catalog":
+    if action == "btn_search":
+        from app.handlers.search import start_search
+
+        if cars.needs_car(user) and staff_dealer_id is None:  # ищем по автомобилю клиента — сначала спросим его
+            text, kb = car_prompt(user)
+            await message.answer(text, reply_markup=kb)
+        elif state is not None:
+            await start_search(message, user, state, full_access(user, settings, staff_dealer_id))
+    elif action == "btn_catalog":
         text, kb = await models_view(user, session, full_access(user, settings, staff_dealer_id))
         await message.answer(text, reply_markup=kb)
     elif action == "btn_cart":

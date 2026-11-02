@@ -11,7 +11,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarsaleOp, CartItem, Order, OrderItem, Stock, User
-from app.database.repositories.cart import is_available
+from app.database.repositories.cart import item_available
 
 # Какой статус можно поставить из текущего
 TRANSITIONS = {
@@ -50,7 +50,7 @@ class OrderRepository:
         self.session = session
 
     async def create_from_cart(self, user: User) -> list[Order]:
-        """Корзина → заказы (по одному на дилера). Всё в одной транзакции.
+        """Корзина → заказы (по одному на дилера; предзаказ со склада JAC — отдельным заказом). Всё в одной транзакции.
 
         Остаток дилера уменьшается сразу (резерв), чтобы два покупателя не купили одну деталь.
         Если чего-то не хватает — заказы не создаются, корзина не меняется, возвращается список проблем.
@@ -72,27 +72,32 @@ class OrderRepository:
         problems = []
         for item in items:
             stock = locked.get(item.stock_id)
-            if stock is None or not is_available(stock) or item.quantity > stock.quantity:
+            if stock is None or not item_available(item) or item.quantity > stock.quantity:
                 part = item.stock.part
                 problems.append(StockProblem(
                     stock_id=item.stock_id,
                     names={"ru": part.name_ru, "en": part.name_en, "uz": part.name_uz},
                     wanted=item.quantity,
-                    available=stock.quantity if stock is not None and is_available(stock) else 0,
+                    available=stock.quantity if stock is not None and item_available(item) else 0,
                 ))
         if problems:
             raise CheckoutError(problems)
 
-        by_dealer: dict[int, list[CartItem]] = defaultdict(list)
+        # (дилер выдачи, склад JAC или None): покупка у дилера и предзаказ к тому же дилеру — разные заказы
+        by_dealer: dict[tuple[int, int | None], list[CartItem]] = defaultdict(list)
         for item in items:
-            by_dealer[locked[item.stock_id].dealer_id].append(item)
+            stock = locked[item.stock_id]
+            if stock.dealer.is_warehouse:
+                by_dealer[(item.pickup_dealer_id, stock.dealer_id)].append(item)
+            else:
+                by_dealer[(stock.dealer_id, None)].append(item)
 
         orders = []
-        for dealer_id, dealer_items in by_dealer.items():
+        for (dealer_id, source_id), dealer_items in by_dealer.items():
             from app.services.cars import car_text
 
             order = Order(user_id=user.id, dealer_id=dealer_id, status="NEW", total_amount=Decimal(0),
-                          car=car_text(user, "ru"))
+                          car=car_text(user, "ru"), preorder=source_id is not None, source_dealer_id=source_id)
             for item in dealer_items:
                 stock = locked[item.stock_id]
                 part = stock.part

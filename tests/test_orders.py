@@ -92,9 +92,9 @@ async def test_order_texts_and_keyboards(db):
     assert texts(admin_order_keyboard(order, "ru", staff=True))[-1] == ["📋 Заказы дилера"]
     order.status = "COMPLETED"
     assert texts(admin_order_keyboard(order, "ru")) == [["💬 Написать клиенту"], ["🛒 Заказы"]]
-    assert texts(order_keyboard(order, "ru")) == [["💬 Написать дилеру"], ["◀️ К заказам"]]
+    assert texts(order_keyboard(order, "ru")) == [["🔁 Повторить заказ"], ["💬 Написать дилеру"], ["◀️ К заказам"]]
     order.status = "CANCELLED"
-    assert texts(order_keyboard(order, "ru")) == [["◀️ К заказам"]]
+    assert texts(order_keyboard(order, "ru")) == [["🔁 Повторить заказ"], ["◀️ К заказам"]]
 
 
 async def test_user_sees_only_own_orders(db):

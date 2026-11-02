@@ -40,6 +40,7 @@ class SyncConfig:
     every_minutes: int = 30  # 0 — только по кнопке в панели
     skip_dealers: frozenset[str] = frozenset({"test diler"})
     max_hidden_share: float = 0.3  # не скрывать за раз больше 30% деталей — скорее всего, CarSale отдал не всё
+    preorder: bool = True  # читать склад JAC («На складе») — детали для предзаказа
 
     @classmethod
     def from_env(cls) -> "SyncConfig":
@@ -51,6 +52,7 @@ class SyncConfig:
             every_minutes=int(os.getenv("CARSALE_SYNC_MINUTES", "30") or 0),
             skip_dealers=frozenset(s.strip() for s in skip.split(",") if s.strip()),
             max_hidden_share=float(os.getenv("CARSALE_MAX_HIDDEN_SHARE", "0.3")),
+            preorder=os.getenv("CARSALE_PREORDER", "1").strip().lower() not in ("0", "off", "no", "false"),
         )
 
 
@@ -58,7 +60,7 @@ Fetcher = Callable[[SyncConfig], Awaitable[Snapshot]]
 
 
 async def default_fetcher(cfg: SyncConfig) -> Snapshot:
-    return await fetch_snapshot(cfg.login, cfg.password, cfg.base_url, set(cfg.skip_dealers))
+    return await fetch_snapshot(cfg.login, cfg.password, cfg.base_url, set(cfg.skip_dealers), warehouse=cfg.preorder)
 
 
 async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger: str = "schedule",
@@ -74,6 +76,8 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
     untranslated: list[str] = []
     snap: Snapshot | None = None
     path = Path(tempfile.gettempdir()) / f"carsale_{run_id}.xlsx"
+    # Предзаказ выключен (CARSALE_PREORDER=0) — склад очищаем; включён, но склад не прочитался — оставляем прежний
+    keep_warehouse = None if cfg.preorder else False
     try:
         snap = await fetcher(cfg)
         write_xlsx(snap, path)
@@ -81,7 +85,9 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
             rows, errors, warnings, fmt = await import_flow.validate_path(session, path)
             if errors:
                 raise CarsaleError(import_flow.errors_text(errors, LANG))
-            preview = await import_flow.dry_run(session_factory, rows, fmt)
+            if not cfg.preorder or snap.warehouse_error:
+                warnings = [w for w in warnings if w.key != "warn_warehouse_kept"]  # своя строка ниже
+            preview = await import_flow.dry_run(session_factory, rows, fmt, keep_warehouse)
             active = await session.scalar(select(func.count(Part.id)).where(Part.active.is_(True))) or 0
             if active >= 20 and preview.hidden > active * cfg.max_hidden_share:
                 raise CarsaleError(
@@ -90,7 +96,7 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
                     "Если так и должно быть — загрузите выгрузку вручную в панели.")
         async with session_factory() as db:
             try:
-                stats = await import_flow.run_import(db, rows, fmt)
+                stats = await import_flow.run_import(db, rows, fmt, keep_warehouse)
                 await db.commit()
             except Exception:
                 await db.rollback()
@@ -99,6 +105,8 @@ async def run_sync(session_factory: async_sessionmaker, cfg: SyncConfig, trigger
         untranslated = sorted({r.part_name["en"] for r in rows if r.part_name["ru"] == r.part_name["en"]
                                and not r.part_name.get("uz")})
         summary = import_flow.stats_text("applied", stats, fmt, LANG)
+        if snap.warehouse_error:
+            summary += f"\n\n⚠️ Склад JAC не прочитан ({snap.warehouse_error}) — предзаказ работает по прошлым данным."
         if warnings:
             summary += "\n\n" + "\n".join(import_flow.issue_lines(warnings, LANG, limit=10))
         logger.info("CarSale sync %s ok: %s", run_id, stats)

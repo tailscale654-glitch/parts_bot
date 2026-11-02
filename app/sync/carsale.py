@@ -15,6 +15,9 @@
 Проверки (если хоть одна не прошла — ничего не меняем):
   • сумма «Кол-во» строк дилера = итогу «Кол-во у дилера», который показывает CarSale;
   • сумма по всем дилерам = общему итогу при фильтре «У дилера».
+
+  5. Склад JAC (для предзаказа): фильтр «Статус: На складе». Если склад прочитать не удалось,
+     остатки дилеров всё равно обновляются, а склад остаётся по прошлой синхронизации.
 """
 from __future__ import annotations
 
@@ -35,6 +38,7 @@ COLUMNS = ["№", "Кол-во", "Код запчасти", "Название з
 REQUIRED_COLUMNS = ["Кол-во", "Код запчасти", "Название запчасти", "Статус", "Цена продажи", "Цена реализации",
                     "На Дилера"]
 DEALER_STATUS = "У дилера"
+WAREHOUSE_STATUS = "На складе"
 ROWS_PER_PAGE = "1000"
 
 
@@ -55,10 +59,17 @@ class Snapshot:
     rows: list[list[str]] = field(default_factory=list)  # строки таблицы в порядке COLUMNS
     dealers: list[DealerResult] = field(default_factory=list)
     total_kpi: int | None = None  # «Кол-во у дилера» при фильтре только по статусу
+    warehouse_rows: list[list[str]] = field(default_factory=list)  # склад JAC («На складе»)
+    warehouse_error: str = ""  # почему склад не прочитан ("" — прочитан или не нужен)
 
     @property
     def pieces(self) -> int:
         return sum(d.pieces for d in self.dealers)
+
+    @property
+    def warehouse_pieces(self) -> int:
+        qty = COLUMNS.index("Кол-во")
+        return sum(int(c[qty]) for c in self.warehouse_rows if str(c[qty]).isdigit())
 
 
 # ---------- код, который выполняется внутри страницы CarSale ----------
@@ -164,6 +175,34 @@ return (async () => {
 })();
 """.replace("%STATUS%", DEALER_STATUS)
 
+JS_WAREHOUSE = JS_HELPERS + r"""
+return (async () => {
+  await openPanel();
+  await resetFilters();
+  await chipOn('СТАТУС', '%WAREHOUSE%');
+  buttons().find(b => visible(b) && b.innerText.includes('Применить'))?.click();
+  await sleep(1500);
+  [...document.querySelectorAll('main button')].find(b => b.innerText.trim() === '%ROWS%')?.click();
+  await sleep(1500);
+  const first = byLabel('Первая страница');
+  if (first && !first.disabled) { first.click(); await sleep(1500); }
+  // итога «Кол-во у дилера» для склада нет — ждём, пока таблица трижды подряд не изменится
+  const stock = () => {
+    const m = (document.querySelector('main')?.innerText || '').match(/КОЛ-ВО НА СКЛАДЕ\s+([\d\s]+)/i);
+    return m ? parseInt(m[1].replace(/\s/g, ''), 10) : null;
+  };
+  let last = null, same = 0, rows = [];
+  for (let i = 0; i < 60 && same < 3; i++) {
+    rows = readRows();
+    const sig = `${rows.length}|${pieces(rows)}|${stock()}`;
+    same = sig === last && rows.length > 0 ? same + 1 : 0;
+    last = sig; await sleep(700);
+  }
+  const more = byLabel('Следующая страница');
+  return {rows, sum: pieces(rows), kpi: stock(), stable: same >= 3, heads: heads(), hasNext: !!(more && !more.disabled)};
+})();
+""".replace("%WAREHOUSE%", WAREHOUSE_STATUS).replace("%ROWS%", ROWS_PER_PAGE)
+
 JS_DEALER = JS_HELPERS + r"""
 return (async (dealer) => {
   await openPanel();
@@ -252,9 +291,29 @@ async def open_page(page, base_url: str, path: str, login: str, password: str) -
     raise CarsaleError("CarSale снова и снова просит войти — проверьте CARSALE_LOGIN и CARSALE_PASSWORD")
 
 
+async def read_warehouse(page) -> list[list[str]]:
+    """Склад JAC: все строки со статусом «На складе». Бросает CarsaleError, если данным нельзя верить."""
+    res = await page.evaluate(_js(JS_WAREHOUSE))
+    if res.get("hasNext"):
+        raise CarsaleError(f"На складе больше {ROWS_PER_PAGE} строк — нужна доработка")
+    if not res.get("stable") or not res.get("rows"):
+        raise CarsaleError("Таблица склада не загрузилась")
+    if res.get("kpi") is not None and res.get("kpi") != res.get("sum"):
+        raise CarsaleError(f"Склад: в таблице {res.get('sum')} шт., а CarSale показывает {res.get('kpi')} шт.")
+    indexes = column_indexes(res.get("heads") or [])
+    rows = [pick_columns(cells, indexes) for cells in res["rows"]]
+    status = COLUMNS.index("Статус")
+    other = {r[status] for r in rows} - {WAREHOUSE_STATUS}
+    if other:  # фильтр не применился — в таблице чужие строки (например, «У дилера» второй раз)
+        raise CarsaleError("Фильтр «На складе» не сработал: в таблице есть статусы " + ", ".join(sorted(other)))
+    return rows
+
+
 async def fetch_snapshot(login: str, password: str, base_url: str = "https://app.carsale.uz",
-                         skip_dealers: set[str] | None = None, headless: bool = True) -> Snapshot:
-    """Войти в CarSale и прочитать остатки всех дилеров. Бросает CarsaleError с понятной причиной."""
+                         skip_dealers: set[str] | None = None, headless: bool = True,
+                         warehouse: bool = True) -> Snapshot:
+    """Войти в CarSale и прочитать остатки всех дилеров (и склада JAC, если warehouse).
+    Бросает CarsaleError с понятной причиной. Ошибка склада не мешает дилерам — она в snap.warehouse_error."""
     from playwright.async_api import TimeoutError as PwTimeout
     from playwright.async_api import async_playwright
 
@@ -302,6 +361,15 @@ async def fetch_snapshot(login: str, password: str, base_url: str = "https://app
                 snap.dealers.append(DealerResult(name, len(res["rows"]), res["sum"], res["kpi"]))
                 indexes = column_indexes(res.get("heads") or [])
                 snap.rows.extend(pick_columns(cells, indexes) for cells in res["rows"])
+
+            # 5. склад JAC — для предзаказа; не получилось — предзаказ работает по прошлым данным
+            if warehouse:
+                try:
+                    snap.warehouse_rows = await read_warehouse(page)
+                    logger.info("CarSale: склад — %d строк, %d шт.", len(snap.warehouse_rows), snap.warehouse_pieces)
+                except Exception as e:  # noqa: BLE001 — любая ошибка склада не должна ломать остатки дилеров
+                    snap.warehouse_error = str(e)[:500] or type(e).__name__
+                    logger.warning("CarSale: склад не прочитан: %s", snap.warehouse_error)
         finally:
             await browser.close()
 
@@ -317,10 +385,11 @@ def write_xlsx(snap: Snapshot, path: Path) -> Path:
     ws = wb.active
     ws.title = "Запчасти"
     ws.append(["Список запчастей"])
-    ws.append([f"Синхронизация с CarSale {datetime.now():%d.%m.%Y %H:%M} · {len(snap.rows)} записей"])
+    ws.append([f"Синхронизация с CarSale {datetime.now():%d.%m.%Y %H:%M} · "
+               f"{len(snap.rows) + len(snap.warehouse_rows)} записей"])
     ws.append([])
     ws.append(COLUMNS)
-    for cells in snap.rows:
+    for cells in [*snap.rows, *snap.warehouse_rows]:
         ws.append(list(cells[:len(COLUMNS)]))
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)

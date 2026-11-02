@@ -5,9 +5,9 @@ from app.services.localization import i18n
 from app.keyboards.car import CarCB
 
 MENU_LAYOUT = [
-    ["btn_catalog", "btn_cart"],
-    ["btn_my_orders", "btn_profile"],
-    ["btn_manager"],
+    ["btn_catalog", "btn_search"],
+    ["btn_cart", "btn_my_orders"],
+    ["btn_profile", "btn_manager"],
 ]
 MENU_KEYS = [key for row in MENU_LAYOUT for key in row] + ["btn_cancel", "btn_dealer_orders"]
 

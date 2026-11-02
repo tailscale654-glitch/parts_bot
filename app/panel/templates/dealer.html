@@ -3,6 +3,11 @@
 {% block content %}
 <p><a href="/dealers">← Все дилеры</a></p>
 <h1>{{ dealer.name }}</h1>
+{% if dealer.is_warehouse %}
+<div class="flash">🏬 Это склад JAC (в CarSale — статус «На складе»). Клиентам он не показывается как дилер:
+  его детали видны в боте с пометкой «🚚 под заказ», клиент выбирает дилера своего региона, и заказ приходит этому дилеру
+  с пометкой «ПРЕДЗАКАЗ». Срок доставки по регионам — в «⚙️ Настройки → Регионы». Выключите склад — предзаказ отключится.</div>
+{% endif %}
 <div class="kpis">
   <div class="kpi"><div class="l">Состояние</div><div class="v">{% if not dealer.enabled %}⛔ Выключен{% elif not dealer.active %}Нет в выгрузке{% else %}✅ Работает{% endif %}</div>
     <div class="s">{{ 'детали видны клиентам' if dealer.enabled and dealer.active else 'детали скрыты из бота' }}</div></div>
@@ -20,6 +25,11 @@
       <label>Регион<select name="region_id">{% for r in regions %}<option value="{{ r.id }}" {{ 'selected' if dealer.region_id == r.id }}>{{ localized(r) }}</option>{% endfor %}</select></label>
       <label>Телефон<input name="phone" value="{{ dealer.phone or '' }}" placeholder="+998 ..."></label>
       <label>Адрес<input name="address" value="{{ dealer.address or '' }}"></label>
+      {% if not dealer.is_warehouse %}
+      <label>Точка на карте (необязательно)<input name="location" placeholder="41.311081, 69.240562"
+        value="{{ '%.6f, %.6f'|format(dealer.latitude, dealer.longitude) if dealer.latitude is not none and dealer.longitude is not none else '' }}"></label>
+      <p class="muted" style="margin:0">С точкой клиент получает метку дилера в Telegram, когда заказ готов. Без неё — ссылку на карту по адресу.</p>
+      {% endif %}
       <div><button class="btn primary">Сохранить</button></div>
     </form>
     {% if dealer.in_directory %}<p class="muted">Дилер есть в справочнике дилеров: при следующей загрузке справочника телефон, адрес и регион снова возьмутся из файла.</p>{% endif %}

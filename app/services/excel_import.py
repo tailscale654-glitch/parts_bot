@@ -16,7 +16,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CarModel, CarsaleOp, Dealer, Node, Order, OrderItem, Part, Region, Stock
@@ -67,6 +67,7 @@ class ImportRow:
     description: dict
     photo: str | None
     mod_codes: str = ""  # коды модификаций через запятую; пусто — все модификации модели
+    warehouse: bool = False  # строка склада JAC («На складе») — деталь для предзаказа
 
 
 @dataclass
@@ -80,6 +81,7 @@ class ImportStats:
     updated: int = 0
     hidden: int = 0
     reserved: int = 0  # штук вычтено из остатков: они в незакрытых заказах бота
+    preorder: int = 0  # деталей на складе JAC (можно заказать заранее)
 
 
 # ---------- чтение и проверка ----------
@@ -296,7 +298,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         return [], errors, []
 
     skipped_status: dict[str, int] = {}
-    no_price, no_dealer = 0, 0
+    no_price, no_dealer, warehouse_assigned = 0, 0, 0
     default_region_dealers: set[str] = set()
     unknown_models: set[str] = set()
     untranslated: set[str] = set()
@@ -307,11 +309,19 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         excel_row = int(index) + header_row + 2
         v = {c: _clean(raw.get(c)) for c in df.columns}
         status = v.get("Статус") or "—"
-        if status not in mapping.AVAILABLE_STATUSES:
+        warehouse = status == mapping.WAREHOUSE_STATUS
+        if status not in mapping.AVAILABLE_STATUSES and not warehouse:
             skipped_status[status] = skipped_status.get(status, 0) + 1
             continue
         dealer = v.get("На Дилера")
-        if dealer in EMPTY_MARKS:
+        if warehouse:
+            if dealer not in EMPTY_MARKS:  # уже закреплена за дилером — едет к нему, для предзаказа не берём
+                warehouse_assigned += 1
+                continue
+            dealer = v.get(mapping.WAREHOUSE_COLUMN) or mapping.WAREHOUSE_DEFAULT
+            if dealer in EMPTY_MARKS:
+                dealer = mapping.WAREHOUSE_DEFAULT
+        elif dealer in EMPTY_MARKS:
             no_dealer += 1
             continue
         qty = _to_int(v.get("Кол-во"))
@@ -325,7 +335,9 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             no_price += 1
             continue
         key_d = dealer_key(dealer)
-        if key_d in known_dealers:
+        if warehouse:  # склад — не дилер: клиентам как дилер не показывается, регион не важен
+            region_id = region_by_code[mapping.DEFAULT_REGION]
+        elif key_d in known_dealers:
             region_id = known_dealers[key_d]
         elif key_d in mapped_regions:
             region_id = region_by_code[mapped_regions[key_d]]
@@ -360,7 +372,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             if offer is None:
                 offers[key] = {"row": excel_row, "region_id": region_id, "dealer": dealer, "model": model,
                                "node": node, "name": v["Название запчасти"], "number": v["Код запчасти"],
-                               "qty": qty, "price": price, "updated": updated, "override": override}
+                               "qty": qty, "price": price, "updated": updated, "override": override,
+                               "warehouse": warehouse}
             else:  # одна деталь у одного дилера в нескольких строках (разные инвойсы) — суммируем
                 offer["qty"] += qty
                 if pd.notna(updated) and (pd.isna(offer["updated"]) or updated > offer["updated"]):
@@ -374,6 +387,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         warnings.append(ImportError_(0, "warn_skipped_status", {"status": status, "n": n}))
     if no_dealer:
         warnings.append(ImportError_(0, "warn_no_dealer", {"n": no_dealer}))
+    if warehouse_assigned:
+        warnings.append(ImportError_(0, "warn_warehouse_assigned", {"n": warehouse_assigned}))
     if no_price:
         warnings.append(ImportError_(0, "warn_no_price", {"n": no_price}))
     if default_region_dealers:
@@ -389,6 +404,8 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
         warnings.append(ImportError_(0, "warn_unknown_models", {"models": ", ".join(sorted(unknown_models))}))
     if not offers:
         errors.append(ImportError_(0, "err_no_rows"))
+    elif not any(o["warehouse"] for o in offers.values()):
+        warnings.append(ImportError_(0, "warn_warehouse_kept"))  # склада в файле нет — предзаказ по прежним данным
 
     rows = [
         ImportRow(
@@ -399,6 +416,7 @@ def validate_warehouse(path: Path, regions: list[Region], sheet: str, header_row
             description=o["override"].description if o["override"] else {"ru": None, "en": None, "uz": None},
             photo=o["override"].photo if o["override"] else None,
             mod_codes=_mods_text(part_mods.get((o["model"][0].lower(), o["number"].lower()), {ANY_MOD})),
+            warehouse=o["warehouse"],
         )
         for o in offers.values()
     ]
@@ -436,9 +454,13 @@ def _set_names(obj, names: dict, prefix: str = "name") -> None:
             setattr(obj, f"{prefix}_{lang}", names[lang])
 
 
-async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportStats:
-    """Записать строки в базу. Коммит/rollback делает вызывающий код."""
+async def apply_import(session: AsyncSession, rows: list[ImportRow], keep_warehouse: bool | None = None) -> ImportStats:
+    """Записать строки в базу. Коммит/rollback делает вызывающий код.
+    keep_warehouse — оставить прежние остатки склада JAC (предзаказ). None — сами: если в файле нет
+    ни одной строки склада (выгрузку отфильтровали «У дилера» или склад не прочитался), склад не трогаем."""
     stats = ImportStats()
+    if keep_warehouse is None:
+        keep_warehouse = not any(r.warehouse for r in rows)
 
     # Всё существующее загружаем одним запросом на таблицу — быстро даже для 50 000 строк
     models = {m.name_ru.lower(): m for m in (await session.scalars(select(CarModel))).unique()}
@@ -463,10 +485,12 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
 
         key = dealer_key(r.dealer)
         if key not in dealers:
-            dealers[key] = Dealer(region_id=r.region_id, name=r.dealer, name_key=key)
+            dealers[key] = Dealer(region_id=r.region_id, name=r.dealer, name_key=key, is_warehouse=r.warehouse)
             session.add(dealers[key])
         elif not dealers[key].in_directory:
             dealers[key].region_id = r.region_id  # регион из справочника дилеров не перезаписываем
+        if r.warehouse:
+            dealers[key].is_warehouse = True
         dealers[key].active = True
     await session.flush()  # получаем id новых записей
 
@@ -515,8 +539,11 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
 
     # 3б. Детали в незакрытых заказах бота уже обещаны покупателям. Складская программа о них
     # не знает, поэтому вычитаем их из нового остатка — иначе одну деталь можно продать дважды.
+    # Предзаказ, пока деталь не доехала до дилера (новый / подтверждён), числится на складе JAC.
+    held_at = case((and_(Order.preorder.is_(True), Order.status.in_(("NEW", "CONFIRMED")),
+                         Order.source_dealer_id.is_not(None)), Order.source_dealer_id), else_=Order.dealer_id)
     reserved_rows = await session.execute(
-        select(OrderItem.part_id, Order.dealer_id, func.sum(OrderItem.quantity))
+        select(OrderItem.part_id, held_at, func.sum(OrderItem.quantity))
         .join(Order, Order.id == OrderItem.order_id)
         .where(or_(
             Order.status.in_(("NEW", "CONFIRMED", "READY")),
@@ -524,7 +551,7 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
             and_(Order.status == "COMPLETED", select(CarsaleOp.id).where(
                 CarsaleOp.order_id == Order.id, CarsaleOp.status.in_(("queued", "running"))).exists()),
         ), OrderItem.part_id.is_not(None))
-        .group_by(OrderItem.part_id, Order.dealer_id)
+        .group_by(OrderItem.part_id, held_at)
     )
     for part_id, dealer_id, qty in reserved_rows.all():
         stock = stocks.get((part_id, dealer_id))
@@ -537,6 +564,11 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
     # «Скрыто» считаем по артикулам: деталь, которая просто перешла из «Прочее» в свою модель,
     # не пропала из прайса.
     in_file = {r.part_number.lower() for r in rows}
+    warehouse_ids = {d.id for d in dealers.values() if d.is_warehouse and d.id is not None}
+    if keep_warehouse:  # склад JAC не трогаем: его остатки, детали и сам склад остаются как были
+        kept = {key for key, stock in stocks.items() if key not in seen_stocks and stock.dealer_id in warehouse_ids}
+        seen_stocks |= kept
+        seen_parts |= {part_id for part_id, _ in kept}
     gone: set[str] = set()
     for part in parts.values():
         if part.id not in seen_parts and part.active:
@@ -549,13 +581,15 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow]) -> ImportSt
             await session.delete(stock)
     seen_dealers = {dealer_key(r.dealer) for r in rows}
     for key, dealer in dealers.items():
-        if key not in seen_dealers:
+        if key not in seen_dealers and not (keep_warehouse and dealer.is_warehouse):
             dealer.active = False
     await session.flush()
+    stats.preorder = len({part_id for (part_id, dealer_id), stock in stocks.items()
+                          if dealer_id in warehouse_ids and (part_id, dealer_id) in seen_stocks and stock.quantity > 0})
 
     stats.models = len({r.model["ru"].lower() for r in rows})
     stats.nodes = len({r.node["ru"].lower() for r in rows})
     stats.parts = len(counted)
-    stats.dealers = len(seen_dealers)
-    stats.regions = len({dealers[k].region_id for k in seen_dealers})
+    stats.dealers = len({k for k in seen_dealers if not dealers[k].is_warehouse})
+    stats.regions = len({dealers[k].region_id for k in seen_dealers if not dealers[k].is_warehouse})
     return stats

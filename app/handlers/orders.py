@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.database.models import User
-from app.database.repositories.cart import CartRepository, is_available
+from app.database.repositories.cart import CartRepository, item_available
 from app.database.repositories.orders import CheckoutError, OrderRepository
 from app.keyboards.cart import CartCB
 from app.keyboards.orders import (
@@ -55,7 +55,7 @@ async def orders_view(user: User, session: AsyncSession) -> tuple[str, InlineKey
 @router.callback_query(CartCB.filter(F.action == "checkout"))
 async def checkout_preview(callback: CallbackQuery, user: User, session: AsyncSession) -> None:
     items = await CartRepository(session).items(user)
-    if not any(is_available(i.stock) for i in items):
+    if not any(item_available(i) for i in items):
         await callback.answer(i18n.t(user.language, "checkout_nothing"), show_alert=True)
         return
     await callback.answer()
@@ -120,6 +120,28 @@ async def order_show_or_cancel(
     else:
         await callback.answer()
     await _edit(callback, order_text(order, lang), order_keyboard(order, lang))
+
+
+@router.callback_query(OrderCB.filter(F.action == "repeat"))
+async def order_repeat(callback: CallbackQuery, callback_data: OrderCB, user: User, session: AsyncSession) -> None:
+    """«🔁 Повторить заказ»: детали из старого заказа — снова в корзину (по нынешнему наличию и ценам)."""
+    from app.handlers.cart import cart_view
+
+    lang = user.language
+    order = await OrderRepository(session).get(callback_data.id)
+    if order is None or order.user_id != user.id:
+        await callback.answer(i18n.t(lang, "order_not_found"), show_alert=True)
+        return
+    added, missing = await CartRepository(session).repeat(user, order)
+    if not added:
+        await callback.answer(i18n.t(lang, "repeat_nothing"), show_alert=True)
+        return
+    await callback.answer()
+    head = i18n.t(lang, "repeat_added", n=added, total=len(order.items))
+    if missing:
+        head += "\n" + i18n.t(lang, "repeat_missing", names=", ".join(missing[:10]))
+    text, kb = await cart_view(user, session)
+    await callback.message.answer(f"{head}\n\n{text}"[:4000], reply_markup=kb)
 
 
 # ---------- администратор или сотрудник дилера меняет статус ----------
