@@ -50,6 +50,26 @@ class StockRepository:
             select(Dealer).where(Dealer.region_id == region_id, *pickup_conditions()).order_by(Dealer.name))
         return list(result.unique())
 
+    async def price_info(self, part_ids: list[int], region_id: int | None) -> dict[int, dict]:
+        """Для списка деталей: лучшая цена и число дилеров с наличием в регионе, цена на складе JAC.
+        → {part_id: {"local": цена | None, "dealers": n, "warehouse": цена | None}}."""
+        info = {pid: {"local": None, "dealers": 0, "warehouse": None} for pid in part_ids}
+        if not part_ids:
+            return info
+        base = (Stock.part_id.in_(part_ids), Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True))
+        local = await self.session.execute(
+            select(Stock.part_id, func.min(Stock.price), func.count(Stock.id)).join(Dealer, Dealer.id == Stock.dealer_id)
+            .where(*base, Dealer.is_warehouse.is_(False), Dealer.region_id == region_id).group_by(Stock.part_id))
+        for pid, price, n in local.all():
+            info[pid].update(local=price, dealers=n)
+        if await self.pickup_dealers(region_id):  # предзаказ — только если в регионе есть дилер выдачи
+            warehouse = await self.session.execute(
+                select(Stock.part_id, func.min(Stock.price)).join(Dealer, Dealer.id == Stock.dealer_id)
+                .where(*base, Dealer.is_warehouse.is_(True)).group_by(Stock.part_id))
+            for pid, price in warehouse.all():
+                info[pid]["warehouse"] = price
+        return info
+
     async def get(self, stock_id: int) -> Stock | None:
         return await self.session.get(Stock, stock_id)
 

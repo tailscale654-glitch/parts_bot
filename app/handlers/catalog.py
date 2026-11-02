@@ -113,8 +113,26 @@ async def _empty_region_text(user: User, session: AsyncSession) -> str:
     return i18n.t(lang, "catalog_region_empty", region=region, where=where)
 
 
+def shop_row(lang: str | None) -> list[list[InlineKeyboardButton]]:
+    """«🛍 Открыть витрину» над каталогом — если витрина настроена (MINIAPP_URL в .env)."""
+    from aiogram.types import WebAppInfo
+
+    from app.config import miniapp_url
+
+    url = miniapp_url()
+    return [[InlineKeyboardButton(text=i18n.t(lang, "btn_open_shop"), web_app=WebAppInfo(url=url))]] if url else []
+
+
 async def models_view(user: User, session: AsyncSession, full: bool = False) -> tuple[str, InlineKeyboardMarkup | None]:
-    """Первый экран каталога. Клиенту — сразу категории его модели (+ «Прочее»), всем остальным — список моделей."""
+    """Первый экран каталога (+ сверху «🛍 Открыть витрину», если она настроена)."""
+    text, kb = await _models_view(user, session, full)
+    if kb is not None and kb.inline_keyboard and shop_row(user.language):
+        kb.inline_keyboard = shop_row(user.language) + kb.inline_keyboard
+    return text, kb
+
+
+async def _models_view(user: User, session: AsyncSession, full: bool = False) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Клиенту — сразу категории его модели (+ «Прочее»), всем остальным — список моделей."""
     lang = user.language
     repo = _repo(session, user, full)
     if full:

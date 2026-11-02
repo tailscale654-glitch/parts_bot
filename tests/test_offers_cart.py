@@ -107,6 +107,7 @@ async def test_cart_add_limit_and_change(db):
         assert await cart.add(user, stock) == (True, expected)
     assert await cart.add(user, stock) == (False, 4)  # больше остатка нельзя
     assert await cart.add(user, await db.get(Stock, 3)) == (False, 0)  # нет в наличии
+    assert await cart.add(user, await db.get(Stock, 4)) == (False, 0)  # дилер другого региона (Самарканд)
 
     item = (await cart.items(user))[0]
     assert await cart.change(user, item.id, +1) is False

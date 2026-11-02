@@ -70,6 +70,8 @@ async def main() -> None:
 
     from app.services.notify import reminders_loop
 
+    await set_menu_button(bot, settings.miniapp_url)
+
     reminders = asyncio.create_task(reminders_loop(bot, session_factory))  # «заказ ждёт вас» через сутки
     me = await bot.get_me()
     logger.info("Bot @%s started (long polling). Admins: %d", me.username, len(settings.admin_ids))
@@ -80,6 +82,17 @@ async def main() -> None:
         reminders.cancel()
         await bot.session.close()
         await engine.dispose()
+
+
+async def set_menu_button(bot: Bot, url: str) -> None:
+    """Кнопка слева от поля ввода: открывает витрину (если MINIAPP_URL задан), иначе — обычное меню команд."""
+    from aiogram.types import MenuButtonDefault, MenuButtonWebApp, WebAppInfo
+
+    try:
+        button = MenuButtonWebApp(text="JAC Parts", web_app=WebAppInfo(url=url)) if url else MenuButtonDefault()
+        await bot.set_chat_menu_button(menu_button=button)
+    except Exception:  # кнопка — удобство, из-за неё бот не должен падать
+        logger.exception("Cannot set chat menu button")
 
 
 if __name__ == "__main__":

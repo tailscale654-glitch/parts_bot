@@ -38,17 +38,22 @@ def order_status(order: Order, lang: str | None) -> str:
 PROGRESS = ("NEW", "CONFIRMED", "READY", "COMPLETED")
 
 
-def progress_lines(order: Order, lang: str | None) -> list[str]:
-    """Шкала заказа: ✅ пройдено, ⏳ сейчас, ▫️ впереди. Отменённый заказ — без шкалы."""
+def progress_steps(order: Order, lang: str | None) -> list[tuple[str, str]]:
+    """Шаги заказа: (название, done | next | todo). Отменённый заказ — без шагов."""
     if order.status not in PROGRESS:
         return []
     now = PROGRESS.index(order.status)
-    lines = []
+    steps = []
     for i, step in enumerate(PROGRESS):
-        mark = "✅" if i <= now else "⏳" if i == now + 1 else "▫️"
         key = f"progress_{step}_preorder" if order.preorder and step == "CONFIRMED" else f"progress_{step}"
-        lines.append(f"{mark} {i18n.t(lang, key)}")
-    return lines
+        steps.append((i18n.t(lang, key), "done" if i <= now else "next" if i == now + 1 else "todo"))
+    return steps
+
+
+def progress_lines(order: Order, lang: str | None) -> list[str]:
+    """Шкала заказа: ✅ пройдено, ⏳ сейчас, ▫️ впереди. Отменённый заказ — без шкалы."""
+    marks = {"done": "✅", "next": "⏳", "todo": "▫️"}
+    return [f"{marks[state]} {label}" for label, state in progress_steps(order, lang)]
 
 
 def item_name(item: OrderItem, lang: str | None) -> str:

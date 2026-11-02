@@ -65,6 +65,24 @@ services:
       - web
     logging: *logging
 
+  miniapp:
+    # Витрина в Telegram (Mini App) — тот же образ, другая команда. Только витрина, веб-панели здесь нет.
+    # Порт открыт ТОЛЬКО на этом сервере (127.0.0.1): в интернет его выводит Tailscale Funnel
+    # (см. README «Витрина в Telegram»). Адрес витрины — MINIAPP_URL в .env.
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["uvicorn", "--factory", "app.miniapp.server:create_app", "--host", "0.0.0.0", "--port", "8095",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
+    ports:
+      - "127.0.0.1:8095:8095"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bot:
+        condition: service_started  # бот применяет миграции базы
+    logging: *logging
+
   sync:
     # Синхронизация остатков с CarSale (app.carsale.uz) — см. README «Синхронизация с CarSale».
     # Выключить: CARSALE_SYNC_MINUTES=0 в .env (останется только кнопка в панели) или не задавать CARSALE_LOGIN.

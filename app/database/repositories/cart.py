@@ -53,8 +53,8 @@ class CartRepository:
         if stock.dealer.is_warehouse:
             if not can_pickup(pickup) or pickup.region_id != user.region_id:
                 return False, current
-        elif pickup is not None:
-            return False, current
+        elif pickup is not None or stock.dealer.region_id != user.region_id:
+            return False, current  # заказать можно только у дилеров своего региона
         if not is_available(stock) or current + 1 > stock.quantity:
             return False, current
         if item is None:

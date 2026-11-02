@@ -39,6 +39,7 @@ class Settings:
     timezone: str = "Asia/Tashkent"  # время заказов показываем по Ташкенту
     web_url: str = ""  # адрес веб-панели в локальной сети, например http://192.168.1.10
     log_level: str = "INFO"
+    miniapp_url: str = ""  # витрина в Telegram (https://….ts.net/) — пусто: витрины нет, бот работает как раньше
 
 
 def load_settings() -> Settings:
@@ -52,4 +53,11 @@ def load_settings() -> Settings:
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         timezone=os.getenv("TIMEZONE", "Asia/Tashkent"),
         web_url=os.getenv("WEB_URL", "").strip(),
+        miniapp_url=miniapp_url(),
     )
+
+
+def miniapp_url() -> str:
+    """MINIAPP_URL из .env — только https (Telegram открывает витрину лишь по https)."""
+    url = os.getenv("MINIAPP_URL", "").strip()
+    return url if url.startswith("https://") else ""
