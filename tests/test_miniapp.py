@@ -74,7 +74,7 @@ async def test_page_and_access(shop):
 async def test_catalog_search_and_part(shop):
     client, _, _ = shop
     me = (await client.get("/api/me")).json()
-    assert me["car"] == "JAC M4 Luxe" and me["region"] == "Ташкент" and me["t"]["add"] == "В корзину"
+    assert me["car"] == "JAC M4 Luxe" and me["region"] == "Ташкент" and me["t"]["add"] == "Добавить в корзину"
     assert me["cart"] == 0 and me["full"] is False
 
     models = (await client.get("/api/catalog")).json()["models"]

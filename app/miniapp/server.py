@@ -191,6 +191,7 @@ def part_brief(part: Part, info: dict, c: Client) -> dict:
     price = info["local"] if info["local"] is not None else info["warehouse"]
     status = "stock" if info["local"] is not None else "preorder" if info["warehouse"] is not None else "none"
     return {"id": part.id, "name": localized_name(part, lang), "number": part.part_number, "photo": part.photo,
+            "icon": ICONS.get(part.node.name_ru, "other"),
             "price": money(price, lang) if price is not None else None, "status": status,
             "dealers": info["dealers"], "days": region_days(c.user.region, lang) if status == "preorder" else None}
 
@@ -222,7 +223,7 @@ async def cart_json(session: AsyncSession, c: Client) -> dict:
             groups.add((dealer.id, warehouse))
         lines.append({
             "id": item.id, "part_id": part.id, "name": localized_name(part, lang), "number": part.part_number,
-            "photo": part.photo, "qty": item.quantity, "max": stock.quantity, "available": ok,
+            "photo": part.photo, "icon": ICONS.get(part.node.name_ru, "other"), "qty": item.quantity, "max": stock.quantity, "available": ok,
             "price": money(stock.price, lang), "subtotal": money(stock.price * qty, lang),
             "preorder": warehouse, "dealer": dealer.name if dealer else None,
             "days": region_days(dealer.region if dealer else None, lang) if warehouse else None,
@@ -321,6 +322,7 @@ def register_api(app: FastAPI) -> None:
         description = getattr(item, f"description_{lang}", None) or item.description_ru
         return {
             "id": item.id, "name": localized_name(item, lang), "number": item.part_number, "photo": item.photo,
+            "icon": ICONS.get(item.node.name_ru, "other"),
             "model": localized_name(item.model, lang), "node": localized_name(item.node, lang),
             "description": description, "region": localized_name(c.user.region, lang),
             "offers": [{"stock_id": o.id, "price": money(o.price, lang), "qty": o.quantity,

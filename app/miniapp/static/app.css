@@ -1,6 +1,5 @@
-/* JAC Parts — витрина в Telegram.
-   Цвета фона и текста — из темы Telegram (светлая/тёмная у каждого своя), свои — только смысловые:
-   красный JAC — действие, зелёный — в наличии, янтарный — едет со склада, «бирка» — артикул. */
+/* JAC Parts — витрина в Telegram. Минимализм: монохром, много воздуха, один синий акцент — только у главной кнопки.
+   Светлая или тёмная схема — как у клиента в Telegram (data-scheme ставит app.js). */
 
 @font-face { font-family: "Golos Text"; font-weight: 400; font-display: swap;
   src: url(fonts/golos-text-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -14,247 +13,201 @@
   src: url(fonts/golos-text-cyrillic-600-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "Golos Text"; font-weight: 600; font-display: swap;
   src: url(fonts/golos-text-latin-600-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Fira Sans Extra Condensed"; font-weight: 600; font-display: swap;
-  src: url(fonts/fira-sans-extra-condensed-cyrillic-600-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Fira Sans Extra Condensed"; font-weight: 600; font-display: swap;
-  src: url(fonts/fira-sans-extra-condensed-latin-600-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Fira Sans Extra Condensed"; font-weight: 700; font-display: swap;
-  src: url(fonts/fira-sans-extra-condensed-cyrillic-700-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Fira Sans Extra Condensed"; font-weight: 700; font-display: swap;
-  src: url(fonts/fira-sans-extra-condensed-latin-700-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 :root {
-  --page: var(--tg-theme-secondary-bg-color, #eff0f2);
-  --section: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
-  --text: var(--tg-theme-text-color, #15191d);
-  --hint: var(--tg-theme-hint-color, #737b84);
-  --link: var(--tg-theme-link-color, #2470c2);
-  --sep: var(--tg-theme-section-separator-color, rgba(120, 128, 136, .22));
-  --header: var(--tg-theme-section-header-text-color, var(--hint));
-  --jac: #d6001c;
-  --jac-press: #b30018;
-  --on-jac: #ffffff;
-  --ok: #1d8348;
-  --transit: #a86200;
-  --tag: #ead8a6;
-  --tag-ink: #3b311d;
-  --tag-edge: #c9b274;
+  --bg: #ffffff;
+  --surface: #f4f4f4;
+  --surface-press: #e9e9e9;
+  --text: #171a20;
+  --text-2: #5c5e62;
+  --text-3: #8e8f91;
+  --line: #e2e3e3;
+  --accent: #3e6ae1;
+  --accent-press: #3457b1;
+  --on-accent: #ffffff;
+  --ok: #1f8f4e;
+  --wait: #c26b0a;
   --bottom: max(env(safe-area-inset-bottom), var(--tg-safe-area-inset-bottom, 0px));
-  --ui: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --display: "Fira Sans Extra Condensed", "Golos Text", system-ui, sans-serif;
+  --font: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
 :root[data-scheme="dark"] {
-  --page: var(--tg-theme-secondary-bg-color, #101418);
-  --section: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #1b2127));
-  --text: var(--tg-theme-text-color, #eef1f4);
-  --hint: var(--tg-theme-hint-color, #8d969f);
-  --jac: #f0283c;
-  --jac-press: #ff4a5c;
-  --ok: #46c17a;
-  --transit: #f0aa45;
-  --tag: #3a3222;
-  --tag-ink: #f0dfae;
-  --tag-edge: #5d5034;
+  --bg: #171a20;
+  --surface: #23262d;
+  --surface-press: #2c3038;
+  --text: #f4f4f4;
+  --text-2: #a7a9ac;
+  --text-3: #7c7f84;
+  --line: #30333a;
+  --accent: #4b77ef;
+  --accent-press: #6a8ff5;
+  --ok: #4cc27f;
+  --wait: #f0a243;
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; background: var(--page); color: var(--text);
-  font: 400 16px/1.4 var(--ui); -webkit-font-smoothing: antialiased;
-  padding-bottom: calc(76px + var(--bottom));
-}
-body.with-footer { padding-bottom: calc(150px + var(--bottom)); }
-body.no-tabs { padding-bottom: calc(92px + var(--bottom)); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 15px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased; padding-bottom: calc(72px + var(--bottom)); }
+body.with-footer { padding-bottom: calc(144px + var(--bottom)); }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 img { display: block; }
 [hidden] { display: none !important; }
 
-#app { max-width: 640px; margin: 0 auto; padding: 12px 16px 0; }
+#app { max-width: 640px; margin: 0 auto; padding: 0 20px; }
 
-/* ---------- шапка ---------- */
-.top { padding: 6px 4px 14px; }
-.top h1 { margin: 0; font: 700 30px/1.05 var(--display); letter-spacing: .005em; }
-.top .sub { margin-top: 4px; color: var(--hint); font-size: 15px; }
-.car-hint { margin: 14px 16px 0; color: var(--hint); font-size: 13px; }
+/* ---------- главный экран: автомобиль клиента по центру ---------- */
+.hero { padding: 44px 0 28px; text-align: center; }
+.hero h1 { margin: 0; font-size: 34px; line-height: 1.12; font-weight: 500; letter-spacing: -.01em; }
+.hero p { margin: 8px 0 0; color: var(--text-2); font-size: 15px; }
 
-.search { position: sticky; top: 0; z-index: 5; margin: 0 -16px 18px; padding: 8px 16px; background: var(--page); }
-.search label { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px;
-  border-radius: 12px; background: var(--section); }
-.search svg { flex: none; width: 20px; height: 20px; color: var(--hint); }
-.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 16px; }
-.search input::placeholder { color: var(--hint); }
-.search .clear { border: 0; background: none; padding: 6px; color: var(--hint); font-size: 18px; line-height: 1; }
+.page-title { padding: 28px 0 20px; }
+.page-title h1 { margin: 0; font-size: 28px; line-height: 1.15; font-weight: 500; letter-spacing: -.01em; }
+.page-title p { margin: 6px 0 0; color: var(--text-2); }
 
-/* ---------- сгруппированные списки, как в настройках Telegram ---------- */
-.group-title { margin: 22px 16px 7px; color: var(--header); font-size: 14px; font-weight: 500; }
-.group-title small { display: block; margin-top: 1px; color: var(--hint); font-size: 13px; font-weight: 400; }
-.group { background: var(--section); border-radius: 14px; overflow: hidden; }
-.row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 54px; padding: 10px 14px;
-  border: 0; background: none; text-align: left; position: relative; }
-.row + .row::before { content: ""; position: absolute; top: 0; right: 0; left: 64px; border-top: .5px solid var(--sep); }
-.row.plain + .row.plain::before { left: 14px; }
-.row:active { background: color-mix(in srgb, var(--text) 6%, transparent); }
-.row .ico { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
-  background: color-mix(in srgb, var(--jac) 11%, transparent); color: var(--jac); }
-.row .ico svg { width: 21px; height: 21px; }
-.row .grow { flex: 1; min-width: 0; }
-.row .name { font-weight: 500; }
-.row .meta { color: var(--hint); font-size: 14px; }
-.row .count { color: var(--hint); font-variant-numeric: tabular-nums; }
-.row .chev { flex: none; width: 8px; height: 13px; color: var(--hint); opacity: .7; }
+.search { position: sticky; top: 0; z-index: 5; margin: 0 -20px; padding: 10px 20px; background: var(--bg); }
+.search label { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 4px; background: var(--surface); }
+.search svg { flex: none; width: 18px; height: 18px; color: var(--text-3); }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 15px; }
+.search input::placeholder { color: var(--text-3); }
+.search .clear { border: 0; background: none; padding: 4px 2px; color: var(--text-2); font-size: 14px; }
 
-/* ---------- бирка с артикулом: единственная «вещь» в интерфейсе ---------- */
-.tag { display: inline-flex; align-items: center; gap: 7px; height: 24px; padding: 0 9px 0 19px; position: relative;
-  background: var(--tag); color: var(--tag-ink); border-radius: 3px 5px 5px 3px;
-  clip-path: polygon(9px 0, 100% 0, 100% 100%, 9px 100%, 0 50%);
-  font: 600 15px/1 var(--display); letter-spacing: .04em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tag::before { content: ""; position: absolute; left: 7px; top: 50%; width: 6px; height: 6px; margin-top: -3px;
-  border-radius: 50%; background: var(--section); box-shadow: inset 0 0 0 1px var(--tag-edge); }
-.tag.on-page::before { background: var(--page); }
+.section { margin: 32px 0 14px; font-size: 20px; font-weight: 500; letter-spacing: -.005em; }
+.section small { display: block; margin-top: 2px; color: var(--text-2); font-size: 14px; font-weight: 400; letter-spacing: 0; }
 
-.hero-tag { display: grid; place-items: center; height: 176px; margin: 0 0 18px; border-radius: 16px;
-  background: var(--section); position: relative; overflow: hidden; }
-.hero-tag .string { position: absolute; left: 50%; top: 0; width: 120px; height: 72px; margin-left: -96px;
-  border: 1.5px solid var(--tag-edge); border-color: transparent transparent var(--tag-edge) var(--tag-edge);
-  border-radius: 0 0 0 60px; opacity: .8; }
-.hero-tag .big { height: 64px; padding: 0 22px 0 46px; transform: rotate(-4deg);
-  clip-path: polygon(22px 0, 100% 0, 100% 100%, 22px 100%, 0 50%); border-radius: 4px 8px 8px 4px;
-  font-size: 30px; letter-spacing: .05em; box-shadow: none; }
-.hero-tag .big::before { left: 18px; width: 12px; height: 12px; margin-top: -6px; }
-.hero-tag .big small { display: block; font: 500 12px/1 var(--ui); letter-spacing: 0; opacity: .7; margin-bottom: 4px; }
-.hero-tag .big span { display: block; }
-.hero-tag .big { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
+/* ---------- категории: светло-серые плитки ---------- */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 10px; }
+.tile { display: flex; flex-direction: column; align-self: start; padding: 0; border: 0; background: none; text-align: left; }
+.tile .shot { aspect-ratio: 4 / 3; }
+.tile .label { margin-top: 10px; font-weight: 500; line-height: 1.3; }
+.tile .count { color: var(--text-2); font-size: 13px; }
 
-.photo { margin: 0 0 16px; border-radius: 16px; overflow: hidden; background: var(--section); aspect-ratio: 4 / 3; }
-.photo img { width: 100%; height: 100%; object-fit: contain; }
+.shot { display: grid; place-items: center; border-radius: 4px; background: var(--surface); overflow: hidden; color: var(--text-3); }
+.shot svg { width: 34%; height: 34%; stroke-width: 1.1px; }
+.shot img { width: 100%; height: 100%; object-fit: cover; }
+.tile:active .shot, .product:active .shot { background: var(--surface-press); }
 
-/* ---------- деталь в списке ---------- */
-.item { align-items: flex-start; padding: 12px 14px; }
-.item + .item::before { left: 84px; }
-.thumb { flex: none; width: 56px; height: 56px; border-radius: 10px; background: var(--page); overflow: hidden;
-  display: grid; place-items: center; color: var(--hint); }
-.thumb img { width: 100%; height: 100%; object-fit: cover; }
-.thumb svg { width: 24px; height: 24px; opacity: .55; }
-.item .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
-.item .tag { margin: 6px 0 7px; height: 21px; font-size: 14px; }
-.price-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
-.price { font: 600 19px/1.1 var(--display); letter-spacing: .01em; font-variant-numeric: tabular-nums; }
-.state { font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
-.state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.state.stock { color: var(--ok); }
-.state.preorder { color: var(--transit); }
-.state.preorder::before { border-radius: 2px; transform: rotate(45deg); }
-.state.none { color: var(--hint); }
+/* ---------- детали: сетка как в интернет-магазине ---------- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 10px; }
+.product { display: flex; flex-direction: column; align-items: flex-start; align-self: start; padding: 0; border: 0;
+  background: none; text-align: left; min-width: 0; }
+.product .shot, .tile .shot { width: 100%; }
+.product .shot { aspect-ratio: 1 / 1; }
+.product .pname { margin-top: 10px; font-weight: 500; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; }
+.product .pnum { margin-top: 2px; color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.product .pprice { margin-top: 6px; font-variant-numeric: tabular-nums; }
+.status { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; color: var(--text-2); font-size: 12px; }
+.status::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.status.stock::before { background: var(--ok); }
+.status.preorder::before { background: var(--wait); }
+
+.more { margin-top: 28px; }
 
 /* ---------- карточка детали ---------- */
-.part-title { margin: 0 4px; font: 700 30px/1.08 var(--display); letter-spacing: .005em; }
-.part-sub { margin: 6px 4px 12px; color: var(--hint); font-size: 15px; }
-.part-head .tag { margin: 0 4px 4px; }
-.desc { margin: 12px 4px 0; color: var(--hint); font-size: 15px; }
-.offer { padding: 16px; }
-.offer .big-price { font: 700 36px/1 var(--display); letter-spacing: .005em; font-variant-numeric: tabular-nums; }
-.offer .state { margin-top: 8px; font-size: 14px; }
-.offer .note { margin: 10px 0 0; color: var(--hint); font-size: 14px; }
-.dealer { margin-top: 14px; padding-top: 14px; border-top: .5px solid var(--sep); }
-.dealer .label { color: var(--hint); font-size: 13px; }
-.dealer .dname { margin-top: 2px; font-weight: 600; }
-.dealer .addr { color: var(--hint); font-size: 14px; }
-.links { display: flex; gap: 8px; margin-top: 10px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 17px;
-  border: 0; background: color-mix(in srgb, var(--link) 12%, transparent); color: var(--link);
-  font-size: 14px; font-weight: 500; text-decoration: none; }
-.chip svg { width: 16px; height: 16px; }
-.dealer-row .grow .addr { font-size: 13px; }
-.dealer-row .side { text-align: right; flex: none; }
-.dealer-row .side .price { font-size: 18px; }
-.add-mini { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--jac); color: var(--on-jac);
-  display: grid; place-items: center; }
-.add-mini svg { width: 18px; height: 18px; }
-.add-mini.has { background: color-mix(in srgb, var(--jac) 14%, transparent); color: var(--jac); font: 600 15px/1 var(--display); }
+.part-shot { margin: 16px -20px 0; border-radius: 0; aspect-ratio: 4 / 3; }
+.part-shot svg { width: 28%; height: 28%; stroke-width: .9px; }
+.part-shot img { object-fit: contain; }
+.part-head { padding: 24px 0 4px; }
+.part-head h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 500; letter-spacing: -.01em; }
+.part-head .sub { margin-top: 6px; color: var(--text-2); }
+.part-head .price { margin-top: 14px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.part-head .num { margin-top: 4px; color: var(--text-3); font-size: 13px; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.part-desc { margin: 18px 0 0; color: var(--text-2); }
+.lead { margin: 0 0 14px; color: var(--text-2); font-size: 14px; }
 
-.pick { gap: 12px; }
-.pick .radio { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--hint); position: relative; }
-.pick[aria-checked="true"] .radio { border-color: var(--jac); }
-.pick[aria-checked="true"] .radio::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--jac); }
+/* выбор дилера — рамки, выбранная обведена синим */
+.options { display: grid; gap: 10px; }
+.option { display: block; width: 100%; padding: 14px 16px; border: 0; border-radius: 4px; background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line); text-align: left; }
+.option[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--accent); }
+.option .top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.option .oname { font-weight: 500; }
+.option .oprice { flex: none; font-variant-numeric: tabular-nums; }
+.option .oaddr { margin-top: 2px; color: var(--text-2); font-size: 13px; }
+.option .ometa { margin-top: 6px; color: var(--text-3); font-size: 12px; }
+.option .olinks { display: flex; gap: 18px; margin-top: 10px; }
+.option .olinks a { color: var(--text); font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: var(--text-3); }
 
-/* ---------- нижняя кнопка действия ---------- */
-#footer { position: fixed; left: 0; right: 0; bottom: calc(64px + var(--bottom)); z-index: 20; padding: 10px 16px 8px;
-  background: linear-gradient(to top, var(--page) 70%, transparent); }
-body.no-tabs #footer { bottom: 0; padding-bottom: calc(12px + var(--bottom)); }
+/* ---------- главная кнопка снизу ---------- */
+#footer { position: fixed; left: 0; right: 0; bottom: calc(60px + var(--bottom)); z-index: 20; padding: 12px 20px;
+  background: var(--bg); border-top: 1px solid var(--line); }
 #footer:empty { display: none; }
-.cta { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 608px;
-  margin: 0 auto; height: 54px; padding: 0 20px; border: 0; border-radius: 14px; background: var(--jac); color: var(--on-jac);
-  font-weight: 600; font-size: 17px; }
-.cta:active { background: var(--jac-press); }
-.cta .p { font: 700 21px/1 var(--display); font-variant-numeric: tabular-nums; }
-.cta[disabled] { opacity: .45; }
-.cta.secondary { justify-content: center; background: var(--section); color: var(--jac); }
-.cta-note { max-width: 608px; margin: 0 auto 8px; color: var(--hint); font-size: 13px; text-align: center; }
+#footer > * { display: block; max-width: 600px; margin: 0 auto; }
+.cta { display: flex; align-items: center; justify-content: center; width: 100%; height: 44px; padding: 0 16px; border: 0;
+  border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 500; }
+.cta:active { background: var(--accent-press); }
+.cta[disabled] { opacity: .4; }
+.cta.ghost { background: var(--surface); color: var(--text); }
+.cta.ghost:active { background: var(--surface-press); }
 
 /* ---------- корзина ---------- */
-.line { align-items: flex-start; padding: 14px; }
-.line + .line::before { left: 84px; }
-.line .where { margin-top: 4px; font-size: 13px; color: var(--hint); }
-.line .where.preorder { color: var(--transit); }
-.line .warn { margin-top: 4px; font-size: 13px; color: var(--jac); }
-.line .bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
-.stepper { display: inline-flex; align-items: center; height: 34px; border-radius: 17px; background: var(--page); }
-.stepper button { width: 38px; height: 34px; border: 0; background: none; font-size: 20px; line-height: 1; color: var(--jac); }
-.stepper button[disabled] { color: var(--hint); opacity: .5; }
-.stepper span { min-width: 22px; text-align: center; font: 600 17px/1 var(--display); font-variant-numeric: tabular-nums; }
-.total { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 4px 4px; }
-.total .price { font-size: 28px; }
-.small-note { margin: 4px 4px 0; color: var(--hint); font-size: 14px; }
+.lines { border-top: 1px solid var(--line); }
+.line { display: grid; grid-template-columns: 76px 1fr; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.line .shot { width: 76px; height: 76px; }
+.line .shot svg { stroke-width: 1.3px; }
+.line .lname { font-weight: 500; line-height: 1.3; }
+.line .lnum { color: var(--text-3); font-size: 12px; letter-spacing: .02em; }
+.line .where { margin-top: 4px; color: var(--text-2); font-size: 13px; }
+.line .warn { margin-top: 4px; color: var(--wait); font-size: 13px; }
+.line .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.line .lprice { font-variant-numeric: tabular-nums; }
+.qty { display: inline-flex; align-items: center; height: 32px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--line); }
+.qty button { width: 34px; height: 32px; border: 0; background: none; font-size: 17px; line-height: 1; }
+.qty button[disabled] { color: var(--text-3); }
+.qty span { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.summary { padding: 18px 0 0; }
+.summary .sline { display: flex; justify-content: space-between; color: var(--text-2); }
+.summary .stotal { display: flex; justify-content: space-between; margin-top: 8px; font-size: 17px; font-weight: 500;
+  font-variant-numeric: tabular-nums; }
+.summary .note { margin: 10px 0 0; color: var(--text-2); font-size: 13px; }
 
 /* ---------- заказы ---------- */
-.order { padding: 16px; }
-.order + .order { border-top: .5px solid var(--sep); }
-.order .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.order .num { font: 700 21px/1.1 var(--display); }
-.order .when { color: var(--hint); font-size: 13px; }
-.order .what { margin-top: 6px; font-size: 14px; color: var(--hint); }
-.order .state.preorder { margin-top: 8px; }
-.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 14px; }
-.steps i { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--hint) 28%, transparent); }
-.steps i.done { background: var(--ok); }
-.steps i.next { background: linear-gradient(90deg, var(--transit) 50%, color-mix(in srgb, var(--hint) 28%, transparent) 50%); }
-.order .now { margin-top: 7px; font-size: 14px; font-weight: 500; }
-.order .now.cancel { color: var(--hint); }
-.order .pickup { margin-top: 10px; font-size: 14px; }
-.order .pickup .addr { color: var(--hint); }
+.orders { border-top: 1px solid var(--line); }
+.order { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.order .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.order .num { font-size: 17px; font-weight: 500; }
+.order .total { font-variant-numeric: tabular-nums; }
+.order .when { margin-top: 2px; color: var(--text-3); font-size: 13px; }
+.order .what { margin-top: 8px; color: var(--text-2); font-size: 14px; }
+.track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: 16px; }
+.track i { height: 2px; background: var(--line); }
+.track i.done { background: var(--text); }
+.track i.next { background: linear-gradient(90deg, var(--accent) 50%, var(--line) 50%); }
+.order .now { margin-top: 8px; font-size: 14px; }
+.order .pickup { margin-top: 12px; font-size: 13px; color: var(--text-2); }
+.order .pickup b { display: block; color: var(--text); font-weight: 500; font-size: 14px; }
+.order .pickup a { display: inline-block; margin-top: 6px; margin-right: 18px; color: var(--text); text-decoration: underline;
+  text-underline-offset: 3px; text-decoration-color: var(--text-3); }
 
-/* ---------- пусто, ошибки, готово ---------- */
-.empty { padding: 56px 24px 24px; text-align: center; }
-.empty .mark { display: inline-grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; margin-bottom: 16px;
-  background: var(--section); color: var(--hint); }
-.empty .mark svg { width: 30px; height: 30px; }
-.empty h2 { margin: 0 0 8px; font: 700 24px/1.15 var(--display); }
-.empty p { margin: 0 auto 20px; max-width: 30em; color: var(--hint); font-size: 15px; }
-.empty .cta { max-width: 280px; justify-content: center; }
-.done .mark { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
-.done .nums { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 14px; }
+/* ---------- пусто, ошибка, спасибо ---------- */
+.empty { padding: 96px 8px 24px; text-align: center; }
+.empty h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.2; font-weight: 500; letter-spacing: -.01em; }
+.empty p { margin: 0 auto 28px; max-width: 28em; color: var(--text-2); }
+.empty .cta { max-width: 300px; margin: 0 auto; }
+.empty .nums { margin: 0 0 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.inline-empty { padding: 48px 8px 8px; }
 
-.skeleton { height: 54px; border-radius: 14px; background: var(--section); margin-bottom: 10px; opacity: .6; }
+.skeleton { height: 160px; border-radius: 4px; background: var(--surface); margin-top: 24px; }
 
 /* ---------- вкладки ---------- */
 #tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(3, 1fr);
-  padding: 6px 8px calc(6px + var(--bottom)); background: var(--section); border-top: .5px solid var(--sep); }
-#tabs button { display: grid; justify-items: center; gap: 3px; padding: 4px 0; border: 0; background: none; color: var(--hint);
-  font-size: 12px; font-weight: 500; position: relative; }
-#tabs button svg { width: 25px; height: 25px; }
-#tabs button[aria-current="page"] { color: var(--jac); }
-#tabs .badge { position: absolute; top: 0; left: calc(50% + 7px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--jac); color: var(--on-jac); font: 600 12px/18px var(--ui); text-align: center; }
-#tabs .badge.bump { animation: bump .35s ease-out; }
-@keyframes bump { 40% { transform: scale(1.35); } }
+  padding: 6px 8px calc(4px + var(--bottom)); background: var(--bg); border-top: 1px solid var(--line); }
+#tabs button { display: grid; justify-items: center; gap: 2px; padding: 4px 0; border: 0; background: none; color: var(--text-3);
+  font-size: 11px; font-weight: 500; position: relative; }
+#tabs button svg { width: 23px; height: 23px; stroke-width: 1.5px; }
+#tabs button[aria-current="page"] { color: var(--text); }
+#tabs .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
+  background: var(--accent); color: var(--on-accent); font-size: 11px; line-height: 17px; text-align: center; }
 
-#toast { position: fixed; left: 50%; bottom: calc(150px + var(--bottom)); z-index: 40; transform: translateX(-50%);
-  max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px; background: var(--text); color: var(--page);
-  font-size: 14px; font-weight: 500; text-align: center; }
+#toast { position: fixed; left: 50%; bottom: calc(140px + var(--bottom)); z-index: 40; transform: translateX(-50%);
+  max-width: calc(100% - 40px); padding: 10px 16px; border-radius: 4px; background: var(--text); color: var(--bg);
+  font-size: 14px; text-align: center; }
+#toast:not([hidden]) { animation: rise .25s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
