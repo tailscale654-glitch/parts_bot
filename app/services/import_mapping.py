@@ -47,6 +47,10 @@ MODEL_NAMES = {
     "M4LUXE": "JAC M4 Luxe",
     "Sunray": "JAC Sunray",
     "Sunray фургон": "JAC Sunray фургон",
+    # сервисный инструмент подходит к любой модели — в раздел «Прочее»
+    "service tool": ALL_MODELS[0],
+    "Service tool": ALL_MODELS[0],
+    "SERVICE TOOL": ALL_MODELS[0],
 }
 
 # Регион дилера берётся из СПРАВОЧНИКА ДИЛЕРОВ (файл «Название / Код / Адрес / Район / ... / Статус»,

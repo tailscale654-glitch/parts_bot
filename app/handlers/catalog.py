@@ -60,8 +60,10 @@ async def _unavailable(callback: CallbackQuery, lang: str) -> None:
 
 
 def full_access(user: User, settings: Settings | None, staff_dealer_id: int | None) -> bool:
-    """Администраторы и сотрудники дилеров видят весь каталог; клиенты — только свою модель."""
-    return staff_dealer_id is not None or (settings is not None and user.telegram_id in settings.admin_ids)
+    """Все модели — только у сотрудников дилеров (автомобиль у них не спрашиваем).
+    Клиенты и администраторы видят запчасти для автомобиля из профиля (+ «Прочее»);
+    другую модель — через «🚗 Изменить автомобиль»."""
+    return staff_dealer_id is not None
 
 
 def _repo(session: AsyncSession, user: User, full: bool) -> CatalogRepository:

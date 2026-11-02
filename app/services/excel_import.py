@@ -246,7 +246,9 @@ def _model_codes(raw: str | None) -> list[str]:
 def _model_names(raw: str | None) -> list[tuple[str, str, str]]:
     """'T9-P33Z3,T8-P30BF' → две модели; 'RF8-V9AA3,V9HA0' → одна модель JAC RF8; '—' → «Прочее»."""
     names = dict.fromkeys(mapping.MODEL_NAMES.get(code, code) for code in _model_codes(raw))  # без повторов
-    return [(name, name, name) for name in names] or [mapping.ALL_MODELS]
+    # «Прочее» — с переводами (Other / Boshqa), остальные модели называются одинаково на всех языках
+    return [mapping.ALL_MODELS if name == mapping.ALL_MODELS[0] else (name, name, name) for name in names] \
+        or [mapping.ALL_MODELS]
 
 
 ANY_MOD = "*"

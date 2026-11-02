@@ -196,3 +196,23 @@ async def test_empty_everywhere_says_catalog_not_loaded(session):
     user = await session.get(User, 1)
     text, kb = await models_view(user, session, full=True)
     assert kb is None and "ни у одного дилера" in text and "CarSale" in text
+
+
+def test_catalog_by_profile_car_for_admins_too():
+    """«🛍 Каталог»: клиент и администратор — запчасти автомобиля из профиля; все модели — только сотрудник дилера."""
+    from app.config import Settings
+    from app.handlers.catalog import full_access
+
+    settings = Settings(bot_token="x", admin_ids={11}, database_url="")
+    admin = SimpleNamespace(telegram_id=11)
+    assert full_access(admin, settings, None) is False
+    assert full_access(admin, settings, 5) is True  # сотрудник дилера
+
+
+def test_service_tool_goes_to_other():
+    """Код «service tool» из CarSale — раздел «Прочее» (с переводами), а не отдельная модель."""
+    from app.services.excel_import import _model_names
+    from app.services.import_mapping import ALL_MODELS
+
+    assert _model_names("service tool") == [ALL_MODELS]
+    assert _model_names("T9-P33Z3,service tool") == [("JAC T9",) * 3, ALL_MODELS]
