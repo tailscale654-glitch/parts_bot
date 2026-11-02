@@ -184,3 +184,15 @@ async def test_empty_region_names_the_region(session):
     await session.refresh(user, ["region"])  # в боте пользователь загружается заново на каждое сообщение
     text, kb = await models_view(user, session, full=True)
     assert kb is None and "Навоийская область" in text and "Изменить регион" in text
+    assert "Есть в регионах" in text and "• Ташкент —" in text  # подсказка: где наличие есть
+
+
+async def test_empty_everywhere_says_catalog_not_loaded(session):
+    """Ни у одного дилера нет наличия (например, сразу после очистки базы) — так и говорим."""
+    from sqlalchemy import update
+
+    await session.execute(update(Stock).values(quantity=0))
+    await session.commit()
+    user = await session.get(User, 1)
+    text, kb = await models_view(user, session, full=True)
+    assert kb is None and "ни у одного дилера" in text and "CarSale" in text

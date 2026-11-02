@@ -88,6 +88,17 @@ def _car_buttons(lang: str | None, other: CarModel | None) -> list[list[InlineKe
     return rows
 
 
+async def _empty_region_text(user: User, session: AsyncSession) -> str:
+    """Сотруднику: в его регионе пусто — где наличие есть (или что его нет нигде: каталог не загружен)."""
+    lang = user.language
+    region = localized_name(user.region, lang) if user.region else i18n.t(lang, "region_not_selected")
+    elsewhere = await CatalogRepository(session).regions_with_stock()
+    if not elsewhere:
+        return i18n.t(lang, "catalog_empty_everywhere")
+    where = "\n".join(i18n.t(lang, "catalog_region_line", region=localized_name(r, lang), n=n) for r, n in elsewhere)
+    return i18n.t(lang, "catalog_region_empty", region=region, where=where)
+
+
 async def models_view(user: User, session: AsyncSession, full: bool = False) -> tuple[str, InlineKeyboardMarkup | None]:
     """Первый экран каталога. Клиенту — сразу категории его модели (+ «Прочее»), всем остальным — список моделей."""
     lang = user.language
@@ -95,8 +106,7 @@ async def models_view(user: User, session: AsyncSession, full: bool = False) -> 
     if full:
         models = await repo.list_models(lang)
         if not models:  # в регионе из профиля ни у одного дилера нет наличия (или каталог ещё не загружен)
-            region = localized_name(user.region, lang) if user.region else i18n.t(lang, "region_not_selected")
-            return i18n.t(lang, "catalog_region_empty", region=region), None
+            return await _empty_region_text(user, session), None
         return i18n.t(lang, "choose_model"), models_keyboard(models, lang)
     if cars.needs_car(user):
         return car_prompt(user)

@@ -6,7 +6,7 @@
 from sqlalchemy import func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import CarModel, Dealer, Node, Part, Stock
+from app.database.models import CarModel, Dealer, Node, Part, Region, Stock
 from app.services.import_mapping import ALL_MODELS
 
 
@@ -51,6 +51,16 @@ class CatalogRepository:
             select(CarModel).where(CarModel.active.is_(True), has_parts).order_by(CarModel.name_ru == ALL_MODELS[0], _name_order(CarModel, lang))  # «Прочее» — в конце
         )
         return list(result.scalars())
+
+    async def regions_with_stock(self, limit: int = 5) -> list[tuple[Region, int]]:
+        """Регионы, где у дилеров есть детали в наличии, и сколько деталей — для подсказки сотрудникам."""
+        parts = func.count(func.distinct(Stock.part_id))
+        rows = await self.session.execute(
+            select(Region, parts).join(Dealer, Dealer.region_id == Region.id).join(Stock, Stock.dealer_id == Dealer.id)
+            .join(Part, Part.id == Stock.part_id)
+            .where(Stock.quantity > 0, Dealer.active.is_(True), Dealer.enabled.is_(True), Part.active.is_(True))
+            .group_by(Region.id).order_by(parts.desc(), Region.sort_order).limit(limit))
+        return [(region, n) for region, n in rows.unique().all()]
 
     async def model_by_name(self, name_ru: str | None) -> CarModel | None:
         if not name_ru:
