@@ -46,6 +46,8 @@ def profile_view(user: User) -> tuple[str, InlineKeyboardMarkup]:
         name=name, phone=user.phone or "—", region=region_title(user), language=i18n.t(lang, "language_name"),
     )
     vin = f"\n{i18n.t(lang, 'vin_line', vin=user.car_vin)}" if user.car_vin else ""
+    if user.car_engine:
+        vin += f"\n{i18n.t(lang, 'engine_line', engine=user.car_engine)}"
     return f"{text}\n{cars.car_line(user, lang)}{vin}", profile_keyboard(lang)
 
 
@@ -67,17 +69,18 @@ async def needs_car(user: User, session: AsyncSession) -> bool:
 
 
 async def next_step(message: Message, user: User, session: AsyncSession) -> None:
-    """Регистрация по шагам: язык → регион → автомобиль (модель, цвет, модификация) → телефон → главное меню."""
+    """Регистрация по шагам: язык → регион → телефон → VIN (машина из CarSale) или модель вручную → главное меню.
+    Телефон раньше VIN: витрина со сканером открывается только зарегистрированным (с телефоном)."""
     if user.language is None:
         await message.answer(i18n.t(None, "choose_language"), reply_markup=language_keyboard())
     elif user.region_id is None:
         text, kb = await region_prompt(user, session)
         await message.answer(text, reply_markup=kb)
+    elif not user.phone:
+        await message.answer(i18n.t(user.language, "ask_phone"), reply_markup=phone_keyboard(user.language))
     elif await needs_car(user, session):
         text, kb = car_prompt(user)
         await message.answer(text, reply_markup=kb)
-    elif not user.phone:
-        await message.answer(i18n.t(user.language, "ask_phone"), reply_markup=phone_keyboard(user.language))
     else:
         await send_main_menu(message, user, session)
 
@@ -106,8 +109,10 @@ async def cmd_start(message: Message, user: User, session: AsyncSession, state: 
 
 
 async def leave_search(state: FSMContext | None) -> None:
-    """Нажали другую кнопку меню — выходим из режима поиска (последний запрос остаётся в данных)."""
-    if state is not None and await state.get_state() == SearchStates.query.state:
+    """Нажали другую кнопку меню — выходим из режима поиска или ввода VIN (последний запрос остаётся в данных)."""
+    from app.handlers.vin import VinStates
+
+    if state is not None and await state.get_state() in (SearchStates.query.state, VinStates.wait.state):
         await state.set_state(None)
 
 

@@ -230,6 +230,7 @@ img { display: block; }
 .car-pic svg.pic { width: 88%; height: 88%; stroke-width: 1.2px; }
 .car-model { font-size: 17px; font-weight: 500; }
 .car-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; color: var(--text-2); font-size: 14px; }
+.car-engine { margin-top: 4px; color: var(--text-2); font-size: 13px; letter-spacing: .02em; }
 .car-change { margin-top: 8px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--text-3); }
 .settings { border-top: 1px solid var(--line); }
 .setting { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 12px 0; border: 0;
@@ -282,6 +283,22 @@ img { display: block; }
   font-variant-numeric: tabular-nums; pointer-events: none; }
 .vin-help { margin: 8px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
 .vin-help.bad { color: var(--wait); }
+
+/* машина из базы JAC Motors Toshkent (CarSale) по VIN: фото нужного цвета и данные */
+.vin-car { margin-top: 16px; }
+.vin-car[hidden] { display: none; }
+.vin-car.found { overflow: hidden; border-radius: 4px; background: var(--surface); }
+.vin-car-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.vin-car-body { padding: 14px 16px 16px; }
+.vin-car-body b { display: block; font-size: 17px; font-weight: 500; }
+.vin-car-color { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--text-2); font-size: 14px; }
+.vin-car-color .swatch.small { width: 12px; height: 12px; }
+.vin-car dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
+.vin-car dt { color: var(--text-2); }
+.vin-car dd { margin: 0; letter-spacing: .02em; }
+.vin-car-note { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
+.vin-car.found .vin-car-note { margin-top: 12px; }
+.vin-car-note.ok { color: var(--ok); }
 
 /* живой сканер VIN: камера во весь экран, рамка под строку номера, всё вокруг притемнено.
    Цвета свои (не темы): поверх видео нужен белый текст в любой теме. */

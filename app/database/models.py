@@ -48,6 +48,9 @@ class User(Base):
     car_modification: Mapped[str | None] = mapped_column(String(32))  # None — одна модификация или «не знаю»
     car_color: Mapped[str | None] = mapped_column(String(16))  # ключ из app/services/cars.py COLORS
     car_vin: Mapped[str | None] = mapped_column(String(17))  # VIN (17 знаков) — менеджеру для точного подбора
+    # из CarSale CRM по VIN (проданная машина): номер двигателя и комплектация как в CarSale («M3 Люкс 2026»)
+    car_engine: Mapped[str | None] = mapped_column(String(32))
+    car_trim: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

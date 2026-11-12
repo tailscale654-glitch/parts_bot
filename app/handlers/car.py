@@ -1,8 +1,10 @@
-"""Автомобиль клиента: модель → комплектация (если у модели их несколько) → цвет.
+"""Автомобиль клиента вручную: модель → комплектация (если у модели их несколько) → цвет.
 
-При регистрации — после региона, перед телефоном. Из профиля — «🚗 Изменить автомобиль».
+Обычно машину находит VIN (handlers/vin.py, данные из CarSale). Сюда попадают кнопкой «🚗 Выбрать модель
+вручную» — если VIN не нашёлся или его нет под рукой. «🚗 Изменить автомобиль» открывает экран VIN.
 Каталог клиента показывает только запчасти его модели (и раздел «Прочее»)."""
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +21,15 @@ router = Router(name="car")
 
 
 @router.callback_query(F.data.startswith("car:start"))  # и кнопки из старых сообщений профиля
-async def start_car(callback: CallbackQuery, user: User) -> None:
+async def start_car(callback: CallbackQuery, user: User, state: FSMContext) -> None:
+    from app.handlers.vin import ask_vin
+
+    await callback.answer()
+    await ask_vin(callback.message, user, state)
+
+
+@router.callback_query(CarCB.filter(F.action == "manual"))
+async def manual_car(callback: CallbackQuery, user: User) -> None:
     await callback.answer()
     await callback.message.answer(i18n.t(user.language, "choose_car_model"), reply_markup=car_models_keyboard())
 
@@ -59,12 +69,16 @@ async def _ask_color(callback: CallbackQuery, user: User) -> None:
 
 
 @router.callback_query(CarCB.filter(F.action == "color"))
-async def set_color(callback: CallbackQuery, callback_data: CarCB, user: User, session: AsyncSession) -> None:
+async def set_color(callback: CallbackQuery, callback_data: CarCB, user: User, session: AsyncSession,
+                    state: FSMContext | None = None) -> None:
+    from app.handlers.vin import save_pending_vin
+
     colors = cars.colors(user.car_model, user.car_modification)
     if not user.car_model or not 0 <= callback_data.i < len(colors):
         await callback.answer()
         return
     await UserRepository(session).set_car(user, color=colors[callback_data.i])
+    await save_pending_vin(user, session, state)  # VIN, который не нашёлся в CarSale, — тоже в профиль
     await callback.answer()
     await _finish(callback, user, session)
 

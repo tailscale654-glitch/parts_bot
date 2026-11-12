@@ -52,12 +52,15 @@ class UserRepository:
         return user
 
     async def set_car(self, user: User, **fields) -> User:
-        """car_model / car_modification / car_color / car_vin — что передали, то и меняем.
+        """car_model / car_modification / car_color / car_vin / car_engine / car_trim — что передали, то и меняем.
 
-        Сменил модель на другую — старый VIN уже не от этой машины, сбрасываем его.
+        Сменил модель на другую — старый VIN и данные CarSale уже не от этой машины, сбрасываем их.
         """
         if "model" in fields and "vin" not in fields and fields["model"] != user.car_model:
             fields["vin"] = None
+        if "vin" in fields and fields["vin"] != user.car_vin:
+            fields.setdefault("engine", None)  # другой VIN — номер двигателя от прежней машины не подходит
+            fields.setdefault("trim", None)
         for name, value in fields.items():
             setattr(user, f"car_{name}", value)
         await self.session.commit()

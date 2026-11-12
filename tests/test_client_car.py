@@ -48,7 +48,7 @@ def test_lists_from_commercial_offer():
     assert cars.models() == ["JAC M3", "JAC M4", "JAC Sunray", "JAC T8", "JAC T9", "JAC JS8", "JAC RF8"]
     assert cars.modifications("JAC M3") == ["passenger", "van"] and cars.modifications("JAC T9") == []
     assert cars.colors("JAC T9") == ["white", "black", "silver", "metallic_gray", "star_gray"]
-    assert cars.colors("JAC RF8") == ["white", "gray", "blue"]
+    assert cars.colors("JAC RF8") == ["white", "black", "gray", "blue"]  # чёрный — по продажам в CarSale
     user = User(car_model="JAC M4", car_color="silver")
     assert cars.catalog_model(user) == "JAC M4 Luxe" and cars.car_text(user, "uz") == "JAC M4 · Kumushrang"
     user = User(car_model="JAC M3", car_modification="van", car_color="white")
@@ -74,8 +74,8 @@ def callback():
 
 async def test_choose_car_then_catalog_shows_only_own_model(session):
     user = await session.get(User, 1)
-    text, kb = await models_view(user, session)  # автомобиль не выбран — сначала выбор модели
-    assert "модель вашего автомобиля" in text and texts(kb) == cars.models()
+    text, kb = await models_view(user, session)  # автомобиль не выбран — сначала VIN (или модель вручную)
+    assert "VIN вашего автомобиля" in text and texts(kb)[-1] == "🚗 Выбрать модель вручную"
 
     cb = callback()
     await car_handlers.set_model(cb, CarCB(action="model", i=cars.models().index("JAC Sunray")), user, session)
@@ -89,7 +89,7 @@ async def test_choose_car_then_catalog_shows_only_own_model(session):
 
     await car_handlers.set_model(cb, CarCB(action="model", i=cars.models().index("JAC RF8")), user, session)
     assert "Цвет" in cb.message.sent[-1][1]  # у RF8 одна комплектация — шаг пропущен
-    await car_handlers.set_color(cb, CarCB(action="color", i=2), user, session)
+    await car_handlers.set_color(cb, CarCB(action="color", i=3), user, session)
     assert (user.car_modification, user.car_color) == (None, "blue")
 
     text, kb = await models_view(user, session)  # каталог: сразу категории своей модели, «Прочее», смена авто

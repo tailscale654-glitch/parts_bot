@@ -86,9 +86,10 @@ def _repo(session: AsyncSession, user: User, full: bool) -> CatalogRepository:
 
 
 def car_prompt(user: User) -> tuple[str, InlineKeyboardMarkup]:
-    from app.keyboards.car import models_keyboard as car_models_keyboard
+    """Автомобиль спрашиваем через VIN (данные подтянутся из CarSale); ручной выбор модели — кнопкой."""
+    from app.handlers.vin import vin_prompt
 
-    return i18n.t(user.language, "choose_car_model"), car_models_keyboard()
+    return vin_prompt(user)
 
 
 def _car_buttons(lang: str | None, other: CarModel | None) -> list[list[InlineKeyboardButton]]:

@@ -556,6 +556,7 @@ screens.profile = {
             car ? h("div", { class: "car-meta" },
               car.hex ? h("span", { class: "swatch small", "data-hex": car.hex }) : null,
               [car.mod_name, car.color_name].filter(Boolean).join(", ")) : null,
+            car && car.engine ? h("div", { class: "car-engine" }, `${t("vin_engine")} ${car.engine}`) : null,
             h("div", { class: "car-change" }, car ? t("change") : t("choose_car")))),
         h("div", { class: "settings vin-row" },
           settingRow(t("vin"), p.vin ? h("span", { class: "vin-value" }, p.vin) : h("span", { class: "accent" }, t("vin_add")),
@@ -879,7 +880,7 @@ function vinScanner({ onFound, onFail }) {
 }
 
 screens.vin = {
-  async draw({ vin }) {
+  async draw({ vin, start }) {
     const saved = vin || "";
     const input = h("input", { id: "vin-input", class: "vin-input", type: "text", maxlength: "20", autocomplete: "off",
       autocapitalize: "characters", autocorrect: "off", spellcheck: "false", enterkeyhint: "done",
@@ -889,7 +890,45 @@ screens.vin = {
     const help = h("p", { class: "vin-help", id: "vin-help" });
     const status = h("p", { class: "vin-status", role: "status" });
     const shot = h("div", { class: "vin-shot", hidden: true });
-    const save = h("button", { class: "cta", type: "button", onclick: () => saveVin(input.value) }, t("save"));
+    const save = h("button", { class: "cta", type: "button", onclick: () => saveVin(input.value, start) }, t("save"));
+    const carsale = h("div", { class: "vin-car", hidden: true, "aria-live": "polite" });
+    let looked = "", lookupSeq = 0, lookupTimer = null;
+
+    // машина из базы JAC Motors Toshkent (CarSale): фото того же цвета, модель, комплектация, двигатель
+    async function lookupCar(v) {
+      if (v === looked) return;
+      looked = v;
+      const seq = ++lookupSeq;
+      carsale.hidden = false;
+      carsale.className = "vin-car";
+      carsale.replaceChildren(h("p", { class: "vin-car-note" }, t("vin_carsale_checking")));
+      let r;
+      try { r = await api("/api/vin/lookup", { vin: v }); } catch (e) { r = { status: "unavailable" }; }
+      if (seq !== lookupSeq || input.value !== v) return; // номер успели поменять
+      if (r.status === "found") {
+        const c = r.car;
+        carsale.className = "vin-car found";
+        carsale.replaceChildren(
+          c.photo ? h("img", { class: "vin-car-photo", src: c.photo, alt: c.model }) : null,
+          h("div", { class: "vin-car-body" },
+            h("b", {}, [c.model, c.mod_name].filter(Boolean).join(" · ")),
+            h("span", { class: "vin-car-color" }, c.hex ? h("span", { class: "swatch small", "data-hex": c.hex }) : null, c.color_name),
+            h("dl", {},
+              c.trim ? [h("dt", {}, t("vin_trim")), h("dd", {}, c.trim)] : null,
+              c.engine ? [h("dt", {}, t("vin_engine")), h("dd", {}, c.engine)] : null),
+            h("p", { class: "vin-car-note ok" }, t("vin_carsale_found"))));
+        paintSwatches(carsale);
+        const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+        requestAnimationFrame(() => carsale.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "nearest" }));
+        save.textContent = t("vin_save_car");
+        save.disabled = false; // тот же VIN, но из базы подтянутся модель, цвет и двигатель — сохранить есть что
+      } else {
+        carsale.className = "vin-car";
+        carsale.replaceChildren(h("p", { class: "vin-car-note" },
+          t(r.status === "missing" ? "vin_carsale_missing" : "vin_carsale_unavailable")));
+        save.textContent = t("save");
+      }
+    }
 
     function refresh() {
       const v = input.value;
@@ -897,7 +936,10 @@ screens.vin = {
       count.textContent = `${v.length}/17`;
       help.textContent = v.length === 17 && !ok ? t("vin_bad") : t("vin_where");
       help.classList.toggle("bad", v.length === 17 && !ok);
-      save.disabled = !ok || v === saved;
+      save.disabled = !ok || (v === saved && !start);
+      clearTimeout(lookupTimer);
+      if (ok) lookupTimer = setTimeout(() => lookupCar(v), v === saved ? 0 : 350);
+      else { looked = ""; lookupSeq++; carsale.hidden = true; save.textContent = t("save"); }
     }
     input.addEventListener("input", () => {
       const clean = vinClean(input.value);
@@ -976,8 +1018,10 @@ screens.vin = {
 
     refresh();
     setFooter(save);
+    if (start) setTimeout(startScanner, 300); // из регистрации в боте — сразу камера
     return h("div", { class: "vin" },
-      h("header", { class: "page-title" }, h("h1", {}, t("vin_title")), h("p", {}, t("vin_why"))),
+      h("header", { class: "page-title" }, h("h1", {}, t(start ? "vin_start_title" : "vin_title")),
+        h("p", {}, t(start ? "vin_start_why" : "vin_why"))),
       h("button", { class: "vin-scan", type: "button", onclick: startScanner },
         icon("camera"),
         h("span", {}, h("b", {}, t("vin_scan")), h("small", {}, t("vin_scan_hint")))),
@@ -986,14 +1030,20 @@ screens.vin = {
       h("label", { class: "vin-label", for: "vin-input" }, t("vin_or")),
       h("div", { class: "vin-field" }, input, count),
       help,
-      saved ? h("button", { class: "link danger", type: "button", onclick: () => saveVin("") }, t("vin_remove")) : null);
+      carsale,
+      saved && !start ? h("button", { class: "link danger", type: "button", onclick: () => saveVin("") }, t("vin_remove")) : null);
   },
 };
 
-async function saveVin(value) {
+async function saveVin(value, start) {
   try {
-    const p = await api("/api/profile/vin", { vin: value });
+    const p = await api("/api/profile/vin", { vin: value, start: !!start });
     haptic(!value || p.vin_check ? "success" : "warning");
+    if (start) { // регистрация идёт в чате: бот уже написал, что сохранено, — закрываем витрину
+      toast(t("vin_saved_chat"));
+      setTimeout(() => tg.close(), 900);
+      return;
+    }
     state.tab = "profile";
     show("profile", {}, { root: true });
     if (!value) toast(t("vin_removed"));
@@ -1075,6 +1125,11 @@ async function start() {
   state.t = state.me.t;
   state.cart = state.me.cart;
   document.documentElement.lang = state.me.lang;
+  if (new URLSearchParams(location.search).get("start") === "vin") { // кнопка «📷 Сканировать VIN» в боте
+    state.tab = "profile";
+    show("vin", { start: true }, { root: true });
+    return;
+  }
   show("home", {}, { root: true });
 }
 

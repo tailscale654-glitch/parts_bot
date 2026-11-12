@@ -66,6 +66,9 @@ async def lifespan(app: FastAPI):
     if app.state.bot is None:
         app.state.bot = Bot(token=settings.bot_token)  # только чтобы отправлять уведомления о заказах
     yield
+    from app.services.carsale_crm import close_crm
+
+    await close_crm()
     await app.state.bot.session.close()
     if engine is not None:
         await engine.dispose()
@@ -99,6 +102,7 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     app.state.scan_limiter = RateLimiter(limit=20)  # распознавание VIN тяжёлое — не чаще 20 фото в минуту
     app.state.scan_slots = asyncio.Semaphore(2)  # и не больше двух одновременно на весь сервер
     app.state.frame_limiter = RateLimiter(limit=150)  # сканер шлёт 1–2 кадра в секунду, пока открыт
+    app.state.lookup_limiter = RateLimiter(limit=30)  # поиск VIN в CarSale — не перебор чужих номеров
     app.state.frame_slots = asyncio.Semaphore(4)  # кадр лёгкий (≈0,4 с), но тоже не без предела
     index = (STATIC / "index.html").read_text(encoding="utf-8").replace("{{v}}", asset_version())
 
@@ -117,6 +121,29 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     register_api(app)
     return app
+
+
+async def continue_in_chat(bot, session: AsyncSession, c: Client, sold) -> None:
+    """Регистрация шла в боте: после сканера пишем в чат, что сохранили, и ведём дальше (каталог или выбор модели)."""
+    from app.handlers.catalog import models_view
+    from app.keyboards.car import colors_keyboard, models_keyboard
+    from app.services.notify import send
+    from app.services.vin_car import card_lines
+
+    user, lang = c.user, c.lang
+    if sold is not None:
+        text, kb = i18n.t(lang, "vin_saved", card="\n".join(card_lines(sold, lang))), None
+    else:
+        text, kb = i18n.t(lang, "vin_line", vin=user.car_vin), None
+    await send(bot, user.telegram_id, text, kb)
+    if not user.car_model:
+        await send(bot, user.telegram_id, i18n.t(lang, "choose_car_model"), models_keyboard())
+    elif not user.car_color:
+        await send(bot, user.telegram_id, i18n.t(lang, "choose_car_color", model=cars.car_text(user, lang)),
+                   colors_keyboard(user.car_model, user.car_modification, lang))
+    else:
+        text, kb = await models_view(user, session)
+        await send(bot, user.telegram_id, text, kb)
 
 
 MAX_FRAME = 1_500_000  # кадр сканера — полоса ~1280 px в JPEG, обычно 60–150 КБ
@@ -289,13 +316,21 @@ async def profile_json(session: AsyncSession, c: Client) -> dict:
     if user.car_model:
         car = {"model": user.car_model, "mod": user.car_modification, "color": user.car_color,
                "mod_name": cars.mod_name(user.car_modification, lang), "color_name": cars.color_name(user.car_color, lang),
-               "hex": COLOR_HEX.get(user.car_color or ""),
+               "hex": COLOR_HEX.get(user.car_color or ""), "engine": user.car_engine, "trim": user.car_trim,
                "photo": car_photo(user.car_model, user.car_modification, small=True, color=user.car_color)}
     return {"name": " ".join(filter(None, [user.first_name, user.last_name])) or None, "phone": user.phone,
             "region": {"id": user.region_id, "name": localized_name(user.region, lang)},
             "lang": lang or "ru", "languages": [{"code": code, "name": i18n.t(code, "language_name")} for code in LANGUAGES],
             "car": car, "staff_dealer": staff_dealer.name if staff_dealer else None,
             "vin": user.car_vin, "vin_check": bool(user.car_vin) and check_digit_ok(user.car_vin)}
+
+
+def sold_json(sold, lang: str | None) -> dict:
+    """Машина из CarSale CRM для карточки в витрине: фото того же цвета, модель, комплектация, двигатель."""
+    return {"vin": sold.vin, "model": sold.model or sold.carsale_model, "mod_name": cars.mod_name(sold.mod, lang),
+            "color_name": cars.color_name(sold.color, lang) or sold.carsale_color, "hex": COLOR_HEX.get(sold.color or ""),
+            "trim": sold.trim, "engine": sold.engine,
+            "photo": car_photo(sold.model, sold.mod, color=sold.color) if sold.model else None}
 
 
 class LanguageBody(BaseModel):
@@ -308,6 +343,7 @@ class RegionBody(BaseModel):
 
 class VinBody(BaseModel):
     vin: str = Field(default="", max_length=40)  # пусто — удалить VIN
+    start: bool = False  # витрину открыли из регистрации в боте (?start=vin) — бот продолжит в чате
 
 
 class CarBody(BaseModel):
@@ -550,13 +586,36 @@ def register_api(app: FastAPI) -> None:
             slots.release()
         return {"vin": vin, "method": method, "check_ok": bool(vin) and check_digit_ok(vin)}
 
+    @app.post("/api/vin/lookup")
+    async def vin_lookup(body: VinBody, request: Request, c: Client = Depends(client)):
+        """VIN → проданная машина из CarSale CRM («Остатки» → «Архив»). Только данные машины, без покупателя."""
+        from app.services.vin_car import FOUND, lookup
+
+        if not request.app.state.lookup_limiter.allow(c.user.telegram_id):
+            raise HTTPException(429, "too_many")
+        vin = normalize(body.vin)
+        if not is_valid(vin):
+            raise HTTPException(422, "bad_vin")
+        status, sold = await lookup(vin)
+        return {"vin": vin, "status": status, "car": sold_json(sold, c.lang) if status == FOUND else None}
+
     @app.post("/api/profile/vin")
-    async def set_vin(body: VinBody, c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+    async def set_vin(body: VinBody, request: Request, c: Client = Depends(client),
+                      session: AsyncSession = Depends(get_session)):
+        """Сохранить VIN. Нашёлся в CarSale — заодно модель, комплектация, цвет, номер двигателя (сервер ищет сам:
+        данным машины от витрины не доверяем). Из регистрации (start) — бот продолжает в чате."""
+        from app.services.vin_car import FOUND, apply, lookup
+
         vin = normalize(body.vin)
         if vin and not is_valid(vin):
             raise HTTPException(422, "bad_vin")
-        await UserRepository(session).set_car(c.user, vin=vin or None)
-        return await profile_json(session, c)
+        if vin and not request.app.state.lookup_limiter.allow(c.user.telegram_id):
+            raise HTTPException(429, "too_many")
+        status, sold = await lookup(vin) if vin else ("", None)
+        await apply(session, c.user, vin or None, sold if status == FOUND else None)
+        if body.start and vin:
+            await continue_in_chat(request.app.state.bot, session, c, sold if status == FOUND else None)
+        return {**await profile_json(session, c), "carsale": status}
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException):

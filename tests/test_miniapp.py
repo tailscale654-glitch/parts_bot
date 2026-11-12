@@ -205,7 +205,8 @@ async def test_profile_car(shop):
 
     p = (await client.post("/api/profile/car", json={"model": "JAC M3", "mod": "van", "color": "white"})).json()
     assert p["car"] == {"model": "JAC M3", "mod": "van", "color": "white", "mod_name": "VAN (фургон)",
-                        "color_name": "Белый", "hex": "#f4f4f4", "photo": "/static/cars/m3-van-s.webp"}
+                        "color_name": "Белый", "hex": "#f4f4f4", "photo": "/static/cars/m3-van-s.webp",
+                        "engine": None, "trim": None}
     assert (await client.get("/api/me")).json()["car"] == "JAC M3 · VAN (фургон) · Белый"
     # другой цвет — машина на фото того же цвета (в профиле и на главной)
     p = (await client.post("/api/profile/car", json={"model": "JAC M3", "mod": "van", "color": "black"})).json()
@@ -285,6 +286,42 @@ async def test_vin_scan_and_save(shop):
     assert p["vin"] is None
     await client.post("/api/profile/vin", json={"vin": VIN})
     assert (await client.post("/api/profile/vin", json={"vin": ""})).json()["vin"] is None
+
+
+async def test_vin_lookup_fills_car_from_carsale(shop):
+    """VIN → машина из CarSale CRM (подменена): карточка с фото нужного цвета; сохранение — модель, цвет, двигатель.
+    Из регистрации (start) бот пишет в чат, что машина сохранена, и показывает каталог."""
+    from app.services import carsale_crm
+    from tests.test_carsale_crm import VIN, StubCRM, sold
+
+    client, bot, _ = shop
+    carsale_crm.set_crm(StubCRM({VIN: sold(VIN), "LJ166A339S2205968": sold("LJ166A339S2205968")}))
+    try:
+        r = (await client.post("/api/vin/lookup", json={"vin": "lj166a339s2205968"})).json()
+        assert r["status"] == "found" and r["car"] == {
+            "vin": "LJ166A339S2205968", "model": "JAC M3", "mod_name": "VAN (фургон)", "color_name": "Белый",
+            "hex": "#f4f4f4", "trim": "M3 фургон", "engine": "S05176139", "photo": "/static/cars/m3-van.webp"}
+        assert (await client.post("/api/vin/lookup", json={"vin": "LJ12EKR17N4000123"})).json() == \
+            {"vin": "LJ12EKR17N4000123", "status": "missing", "car": None}
+        assert (await client.post("/api/vin/lookup", json={"vin": "123"})).status_code == 422
+
+        p = (await client.post("/api/profile/vin", json={"vin": VIN, "start": True})).json()
+        assert p["carsale"] == "found" and p["vin"] == VIN
+        assert {k: p["car"][k] for k in ("model", "color", "engine", "photo")} == \
+            {"model": "JAC JS8", "color": "black", "engine": "T3604334", "photo": "/static/cars/js8-s.webp"}
+        chat = [c.args[1] for c in bot.send_message.call_args_list]
+        assert any("Автомобиль сохранён" in t and "T3604334" in t for t in chat)
+
+        # VIN не из CarSale: машину не трогаем, номер двигателя прежней машины сбрасываем
+        p = (await client.post("/api/profile/vin", json={"vin": "LJ12EKR17N4000123"})).json()
+        assert p["carsale"] == "missing" and p["car"]["model"] == "JAC JS8" and p["car"]["engine"] is None
+    finally:
+        carsale_crm.set_crm(None)
+    carsale_crm.set_crm(StubCRM(down=True))
+    try:
+        assert (await client.post("/api/vin/lookup", json={"vin": VIN})).json()["status"] == "unavailable"
+    finally:
+        carsale_crm.set_crm(None)
 
 
 async def test_vin_scanner_frames(shop):

@@ -1,6 +1,7 @@
 """Автомобиль клиента: модели, комплектации и цвета для выбора при регистрации.
 
-Источники: сайт jacmotors.uz/models (октябрь 2026) и коммерческое предложение JAC MOTORS TOSHKENT (2025).
+Источники: сайт jacmotors.uz/models (октябрь 2026), коммерческое предложение JAC MOTORS TOSHKENT (2025)
+и проданные машины в CarSale CRM (ноябрь 2026: у T8 есть «Metallic gray», у RF8 — «Sandalwood Black»).
 Цвета — объединение обоих источников (у клиента может быть машина прошлого года выпуска).
 Этот файл можно править без знания Python — меняйте только текст в кавычках.
 
@@ -47,10 +48,10 @@ CARS = [
     Car("JAC M3", "JAC M3", ("white", "black", "silver"), ("passenger", "van")),
     Car("JAC M4", "JAC M4 Luxe", ("white", "black", "silver")),
     Car("JAC Sunray", "JAC Sunray", ("white", "black", "silver", "gray", "metallic_gray"), ("minibus", "van")),
-    Car("JAC T8", "JAC T8", ("white", "black", "silver", "gray")),
+    Car("JAC T8", "JAC T8", ("white", "black", "silver", "gray", "metallic_gray")),
     Car("JAC T9", "JAC T9", ("white", "black", "silver", "metallic_gray", "star_gray")),
     Car("JAC JS8", "JAC JS8", ("white", "black", "red", "metallic_gray")),
-    Car("JAC RF8", "JAC RF8", ("white", "gray", "blue")),
+    Car("JAC RF8", "JAC RF8", ("white", "black", "gray", "blue")),
 ]
 LANG_INDEX = {"ru": 0, "en": 1, "uz": 2}
 
@@ -108,9 +109,10 @@ def car_text(user: User, lang: str | None) -> str | None:
 
 
 def car_with_vin(user: User, lang: str | None) -> str | None:
-    """Для менеджеров (заказ, панель): «JAC M4 · Белый · VIN LJ12EKR17N4000123»."""
-    vin = getattr(user, "car_vin", None)
-    return " · ".join(filter(None, [car_text(user, lang), f"VIN {vin}" if vin else None])) or None
+    """Для менеджеров (заказ, панель): «JAC M4 · Белый · VIN LJ12EKR17N4000123 · двиг. T3604334»."""
+    vin, engine = getattr(user, "car_vin", None), getattr(user, "car_engine", None)
+    return " · ".join(filter(None, [car_text(user, lang), f"VIN {vin}" if vin else None,
+                                    f"двиг. {engine}" if engine else None])) or None
 
 
 def needs_car(user: User) -> bool:

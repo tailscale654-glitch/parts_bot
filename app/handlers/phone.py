@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.database.repositories.users import UserRepository
-from app.handlers.catalog import models_view
-from app.handlers.start import next_step, send_main_menu
+from app.handlers.catalog import car_prompt, models_view
+from app.handlers.start import needs_car, next_step, send_main_menu
 from app.keyboards.main import main_reply_keyboard
 from app.keyboards.phone import phone_keyboard
 from app.services.localization import i18n
@@ -39,8 +39,12 @@ async def got_contact(message: Message, user: User, session: AsyncSession) -> No
     await UserRepository(session).set_phone(user, phone)
     saved = i18n.t(lang, "phone_saved", phone=phone)
     if first_time:
-        # Конец регистрации: показываем нижнее меню и сразу открываем каталог
+        # Нижнее меню — сразу; дальше VIN автомобиля (данные из CarSale) или, если машина уже есть, каталог
         await message.answer(saved, reply_markup=main_reply_keyboard(lang))
+        if await needs_car(user, session):
+            text, kb = car_prompt(user)
+            await message.answer(text, reply_markup=kb)
+            return
         await open_catalog(message, user, session)
     else:
         await send_main_menu(message, user, session, prefix=saved)
