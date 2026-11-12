@@ -204,10 +204,23 @@ async def test_profile_car(shop):
 
     p = (await client.post("/api/profile/car", json={"model": "JAC M3", "mod": "van", "color": "white"})).json()
     assert p["car"] == {"model": "JAC M3", "mod": "van", "color": "white", "mod_name": "VAN (фургон)",
-                        "color_name": "Белый", "hex": "#f4f4f4"}
+                        "color_name": "Белый", "hex": "#f4f4f4", "photo": "/static/cars/m3-van-s.webp"}
     assert (await client.get("/api/me")).json()["car"] == "JAC M3 · VAN (фургон) · Белый"
     for bad in ({"model": "JAC M3", "color": "white"},                       # у M3 комплектация обязательна
                 {"model": "JAC T8", "color": "red"},                         # такого цвета у T8 нет
                 {"model": "Tesla", "color": "white"}):
         assert (await client.post("/api/profile/car", json=bad)).status_code == 422
     assert (await client.post("/api/profile/car", json={"model": "JAC T8", "color": "gray"})).json()["car"]["mod"] is None
+
+
+async def test_model_photos(shop):
+    client, _, _ = shop
+    me = (await client.get("/api/me")).json()
+    assert me["car_model"] == "JAC M4 Luxe" and me["car_photo"] == "/static/cars/m4.webp"  # старая запись — имя каталога
+    photo = await client.get(me["car_photo"])
+    assert photo.status_code == 200 and photo.headers["content-type"] == "image/webp"
+    models = {c["model"]: c for c in (await client.get("/api/cars")).json()["cars"]}
+    assert models["JAC RF8"]["photo"] == "/static/cars/rf8-s.webp"
+    assert {m["key"]: m["photo"] for m in models["JAC M3"]["mods"]} == {
+        "passenger": "/static/cars/m3-s.webp", "van": "/static/cars/m3-van-s.webp"}  # у фургона своё фото
+    assert models["JAC T9"]["photo"] is None  # фото T9 пока нет — витрина нарисует машину

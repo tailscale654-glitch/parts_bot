@@ -195,8 +195,9 @@ screens.home = {
     const me = state.me;
     const root = h("div", {},
       h("header", { class: "hero" },
-        h("h1", {}, me.full ? t("all_models") : (me.car || "JAC")),
+        h("h1", {}, me.full ? t("all_models") : (me.car_model || me.car || "JAC")),
         h("p", {}, t("hero_sub", { region: me.region }))));
+    if (me.car_photo) root.append(h("img", { class: "hero-photo", src: me.car_photo, alt: me.car_model || "" }));
 
     const results = h("div", {});
     const categories = h("div", {});
@@ -321,6 +322,7 @@ function openLink(url) {
 function optionList(items, chosenKey, onPick) {
   const buttons = items.map((it) => {
     const btn = h("button", { class: "option", type: "button", role: "radio", "aria-checked": String(it.key === chosenKey) },
+      it.photo !== undefined ? carMedia(it.photo, "ophoto") : null,
       h("div", { class: "top" },
         h("span", { class: "oname" }, it.hex ? h("span", { class: "swatch", "data-hex": it.hex }) : null, it.title),
         it.price ? h("span", { class: "oprice" }, it.price) : null),
@@ -334,7 +336,13 @@ function optionList(items, chosenKey, onPick) {
     });
     return btn;
   });
-  return h("div", { class: "options", role: "radiogroup" }, buttons);
+  return h("div", { class: "options" + (items.some((it) => it.photo !== undefined) ? " cars" : ""), role: "radiogroup" }, buttons);
+}
+
+/* Фото модели JAC (если есть) или схематичная машина */
+function carMedia(photo, cls) {
+  if (!photo) return h("div", { class: cls, html: picture("car") });
+  return h("div", { class: cls }, h("img", { src: photo, alt: "", loading: "lazy" }));
 }
 
 function stockOptions(p) {
@@ -535,7 +543,7 @@ screens.profile = {
       const car = p.car;
       root.append(h("h2", { class: "section" }, t("car")),
         h("button", { class: "car-card", type: "button", onclick: () => show("pickModel", { current: car && car.model }) },
-          h("div", { class: "car-pic", html: picture("car") }),
+          carMedia(car && car.photo, "car-pic"),
           h("div", { class: "car-info" },
             h("div", { class: "car-model" }, car ? car.model : t("choose_car")),
             car ? h("div", { class: "car-meta" },
@@ -606,7 +614,8 @@ screens.pickLanguage = {
 screens.pickModel = {
   async draw({ current }) {
     const data = await api("/api/cars");
-    return pickScreen(t("choose_model"), t("car_note"), data.cars.map((c) => ({ key: c.model, title: c.model, dealer: {} })),
+    return pickScreen(t("choose_model"), t("car_note"),
+      data.cars.map((c) => ({ key: c.model, title: c.model, photo: c.photo, dealer: {} })),
       current, (it) => {
         const car = data.cars.find((c) => c.model === it.key);
         if (car.mods.length > 1) show("pickMod", { car });
@@ -617,7 +626,8 @@ screens.pickModel = {
 
 screens.pickMod = {
   async draw({ car }) {
-    return pickScreen(car.model, t("choose_mod"), car.mods.map((m) => ({ key: m.key, title: m.name, dealer: {} })), null,
+    return pickScreen(car.model, t("choose_mod"),
+      car.mods.map((m) => ({ key: m.key, title: m.name, photo: m.photo, dealer: {} })), null,
       (it) => show("pickColor", { car, mod: it.key }));
   },
 };
@@ -629,6 +639,8 @@ screens.pickColor = {
     const root = pickScreen(car.model, [modName, t("choose_color")].filter(Boolean).join(". "),
       colors.map((c) => ({ key: c.key, title: c.name, hex: c.hex, dealer: {} })), null,
       (it) => saveProfile("/api/profile/car", { model: car.model, mod: mod || null, color: it.key }));
+    const photo = (car.mods.find((m) => m.key === mod) || {}).photo || car.photo;
+    if (photo) root.insertBefore(h("img", { class: "color-photo", src: photo.replace("-s.webp", ".webp"), alt: "" }), root.children[1]);
     paintSwatches(root);
     return root;
   },

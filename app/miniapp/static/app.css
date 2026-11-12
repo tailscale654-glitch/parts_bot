@@ -197,10 +197,24 @@ img { display: block; }
 .order .pickup a { display: inline-block; margin-top: 6px; margin-right: 18px; color: var(--text); text-decoration: underline;
   text-underline-offset: 3px; text-decoration-color: var(--text-3); }
 
+/* ---------- фото моделей JAC ---------- */
+.hero-photo { display: block; width: calc(100% + 40px); max-width: none; margin: -12px -20px 8px; aspect-ratio: 16 / 9;
+  object-fit: cover; background: var(--surface); }
+.options.cars { grid-template-columns: 1fr 1fr; }
+.options.cars .option { display: flex; flex-direction: column; justify-content: flex-start; }
+.option .ophoto { display: grid; place-items: center; margin: -8px -10px 10px; aspect-ratio: 16 / 9; border-radius: 2px;
+  overflow: hidden; background: var(--surface); color: var(--text-2); }
+.option .ophoto img, .car-pic img { width: 100%; height: 100%; object-fit: cover; }
+.option .ophoto svg.pic { width: 72%; height: 72%; stroke-width: 1.2px; }
+.car-pic { overflow: hidden; }
+.color-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin: 0 0 16px; border-radius: 4px;
+  background: var(--surface); }
+
 /* ---------- профиль ---------- */
 .car-card { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: center; width: 100%; padding: 0;
   border: 0; background: none; text-align: left; }
 .car-pic { display: grid; place-items: center; height: 84px; border-radius: 4px; background: var(--surface); color: var(--text-2); }
+.car-card { grid-template-columns: 150px 1fr; }
 .car-pic svg.pic { width: 88%; height: 88%; stroke-width: 1.2px; }
 .car-model { font-size: 17px; font-weight: 500; }
 .car-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; color: var(--text-2); font-size: 14px; }
