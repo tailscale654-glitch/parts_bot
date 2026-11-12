@@ -36,6 +36,7 @@ def menu_action(text: str | None) -> str | None:
 def profile_keyboard(lang: str) -> InlineKeyboardMarkup:
     rows = [
         ("btn_change_car", CarCB(action="start").pack()),
+        ("btn_service", "to:show:0"),  # handlers/service.py: ServiceCB(action="show")
         ("btn_change_phone", "profile:phone"),
         ("btn_change_region", "menu:region"),
         ("btn_change_language", "menu:language"),

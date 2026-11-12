@@ -284,6 +284,40 @@ img { display: block; }
 .vin-help { margin: 8px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
 .vin-help.bad { color: var(--wait); }
 
+/* ТО и пробег */
+.km-card { display: grid; gap: 2px; padding: 16px; border-radius: 4px; background: var(--surface); }
+.km-label { color: var(--text-2); font-size: 13px; }
+.km-value { font-size: 28px; font-weight: 500; letter-spacing: -.01em; }
+.km-card small { color: var(--text-2); font-size: 13px; }
+.km-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 14px; }
+.km-input { min-width: 0; width: 100%; height: 48px; padding: 0 14px; border: 0; border-radius: 4px; background: var(--bg); color: var(--text);
+  font: inherit; font-size: 17px; letter-spacing: .02em; }
+.km-input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.km-input::placeholder { color: var(--text-3); font-size: 15px; letter-spacing: 0; }
+.km-save { height: 48px; padding: 0 18px; border: 0; border-radius: 4px; background: var(--accent); color: #fff;
+  font: inherit; font-size: 15px; font-weight: 500; }
+.km-save:disabled { opacity: .4; }
+.next-to { margin-top: 24px; }
+.next-to h2 { margin: 0; font-size: 20px; font-weight: 500; }
+.next-left { margin: 4px 0 0; color: var(--text-2); font-size: 15px; }
+.next-to.due .next-left { color: var(--wait); }
+.next-items { margin: 14px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.next-items li { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.next-items li::first-letter { text-transform: uppercase; }
+.kit-result:empty { display: none; }
+.kit-result { margin-top: 24px; padding: 16px; border-radius: 4px; background: var(--surface); }
+.kit-result h3 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+.kit-lines { margin: 0; padding: 0; list-style: none; }
+.kit-lines li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 15px; }
+.kit-lines li > span::first-letter { text-transform: uppercase; }
+.kit-lines small { display: block; margin-top: 2px; color: var(--text-2); font-size: 12px; letter-spacing: .02em; }
+.kit-lines b { flex: none; font-weight: 500; }
+.kit-total { display: flex; justify-content: space-between; margin: 8px 0 0; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 16px; }
+.kit-total b { font-weight: 600; }
+.kit-note { margin: 10px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
+.kit-note.warn { color: var(--wait); }
+
 /* машина из базы JAC Motors Toshkent (CarSale) по VIN: фото нужного цвета и данные */
 .vin-car { margin-top: 16px; }
 .vin-car[hidden] { display: none; }

@@ -324,6 +324,25 @@ async def test_vin_lookup_fills_car_from_carsale(shop):
         carsale_crm.set_crm(None)
 
 
+async def test_service_mileage_and_kit(shop):
+    """ТО в витрине: пробег → следующее ТО и состав; «Набор для ТО» — масляный фильтр M4 у дилера Ташкента в корзину."""
+    client, _, _ = shop
+    s = (await client.get("/api/service")).json()
+    assert s["mileage"] is None and s["next"] is None and s["car"] == "JAC M4 Luxe"
+    assert (await client.post("/api/service/mileage", json={"km": 0})).status_code == 422
+    s = (await client.post("/api/service/mileage", json={"km": 9500})).json()
+    assert s["mileage_text"] == "9 500 км" and s["next"]["number"] == 1 and s["next"]["due"] is True
+    assert s["next"]["km"] == "10 000 км" and s["next"]["left"] == "500 км" and "масляный фильтр" in s["next"]["items"]
+    assert (await client.get("/api/profile")).json()["mileage"] == "9 500 км"
+
+    r = (await client.post("/api/service/kit", json={"number": 1})).json()
+    assert r["dealer"] == "OOO «China Group»" and r["cart"] == 1  # при равном числе позиций — где дешевле
+    assert r["added"] == [{"name": "масляный фильтр", "number": "1017100GD050", "qty": 1, "price": "85 000 сум",
+                           "preorder": False, "dealer": "OOO «China Group»"}]
+    assert set(r["missing"]) == {"моторное масло", "прокладка сливной пробки", "фильтр салона"}
+    assert (await client.post("/api/service/kit", json={"number": 0})).status_code == 422
+
+
 async def test_vin_scanner_frames(shop):
     """Живой сканер: кадр со штрих-кодом → номер сразу; пустой кадр — ничего; не больше 150 кадров в минуту."""
     from tests.test_vin import VIN, barcode_png, zxingcpp

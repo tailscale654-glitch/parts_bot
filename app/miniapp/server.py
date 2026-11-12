@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 import hashlib
 import logging
 import time
@@ -322,7 +323,8 @@ async def profile_json(session: AsyncSession, c: Client) -> dict:
             "region": {"id": user.region_id, "name": localized_name(user.region, lang)},
             "lang": lang or "ru", "languages": [{"code": code, "name": i18n.t(code, "language_name")} for code in LANGUAGES],
             "car": car, "staff_dealer": staff_dealer.name if staff_dealer else None,
-            "vin": user.car_vin, "vin_check": bool(user.car_vin) and check_digit_ok(user.car_vin)}
+            "vin": user.car_vin, "vin_check": bool(user.car_vin) and check_digit_ok(user.car_vin),
+            "mileage": km_text(user.car_mileage, lang) if user.car_mileage is not None else None}
 
 
 def sold_json(sold, lang: str | None) -> dict:
@@ -331,6 +333,36 @@ def sold_json(sold, lang: str | None) -> dict:
             "color_name": cars.color_name(sold.color, lang) or sold.carsale_color, "hex": COLOR_HEX.get(sold.color or ""),
             "trim": sold.trim, "engine": sold.engine,
             "photo": car_photo(sold.model, sold.mod, color=sold.color) if sold.model else None}
+
+
+def km_text(value: int, lang: str | None) -> str:
+    from app.handlers.service import km
+
+    return km(value, lang)
+
+
+def service_json(user: User, lang: str | None) -> dict:
+    """ТО: пробег, следующее ТО и что в него входит (по регламенту в app/services/maintenance.py)."""
+    from app.services import maintenance as m
+    from app.services.orders import fmt_date
+
+    data = {"car": cars.car_text(user, lang), "mileage": user.car_mileage,
+            "mileage_text": km_text(user.car_mileage, lang) if user.car_mileage is not None else None,
+            "mileage_date": fmt_date(user.car_mileage_at)[:10] if user.car_mileage_at else None, "next": None}
+    if user.car_model and user.car_mileage is not None:
+        due = m.next_service(user.car_model, user.car_mileage)
+        data["next"] = {"number": due.number, "km": km_text(due.km, lang), "left": km_text(max(due.left, 0), lang),
+                        "due": due.left <= m.REMIND_BEFORE_KM,
+                        "items": [i18n.t(lang, f"kit_{k}") for k in m.kinds_for(user.car_model, due.number)]}
+    return data
+
+
+class MileageBody(BaseModel):
+    km: int = Field(gt=0, lt=2_000_000)
+
+
+class KitBody(BaseModel):
+    number: int = Field(ge=1, le=200)
 
 
 class LanguageBody(BaseModel):
@@ -585,6 +617,41 @@ def register_api(app: FastAPI) -> None:
         finally:
             slots.release()
         return {"vin": vin, "method": method, "check_ok": bool(vin) and check_digit_ok(vin)}
+
+    @app.get("/api/service")
+    async def service(c: Client = Depends(client)):
+        return service_json(c.user, c.lang)
+
+    @app.post("/api/service/mileage")
+    async def service_mileage(body: MileageBody, c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        from app.services import maintenance as m
+
+        if not c.user.car_model:
+            raise HTTPException(409, "no_car")
+        await m.save_mileage(session, c.user, body.km)
+        due = m.due_reminder(c.user)
+        if due is not None:  # подошло ТО — отметим, чтобы бот не напоминал о нём ещё раз в чате
+            c.user.service_reminded_km = due.km
+            await session.commit()
+        return service_json(c.user, c.lang)
+
+    @app.post("/api/service/kit")
+    async def service_kit(body: KitBody, c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        """Набор для ТО-N в корзину (как «🛒 Набор для ТО» в боте): у одного дилера региона, недостающее — под заказ."""
+        from app.services import maintenance as m
+
+        if not c.user.car_model:
+            raise HTTPException(409, "no_car")
+        kit = await m.build_kit(session, c.user, body.number)
+        added, failed = await m.add_kit_to_cart(session, c.user, kit)
+        lang = c.lang
+        return {"number": kit.number, "dealer": kit.dealer.name if kit.dealer else None,
+                "added": [{"name": i18n.t(lang, f"kit_{x.kind}"), "number": x.part.part_number, "qty": x.qty,
+                           "price": money(x.price, lang), "preorder": x.stock.dealer.is_warehouse,
+                           "dealer": (x.pickup or x.stock.dealer).name} for x in added],
+                "missing": [i18n.t(lang, f"kit_{x.kind}") for x in (*kit.missing, *failed)],
+                "total": money(sum((x.price for x in added), Decimal(0)), lang),
+                "cart": await CartRepository(session).total_qty(c.user)}
 
     @app.post("/api/vin/lookup")
     async def vin_lookup(body: VinBody, request: Request, c: Client = Depends(client)):

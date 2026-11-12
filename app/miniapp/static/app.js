@@ -560,7 +560,8 @@ screens.profile = {
             h("div", { class: "car-change" }, car ? t("change") : t("choose_car")))),
         h("div", { class: "settings vin-row" },
           settingRow(t("vin"), p.vin ? h("span", { class: "vin-value" }, p.vin) : h("span", { class: "accent" }, t("vin_add")),
-            () => show("vin", { vin: p.vin }))));
+            () => show("vin", { vin: p.vin })),
+          car ? settingRow(t("service"), p.mileage || h("span", { class: "accent" }, t("service_add")), () => show("service")) : null));
     }
     root.append(h("h2", { class: "section" }, t("settings")),
       h("div", { class: "settings" },
@@ -878,6 +879,90 @@ function vinScanner({ onFound, onFail }) {
     onFail(e && e.name === "NotAllowedError" ? "denied" : "unsupported");
   });
 }
+
+/* ТО и пробег: пробег, следующее ТО по регламенту и набор деталей для него — сразу в корзину */
+screens.service = {
+  async draw() {
+    const s = await api("/api/service");
+    const input = h("input", { id: "km-input", class: "km-input", type: "text", inputmode: "numeric", autocomplete: "off",
+      enterkeyhint: "done", placeholder: t("service_km_placeholder"), "aria-label": t("service_mileage") });
+    const saveKm = h("button", { class: "km-save", type: "button", disabled: true }, t("save"));
+    const result = h("div", { class: "kit-result", "aria-live": "polite" });
+    const parseKm = () => { const n = parseInt(input.value.replace(/\D/g, ""), 10); return n > 0 && n < 2000000 ? n : null; };
+    input.addEventListener("input", () => {
+      const digits = input.value.replace(/\D/g, "").slice(0, 7);
+      input.value = digits ? Number(digits).toLocaleString("ru-RU").replace(/ /g, " ") : "";
+      saveKm.disabled = !parseKm();
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && parseKm()) saveKm.click(); });
+    saveKm.addEventListener("click", async () => {
+      const km = parseKm();
+      if (!km) return;
+      saveKm.disabled = true;
+      try {
+        await api("/api/service/mileage", { km });
+        haptic("success");
+        toast(t("saved"));
+        render();
+      } catch (e) {
+        haptic("error");
+        toast(t("error"));
+        saveKm.disabled = false;
+      }
+    });
+
+    const next = s.next;
+    const kit = next ? h("button", { class: "cta", type: "button" }, t("service_kit", { number: next.number })) : null;
+    if (kit) {
+      kit.addEventListener("click", async () => {
+        kit.disabled = true;
+        try {
+          const r = await api("/api/service/kit", { number: next.number });
+          setCart(r.cart);
+          if (!r.added.length) {
+            haptic("warning");
+            result.replaceChildren(h("p", { class: "kit-note warn" }, t("service_kit_empty")));
+            return;
+          }
+          haptic("success");
+          result.replaceChildren(
+            h("h3", {}, r.dealer ? t("service_kit_added_at", { dealer: r.dealer }) : t("service_kit_added")),
+            h("ul", { class: "kit-lines" }, r.added.map((x) => h("li", {},
+              h("span", {}, x.name + (x.qty > 1 ? ` × ${x.qty}` : ""),
+                h("small", {}, [x.number, x.preorder ? t("service_preorder") : null,
+                  x.dealer && x.dealer !== r.dealer ? x.dealer : null].filter(Boolean).join(" · "))),
+              h("b", {}, x.price)))),
+            h("p", { class: "kit-total" }, h("span", {}, t("total")), h("b", {}, r.total)),
+            r.missing.length ? h("p", { class: "kit-note warn" }, t("service_kit_missing", { names: r.missing.join(", ") })) : null,
+            h("p", { class: "kit-note" }, t("service_kit_check")));
+          kit.textContent = t("service_to_cart");
+          kit.onclick = () => setTab("cart");
+          kit.disabled = false;
+          result.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch (e) {
+          haptic("error");
+          toast(t("error"));
+          kit.disabled = false;
+        }
+      }, { once: true });
+      setFooter(kit);
+    }
+
+    return h("div", { class: "service" },
+      h("header", { class: "page-title" }, h("h1", {}, t("service")), s.car ? h("p", {}, s.car) : null),
+      h("section", { class: "km-card" },
+        h("span", { class: "km-label" }, t("service_mileage")),
+        h("b", { class: "km-value" }, s.mileage_text || t("service_no_mileage")),
+        s.mileage_date ? h("small", {}, t("service_as_of", { date: s.mileage_date })) : null,
+        h("div", { class: "km-row" }, input, saveKm)),
+      next ? h("section", { class: "next-to" + (next.due ? " due" : "") },
+        h("h2", {}, t("service_next", { number: next.number, km: next.km })),
+        h("p", { class: "next-left" }, next.due ? t("service_due", { left: next.left }) : t("service_left", { left: next.left })),
+        h("ul", { class: "next-items" }, next.items.map((x) => h("li", {}, x)))) :
+        h("p", { class: "lead" }, t("service_hint")),
+      result);
+  },
+};
 
 screens.vin = {
   async draw({ vin, start }) {

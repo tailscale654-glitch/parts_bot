@@ -48,6 +48,10 @@ def profile_view(user: User) -> tuple[str, InlineKeyboardMarkup]:
     vin = f"\n{i18n.t(lang, 'vin_line', vin=user.car_vin)}" if user.car_vin else ""
     if user.car_engine:
         vin += f"\n{i18n.t(lang, 'engine_line', engine=user.car_engine)}"
+    if user.car_mileage is not None:
+        from app.handlers.service import km
+
+        vin += f"\n{i18n.t(lang, 'mileage_line', km=km(user.car_mileage, lang))}"
     return f"{text}\n{cars.car_line(user, lang)}{vin}", profile_keyboard(lang)
 
 

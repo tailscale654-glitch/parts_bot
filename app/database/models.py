@@ -51,6 +51,11 @@ class User(Base):
     # из CarSale CRM по VIN (проданная машина): номер двигателя и комплектация как в CarSale («M3 Люкс 2026»)
     car_engine: Mapped[str | None] = mapped_column(String(32))
     car_trim: Mapped[str | None] = mapped_column(String(64))
+    # ТО: последний пробег (км) и когда его сообщили; когда спрашивали; о каком ТО (км) уже напомнили
+    car_mileage: Mapped[int | None] = mapped_column(Integer)
+    car_mileage_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mileage_asked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    service_reminded_km: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -495,3 +500,14 @@ class SupportMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     author: Mapped["WebUser | None"] = relationship(lazy="joined")
+
+
+class MileageRecord(Base):
+    """Пробег, который сообщил клиент (раз в месяц бот спрашивает). По истории — примерный пробег сейчас."""
+
+    __tablename__ = "mileage_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    km: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

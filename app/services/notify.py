@@ -144,7 +144,9 @@ async def remind_ready(bot: Bot, session: AsyncSession, now: datetime | None = N
 
 
 async def reminders_loop(bot: Bot, session_factory, every_seconds: int = 1800) -> None:
-    """Фоновая задача бота: раз в полчаса — напоминания о готовых заказах."""
+    """Фоновая задача бота: раз в полчаса — напоминания о готовых заказах и вопрос о пробеге (раз в месяц)."""
+    from app.handlers.service import ask_mileage_round
+
     while True:
         await asyncio.sleep(every_seconds)
         try:
@@ -154,3 +156,10 @@ async def reminders_loop(bot: Bot, session_factory, every_seconds: int = 1800) -
                 logger.info("Sent %d pick-up reminders", n)
         except Exception:  # напоминания не должны ронять бота
             logger.exception("Pick-up reminders failed")
+        try:
+            async with session_factory() as session:
+                n = await ask_mileage_round(bot, session)
+            if n:
+                logger.info("Asked %d clients for mileage", n)
+        except Exception:
+            logger.exception("Mileage questions failed")

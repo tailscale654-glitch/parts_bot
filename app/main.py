@@ -7,7 +7,7 @@ from aiogram.types import ErrorEvent
 
 from app.config import load_settings
 from app.database.database import create_engine, create_session_factory
-from app.handlers import admin, admin_panel, car, cart, catalog, chat, support, dealer, orders, panel_access, fallback, language, phone, profile, region, search, start, vin
+from app.handlers import admin, admin_panel, car, cart, catalog, chat, support, dealer, orders, panel_access, fallback, language, phone, profile, region, search, service, start, vin
 from app.middlewares.db import DbSessionMiddleware
 from app.services.alerts import ErrorAlerts
 from app.services.localization import i18n
@@ -46,6 +46,7 @@ async def main() -> None:
     dp.include_router(profile.router)
     dp.include_router(car.router)
     dp.include_router(vin.router)  # VIN текстом или фото, пока машины нет, — до каталога и чата с менеджером
+    dp.include_router(service.router)  # ТО и пробег: число в ответ на «какой пробег?» — до поиска и чата
     dp.include_router(catalog.router)
     dp.include_router(search.router)  # «🔎 Поиск»: текст в режиме поиска — до чата с менеджером
     dp.include_router(orders.router)  # до cart: перехватывает «Оформить заказ»
