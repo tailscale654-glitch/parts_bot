@@ -538,6 +538,7 @@ function settingRow(label, value, onClick, extra) {
 screens.profile = {
   async draw() {
     const p = await api("/api/profile");
+    state.car = p.car;
     const root = h("div", {},
       h("header", { class: "page-title" }, h("h1", {}, p.name || t("tab_profile")), h("p", {}, phoneText(p.phone))));
     if (p.staff_dealer) root.append(h("p", { class: "lead" }, t("staff_of", { dealer: p.staff_dealer })));
@@ -660,16 +661,40 @@ screens.pickMod = {
   },
 };
 
+/* Цвет: нажали — машина на фото сразу перекрашивается, «Сохранить» — запоминаем */
 screens.pickColor = {
   async draw({ car, mod }) {
     const colors = car.colors[mod] || [];
     const modName = (car.mods.find((m) => m.key === mod) || {}).name;
+    const mine = state.car && state.car.model === car.model && (state.car.mod || "") === mod ? state.car.color : null;
+    let chosen = colors.some((c) => c.key === mine) ? mine : null;
+    const base = ((car.mods.find((m) => m.key === mod) || {}).photo || car.photo || "").replace("-s.webp", ".webp");
+    const photoOf = (key) => (colors.find((c) => c.key === key) || {}).photo || base;
+    for (const c of colors) if (c.photo) new Image().src = c.photo; // заранее, чтобы перекраска была мгновенной
+
+    const stage = h("div", { class: "color-stage" });
+    if (photoOf(chosen)) stage.append(h("img", { src: photoOf(chosen), alt: car.model }));
+    function showColor(key) {
+      const src = photoOf(key);
+      const top = stage.lastElementChild;
+      if (!src || (top && top.getAttribute("src") === src)) return;
+      const next = h("img", { src, alt: car.model, class: "incoming" });
+      const reveal = () => {
+        stage.append(next);
+        requestAnimationFrame(() => requestAnimationFrame(() => next.classList.remove("incoming")));
+        setTimeout(() => { while (stage.children.length > 1 && stage.firstElementChild !== next) stage.firstElementChild.remove(); }, 400);
+      };
+      if (next.decode) next.decode().then(reveal, reveal); else reveal();
+    }
+
+    const save = h("button", { class: "cta", type: "button", disabled: !chosen,
+      onclick: () => saveProfile("/api/profile/car", { model: car.model, mod: mod || null, color: chosen }) }, t("save"));
     const root = pickScreen(car.model, [modName, t("choose_color")].filter(Boolean).join(". "),
-      colors.map((c) => ({ key: c.key, title: c.name, hex: c.hex, dealer: {} })), null,
-      (it) => saveProfile("/api/profile/car", { model: car.model, mod: mod || null, color: it.key }));
-    const photo = (car.mods.find((m) => m.key === mod) || {}).photo || car.photo;
-    if (photo) root.insertBefore(h("img", { class: "color-photo", src: photo.replace("-s.webp", ".webp"), alt: "" }), root.children[1]);
+      colors.map((c) => ({ key: c.key, title: c.name, hex: c.hex, dealer: {} })), chosen,
+      (it) => { chosen = it.key; save.disabled = false; showColor(it.key); });
+    if (stage.firstElementChild) root.insertBefore(stage, root.children[1]);
     paintSwatches(root);
+    setFooter(save);
     return root;
   },
 };

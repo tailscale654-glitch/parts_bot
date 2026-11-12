@@ -251,24 +251,30 @@ def order_json(order: Order, lang: str | None) -> dict:
     }
 
 
-COLOR_HEX = {"white": "#f4f4f4", "black": "#1b1c1e", "silver": "#c3c6ca", "gray": "#8b8e93", "metallic_gray": "#6c7177",
-             "star_gray": "#b6babf", "red": "#b3162b", "blue": "#2b5aa8"}
+COLOR_HEX = {"white": "#f4f4f4", "black": "#1b1c1e", "silver": "#c3c6ca", "gray": "#8b8e93", "metallic_gray": "#555a61",
+             "star_gray": "#a2a6ab", "red": "#b3162b", "blue": "#2b5aa8"}
 LANGUAGES = ("ru", "uz", "en")
 
 # Фото моделей JAC: static/cars/<ключ>.webp (большое) и <ключ>-s.webp (маленькое, для списков).
-# Нет файла — витрина рисует схематичную машину. Добавить фото T9: положите t9.webp и t9-s.webp (16:9).
+# В другом цвете: <ключ>-<цвет>.webp и <ключ>-<цвет>-s.webp (например m3-van-black.webp) — кузов перекрашен
+# с фото сайта. Нет файла цвета — показываем основное фото; нет и его — витрина рисует схематичную машину.
 CAR_PHOTOS = {"JAC M3": "m3", "JAC M4": "m4", "JAC Sunray": "sunray", "JAC T8": "t8", "JAC T9": "t9",
               "JAC JS8": "js8", "JAC RF8": "rf8"}
 MOD_PHOTOS = {("JAC M3", "van"): "m3-van"}  # у комплектации свой вид — своё фото
 
 
-def car_photo(model: str | None, mod: str | None = None, small: bool = False) -> str | None:
+def car_photo(model: str | None, mod: str | None = None, small: bool = False, color: str | None = None) -> str | None:
     car = cars.get(model) or next((c for c in cars.CARS if c.catalog == model), None)  # старые записи — имя каталога
     if car is None:
         return None
     key = MOD_PHOTOS.get((car.name, mod)) or CAR_PHOTOS.get(car.name)
-    name = f"{key}{'-s' if small else ''}.webp" if key else None
-    return f"/static/cars/{name}" if name and (STATIC / "cars" / name).exists() else None
+    if not key:
+        return None
+    size = "-s" if small else ""
+    for name in ([f"{key}-{color}{size}.webp"] if color else []) + [f"{key}{size}.webp"]:
+        if (STATIC / "cars" / name).exists():
+            return f"/static/cars/{name}"
+    return None
 
 
 async def profile_json(session: AsyncSession, c: Client) -> dict:
@@ -279,7 +285,7 @@ async def profile_json(session: AsyncSession, c: Client) -> dict:
         car = {"model": user.car_model, "mod": user.car_modification, "color": user.car_color,
                "mod_name": cars.mod_name(user.car_modification, lang), "color_name": cars.color_name(user.car_color, lang),
                "hex": COLOR_HEX.get(user.car_color or ""),
-               "photo": car_photo(user.car_model, user.car_modification, small=True)}
+               "photo": car_photo(user.car_model, user.car_modification, small=True, color=user.car_color)}
     return {"name": " ".join(filter(None, [user.first_name, user.last_name])) or None, "phone": user.phone,
             "region": {"id": user.region_id, "name": localized_name(user.region, lang)},
             "lang": lang or "ru", "languages": [{"code": code, "name": i18n.t(code, "language_name")} for code in LANGUAGES],
@@ -325,7 +331,7 @@ def register_api(app: FastAPI) -> None:
         user, lang = c.user, c.lang
         return {"lang": lang or "ru", "name": user.first_name or "", "region": localized_name(user.region, lang),
                 "car": cars.car_text(user, lang) if not c.full else None, "full": c.full,
-                "car_photo": car_photo(user.car_model, user.car_modification) if not c.full else None,
+                "car_photo": car_photo(user.car_model, user.car_modification, color=user.car_color) if not c.full else None,
                 "car_model": user.car_model if not c.full else None,
                 "cart": await CartRepository(session).total_qty(user), "t": ui_texts(lang)}
 
@@ -466,7 +472,8 @@ def register_api(app: FastAPI) -> None:
             result.append({
                 "model": name, "photo": car_photo(name, small=True),
                 "mods": [{"key": m, "name": cars.mod_name(m, lang), "photo": car_photo(name, m, small=True)} for m in mods],
-                "colors": {m: [{"key": k, "name": cars.color_name(k, lang), "hex": COLOR_HEX.get(k)}
+                "colors": {m: [{"key": k, "name": cars.color_name(k, lang), "hex": COLOR_HEX.get(k),
+                                "photo": car_photo(name, m or None, color=k)}
                                for k in cars.colors(name, m or None)] for m in (mods or [""])},
             })
         return {"cars": result}

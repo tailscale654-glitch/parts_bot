@@ -199,13 +199,18 @@ async def test_profile_car(shop):
     client, _, _ = shop
     models = {c["model"]: c for c in (await client.get("/api/cars")).json()["cars"]}
     assert [m["key"] for m in models["JAC M3"]["mods"]] == ["passenger", "van"]
-    assert models["JAC M3"]["colors"]["van"][0] == {"key": "white", "name": "Белый", "hex": "#f4f4f4"}
+    assert models["JAC M3"]["colors"]["van"][0] == {"key": "white", "name": "Белый", "hex": "#f4f4f4",
+                                                   "photo": "/static/cars/m3-van.webp"}  # белый — исходное фото
     assert models["JAC T8"]["mods"] == [] and "" in models["JAC T8"]["colors"]
 
     p = (await client.post("/api/profile/car", json={"model": "JAC M3", "mod": "van", "color": "white"})).json()
     assert p["car"] == {"model": "JAC M3", "mod": "van", "color": "white", "mod_name": "VAN (фургон)",
                         "color_name": "Белый", "hex": "#f4f4f4", "photo": "/static/cars/m3-van-s.webp"}
     assert (await client.get("/api/me")).json()["car"] == "JAC M3 · VAN (фургон) · Белый"
+    # другой цвет — машина на фото того же цвета (в профиле и на главной)
+    p = (await client.post("/api/profile/car", json={"model": "JAC M3", "mod": "van", "color": "black"})).json()
+    assert p["car"]["photo"] == "/static/cars/m3-van-black-s.webp"
+    assert (await client.get("/api/me")).json()["car_photo"] == "/static/cars/m3-van-black.webp"
     for bad in ({"model": "JAC M3", "color": "white"},                       # у M3 комплектация обязательна
                 {"model": "JAC T8", "color": "red"},                         # такого цвета у T8 нет
                 {"model": "Tesla", "color": "white"}):
@@ -224,6 +229,22 @@ async def test_model_photos(shop):
     assert {m["key"]: m["photo"] for m in models["JAC M3"]["mods"]} == {
         "passenger": "/static/cars/m3-s.webp", "van": "/static/cars/m3-van-s.webp"}  # у фургона своё фото
     assert all(m["photo"] for m in models.values())  # фото есть у всех 7 моделей, включая T9
+
+
+async def test_every_color_has_its_photo(shop):
+    """У каждого цвета каждой модели своё фото (кроме цвета исходного фото — там основное)."""
+    client, _, _ = shop
+    source = {"JAC JS8": "black", "JAC RF8": "silver"}  # остальные модели сфотографированы белыми
+    for car in (await client.get("/api/cars")).json()["cars"]:
+        for mod, colors in car["colors"].items():
+            for color in colors:
+                base = color["photo"].rsplit("/", 1)[1]
+                if color["key"] == source.get(car["model"], "white"):
+                    assert "-" + color["key"] not in base, (car["model"], color)
+                else:
+                    assert base.endswith(f"-{color['key']}.webp"), (car["model"], mod, color)
+                    assert (await client.get(color["photo"])).status_code == 200
+                    assert (await client.get(color["photo"].replace(".webp", "-s.webp"))).status_code == 200
 
 
 async def test_vin_scan_and_save(shop):
