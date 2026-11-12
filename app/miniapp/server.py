@@ -43,7 +43,7 @@ from app.services.import_mapping import ALL_MODELS, CATEGORIES
 from app.services.localization import i18n, localized_name
 from app.services.orders import fmt_date, order_status, progress_steps, stock_problems_text
 from app.services.pictures import picture_key
-from app.services.vin import MAX_UPLOAD, check_digit_ok, is_valid, normalize, read_vin
+from app.services.vin import MAX_UPLOAD, check_digit_ok, is_valid, normalize, read_frame, read_vin
 
 logger = logging.getLogger(__name__)
 HERE = Path(__file__).parent
@@ -98,6 +98,8 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     app.state.limiter = RateLimiter()
     app.state.scan_limiter = RateLimiter(limit=20)  # распознавание VIN тяжёлое — не чаще 20 фото в минуту
     app.state.scan_slots = asyncio.Semaphore(2)  # и не больше двух одновременно на весь сервер
+    app.state.frame_limiter = RateLimiter(limit=150)  # сканер шлёт 1–2 кадра в секунду, пока открыт
+    app.state.frame_slots = asyncio.Semaphore(4)  # кадр лёгкий (≈0,4 с), но тоже не без предела
     index = (STATIC / "index.html").read_text(encoding="utf-8").replace("{{v}}", asset_version())
 
     @app.middleware("http")
@@ -115,6 +117,9 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     register_api(app)
     return app
+
+
+MAX_FRAME = 1_500_000  # кадр сканера — полоса ~1280 px в JPEG, обычно 60–150 КБ
 
 
 # ---------- кто открыл витрину ----------
@@ -523,6 +528,26 @@ def register_api(app: FastAPI) -> None:
             raise HTTPException(413, "too_big")
         async with request.app.state.scan_slots:
             vin, method = await asyncio.to_thread(read_vin, data)  # фото не сохраняем — только читаем номер
+        return {"vin": vin, "method": method, "check_ok": bool(vin) and check_digit_ok(vin)}
+
+    @app.post("/api/vin/frame")
+    async def vin_frame(request: Request, frame: UploadFile = File(...), c: Client = Depends(client)):
+        """Кадр живого сканера: полоса из рамки. Отвечаем быстро; номер «засчитывает» витрина, когда он
+        совпал на нескольких кадрах. Сервер занят — пропускаем кадр, сканер пришлёт следующий."""
+        if not request.app.state.frame_limiter.allow(c.user.telegram_id):
+            raise HTTPException(429, "too_many")
+        data = await frame.read(MAX_FRAME + 1)
+        if len(data) > MAX_FRAME:
+            raise HTTPException(413, "too_big")
+        slots = request.app.state.frame_slots
+        try:
+            await asyncio.wait_for(slots.acquire(), timeout=2)
+        except TimeoutError:
+            return {"vin": None, "method": None, "check_ok": False, "busy": True}
+        try:
+            vin, method = await asyncio.to_thread(read_frame, data)  # кадр не сохраняем
+        finally:
+            slots.release()
         return {"vin": vin, "method": method, "check_ok": bool(vin) and check_digit_ok(vin)}
 
     @app.post("/api/profile/vin")

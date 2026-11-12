@@ -8,7 +8,7 @@ import pytest
 from PIL import Image, ImageDraw, ImageFont
 
 from app.services import cars
-from app.services.vin import check_digit_ok, find_vin, is_valid, normalize, read_vin
+from app.services.vin import check_digit_ok, find_vin, is_valid, normalize, read_frame, read_vin
 
 VIN = "LJ12EKR17N4000123"  # контрольная цифра (9-й знак) сходится
 zxingcpp = pytest.importorskip("zxingcpp")
@@ -69,6 +69,35 @@ def test_read_vin_from_printed_text():
     out = io.BytesIO()
     img.rotate(1.5, expand=True, fillcolor=(236, 232, 222)).save(out, "JPEG", quality=85)
     assert read_vin(out.getvalue()) == (VIN, "text")
+
+
+@pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract не установлен (в Docker-образе есть)")
+def test_read_frame_from_scanner_strip():
+    """Живой сканер шлёт полосу из рамки, кадр за кадром (рука чуть дрожит). Отдельный кадр может ошибиться
+    в знаке — витрина засчитывает номер, только когда он совпал на 2 кадрах с верной контрольной цифрой
+    (или на 3 кадрах). Здесь то же правило на серии кадров."""
+    font_path = next((p for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                                  "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf") if Path(p).exists()), None)
+    if font_path is None:
+        pytest.skip("нет шрифта для картинки")
+    votes, locked = {}, None
+    for size, angle in ((76, -2), (60, 0), (76, 1.5), (60, -2), (76, 0), (60, 1.5)):
+        img = Image.new("RGB", (1200, 240), (228, 230, 232))
+        draw = ImageDraw.Draw(img)
+        draw.text((30, -14), "Марка, модель: JAC T8", fill=(90, 90, 90), font=ImageFont.truetype(font_path, 32))
+        draw.text((40, 80), f"VIN: {VIN}", fill=(25, 25, 25), font=ImageFont.truetype(font_path, size))
+        out = io.BytesIO()
+        img.rotate(angle, fillcolor=(228, 230, 232)).save(out, "JPEG", quality=80)
+        vin, method = read_frame(out.getvalue())
+        if vin:
+            assert method == "text"
+            votes[vin] = votes.get(vin, 0) + 1
+            if (votes[vin] >= 2 and check_digit_ok(vin)) or votes[vin] >= 3:
+                locked = vin
+                break
+    assert locked == VIN
+    assert read_frame(barcode_png(VIN, zxingcpp.BarcodeFormat.Code39)) == (VIN, "barcode")  # штрих-код — с первого кадра
+    assert read_frame(b"junk") == (None, None)
 
 
 def test_car_with_vin():

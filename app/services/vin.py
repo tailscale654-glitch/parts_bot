@@ -226,9 +226,11 @@ def _candidates(words: list[str]) -> dict[str, float]:
     return found
 
 
-def _from_text(img) -> str | None:
+def _from_text(img, quick: bool = False) -> str | None:
     """Напечатанный номер: 1) находим строку с VIN на всём фото; 2) перечитываем только её — в нескольких
-    масштабах и вариантах — и выбираем номер, за который «проголосовало» больше всего прочтений."""
+    масштабах и вариантах — и выбираем номер, за который «проголосовало» больше всего прочтений.
+    quick — для сканера: кадр уже обрезан по рамке, читаем быстро (меньше вариантов), остальное доберут
+    следующие кадры."""
     if shutil.which("tesseract") is None:
         return None
     try:
@@ -244,9 +246,9 @@ def _from_text(img) -> str | None:
             votes[vin] = votes.get(vin, 0) + weight
 
     full = ImageOps.grayscale(img).filter(ImageFilter.MedianFilter(3))  # строку перечитываем в полном разрешении
-    base, k_base = _gray(img)
+    base, k_base = _gray(img, 1000 if quick else 1600)
     lines = []
-    for angle in (0, 90, 270):  # документ могли снять боком
+    for angle in ((0,) if quick else (0, 90, 270)):  # документ могли снять боком
         page = base.rotate(angle, expand=True) if angle else base
         found = _lines(_tesseract(page, 11))
         lines = [line for line in found if len(re.sub(r"[^A-Z0-9]", "", "".join(line[0]).upper())) >= 14]
@@ -255,7 +257,7 @@ def _from_text(img) -> str | None:
     source = full.rotate(angle, expand=True) if angle else full
     # строки, похожие на VIN, — сначала те, где уже есть кандидат
     lines.sort(key=lambda line: -max(_candidates(line[0]).values(), default=0))
-    for words, box, height in lines[:2]:
+    for words, box, height in lines[:1 if quick else 2]:
         vote(_candidates(words))
         left, top, right, bottom = (round(v / k_base) for v in box)
         height = height / k_base
@@ -263,10 +265,12 @@ def _from_text(img) -> str | None:
         side, pad = round(height * 8), round(max(height * .8, 6))
         crop = source.crop((max(left - side, 0), max(top - pad, 0), min(right + side, source.width),
                             min(bottom + pad, source.height)))
-        for target in (30, 40, 52):  # высота букв, на которой Tesseract читает лучше всего
+        for target in ((40,) if quick else (30, 40, 52)):  # высота букв, на которой Tesseract читает лучше всего
             k = target / max(height, 1)
             line_img = crop.resize((max(round(crop.width * k), 1), max(round(crop.height * k), 1)), Image.LANCZOS)
-            for variant, whitelist in ((line_img, False), (line_img, True), (_otsu(line_img), True)):
+            variants = ((line_img, True), (_otsu(line_img), True)) if quick else \
+                ((line_img, False), (line_img, True), (_otsu(line_img), True))
+            for variant, whitelist in variants:
                 for words2, _, _ in _lines(_tesseract(variant, 7, whitelist)):
                     vote(_candidates(words2))
     if not votes:
@@ -276,6 +280,20 @@ def _from_text(img) -> str | None:
         return votes[vin] + (min(votes[vin], 2) if check_digit_ok(vin) else 0) + (.3 if vin.startswith("LJ1") else 0)
 
     return max(votes, key=rank)
+
+
+def read_frame(data: bytes) -> tuple[str | None, str | None]:
+    """Кадр сканера (полоса из рамки) → (VIN, способ). Быстро, за 0,2–0,6 с; надёжность даёт совпадение
+    номера на нескольких кадрах подряд — это проверяет витрина."""
+    try:
+        img = _open(data)
+    except Exception:  # noqa: BLE001
+        return None, None
+    vin = _from_barcode(img)
+    if vin:
+        return vin, "barcode"
+    vin = _from_text(img, quick=True)
+    return (vin, "text") if vin else (None, None)
 
 
 def read_vin(data: bytes) -> tuple[str | None, str | None]:

@@ -287,6 +287,22 @@ async def test_vin_scan_and_save(shop):
     assert (await client.post("/api/profile/vin", json={"vin": ""})).json()["vin"] is None
 
 
+async def test_vin_scanner_frames(shop):
+    """Живой сканер: кадр со штрих-кодом → номер сразу; пустой кадр — ничего; не больше 150 кадров в минуту."""
+    from tests.test_vin import VIN, barcode_png, zxingcpp
+
+    client, _, _ = shop
+    frame = ("f.png", barcode_png(VIN, zxingcpp.BarcodeFormat.Code128), "image/png")
+    assert (await client.post("/api/vin/frame", files={"frame": frame})).json() == \
+        {"vin": VIN, "method": "barcode", "check_ok": True}
+    assert (await client.post("/api/vin/frame", files={"frame": ("x.jpg", b"x", "image/jpeg")})).json()["vin"] is None
+    big = await client.post("/api/vin/frame", files={"frame": ("big.jpg", b"0" * 1_500_001, "image/jpeg")})
+    assert big.status_code == 413
+    codes = [(await client.post("/api/vin/frame", files={"frame": ("x.jpg", b"x", "image/jpeg")})).status_code
+             for _ in range(150)]
+    assert codes[-1] == 429 and codes.count(200) == 147  # 3 кадра выше + 147 = 150
+
+
 async def test_vin_scan_rate_limit(shop):
     client, _, _ = shop
     codes = [(await client.post("/api/vin/scan", files={"photo": ("x.jpg", b"x", "image/jpeg")})).status_code for _ in range(21)]

@@ -23,6 +23,8 @@ const ICON = {
   cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M5 8h14l-1.2 11.1a1 1 0 0 1-1 .9H7.2a1 1 0 0 1-1-.9L5 8Z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/></svg>',
   orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17Z"/><path d="M9 8.5h6M9 12.5h6"/></svg>',
   profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.6 3.8-5.8 7.2-5.8s6.3 2.2 7.2 5.8"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  torch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M8 3h8v4l-2 3v10a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V10L8 7V3Z"/><path d="M8 7h8M12 13v2"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3.5 8.5a1.5 1.5 0 0 1 1.5-1.5h2.6l1.6-2.2h5.6L16.4 7H19a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18V8.5Z"/><circle cx="12" cy="13" r="3.6"/></svg>',
   chev: '<svg viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 1.5 5 5-5 5"/></svg>',
 };
@@ -122,6 +124,7 @@ function show(name, params, opts) {
 }
 
 function back() {
+  if (state.overlayClose) return state.overlayClose(); // открыт сканер — «Назад» закрывает его
   if (state.stack.length > 1) {
     state.stack.pop();
     render();
@@ -140,6 +143,7 @@ async function render() {
   toastEl.hidden = true;
   setFooter();
   renderTabs();
+  if (state.overlayClose) state.overlayClose(); // ушли с экрана — сканер закрываем
   if (state.stack.length > 1) tg.BackButton.show(); else tg.BackButton.hide();
   app.replaceChildren(h("div", { class: "skeleton" }), h("div", { class: "skeleton" }));
   try {
@@ -727,6 +731,153 @@ async function shrinkPhoto(file) {
   }
 }
 
+/* ---------- живой сканер VIN ----------
+   Камера внутри витрины. Каждые ~0,4 с полоса из рамки уходит на сервер (он читает одну строку быстро),
+   штрих-код на телефонах с BarcodeDetector читаем прямо здесь. Номер засчитываем, когда он совпал
+   на нескольких кадрах: так ошибка одного кадра не попадёт в поле. */
+const VIN_IN_TEXT = /[A-HJ-NPR-Z0-9]{17}/;
+
+function vinScanner({ onFound, onFail }) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    onFail("unsupported");
+    return;
+  }
+  const video = h("video", { class: "scanner-video", autoplay: true, playsinline: true, muted: true });
+  video.muted = true;
+  const reading = h("p", { class: "scanner-reading", "aria-live": "polite" }, t("vin_scanner_looking"));
+  const win = h("div", { class: "scanner-window" }, h("span", { class: "scanner-beam" }));
+  const torch = h("button", { class: "scanner-btn", type: "button", "aria-label": t("vin_scanner_torch"), hidden: true },
+    icon("torch"));
+  const root = h("div", { class: "scanner", role: "dialog", "aria-label": t("vin_scan") },
+    video,
+    h("div", { class: "scanner-top" },
+      h("button", { class: "scanner-btn", type: "button", "aria-label": t("vin_scanner_close"), onclick: () => close() },
+        icon("close")),
+      torch),
+    h("div", { class: "scanner-middle" },
+      h("p", { class: "scanner-title" }, t("vin_scanner_title")), win, reading),
+    h("div", { class: "scanner-bottom" },
+      h("p", {}, t("vin_scanner_hint")),
+      h("button", { class: "scanner-manual", type: "button", onclick: () => close("manual") }, t("vin_scanner_manual"))));
+
+  let stream = null, closed = false, timer = null, inFlight = false, errors = 0, detector = null, torchOn = false;
+  const votes = new Map();
+  const started = Date.now();
+  const canvas = document.createElement("canvas");
+
+  function close(reason) {
+    if (closed) return;
+    closed = true;
+    clearTimeout(timer);
+    if (stream) stream.getTracks().forEach((tr) => tr.stop());
+    root.remove();
+    document.body.classList.remove("scanning");
+    state.overlayClose = null;
+    document.removeEventListener("visibilitychange", onHidden);
+    if (reason === "manual") onFail("manual");
+  }
+  function onHidden() { if (document.hidden) close(); } // свернули Telegram — камеру отпускаем
+  function lock(vin, checkOk) {
+    if (closed) return;
+    win.classList.add("locked");
+    reading.textContent = vin;
+    haptic("success");
+    setTimeout(() => { close(); onFound(vin, checkOk); }, 450);
+  }
+
+  // полоса из рамки в координатах видео (видео растянуто по экрану с обрезкой краёв — object-fit: cover)
+  function grab() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return null;
+    const vr = video.getBoundingClientRect(), wr = win.getBoundingClientRect();
+    const k = Math.max(vr.width / vw, vr.height / vh);
+    const ox = (vr.width - vw * k) / 2, oy = (vr.height - vh * k) / 2;
+    const padY = wr.height * 0.12;
+    let sx = (wr.left - vr.left - ox) / k, sy = (wr.top - padY - vr.top - oy) / k;
+    let sw = wr.width / k, sh = (wr.height + padY * 2) / k;
+    sx = Math.max(0, sx); sy = Math.max(0, sy);
+    sw = Math.min(sw, vw - sx); sh = Math.min(sh, vh - sy);
+    const scale = Math.min(1, 1280 / sw);
+    canvas.width = Math.round(sw * scale);
+    canvas.height = Math.round(sh * scale);
+    canvas.getContext("2d").drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+  }
+
+  async function tick() {
+    if (closed) return;
+    timer = setTimeout(tick, 380);
+    if (detector) { // штрих-код — сразу на телефоне, если браузер умеет
+      try {
+        for (const code of await detector.detect(video)) {
+          const m = vinClean(code.rawValue || "").match(VIN_IN_TEXT);
+          if (m && VIN_OK.test(m[0])) return lock(m[0], true);
+        }
+      } catch (e) { detector = null; }
+    }
+    if (inFlight || closed) return;
+    inFlight = true;
+    try {
+      const blob = await grab();
+      if (!blob || closed) return;
+      const form = new FormData();
+      form.append("frame", blob, "frame.jpg");
+      const r = await api("/api/vin/frame", form);
+      errors = 0;
+      if (closed || !r.vin) {
+        if (!closed && Date.now() - started > 12000) reading.textContent = t("vin_scanner_slow");
+        return;
+      }
+      if (r.method === "barcode") return lock(r.vin, r.check_ok);
+      const n = (votes.get(r.vin) || 0) + 1;
+      votes.set(r.vin, n);
+      const rival = Math.max(0, ...[...votes].filter(([v]) => v !== r.vin).map(([, c]) => c));
+      reading.textContent = `${t("vin_scanner_reading")} ${r.vin}`;
+      if ((n >= 2 && r.check_ok && n > rival) || (n >= 3 && n >= rival + 2)) lock(r.vin, r.check_ok);
+    } catch (e) {
+      if (e.code === "too_many") { reading.textContent = t("vin_too_many"); clearTimeout(timer); timer = setTimeout(tick, 5000); }
+      else if (++errors >= 3) reading.textContent = t("vin_scanner_offline");
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  document.body.append(root);
+  document.body.classList.add("scanning");
+  state.overlayClose = () => close();
+  document.addEventListener("visibilitychange", onHidden);
+  navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+  }).then(async (s) => {
+    if (closed) { s.getTracks().forEach((tr) => tr.stop()); return; }
+    stream = s;
+    video.srcObject = s;
+    try { await video.play(); } catch (e) { /* autoplay muted — обычно не нужно */ }
+    const track = s.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.torch) {
+      torch.hidden = false;
+      torch.addEventListener("click", async () => {
+        torchOn = !torchOn;
+        try { await track.applyConstraints({ advanced: [{ torch: torchOn }] }); } catch (e) { torchOn = false; }
+        torch.classList.toggle("on", torchOn);
+      });
+    }
+    if ("BarcodeDetector" in window) {
+      try {
+        const want = ["code_39", "code_128", "data_matrix", "qr_code", "pdf417"];
+        const formats = (await window.BarcodeDetector.getSupportedFormats()).filter((f) => want.includes(f));
+        if (formats.length) detector = new window.BarcodeDetector({ formats });
+      } catch (e) { detector = null; }
+    }
+    tick();
+  }).catch((e) => {
+    close();
+    onFail(e && e.name === "NotAllowedError" ? "denied" : "unsupported");
+  });
+}
+
 screens.vin = {
   async draw({ vin }) {
     const saved = vin || "";
@@ -796,7 +947,27 @@ screens.vin = {
       }
     }
 
-    // два поля выбора файла: камера сразу (capture) и галерея — если техпаспорт уже сфотографирован
+    function startScanner() {
+      status.className = "vin-status";
+      status.textContent = "";
+      vinScanner({
+        onFound(vin, checkOk) {
+          input.value = vin;
+          status.className = checkOk ? "vin-status ok" : "vin-status warn";
+          status.textContent = checkOk ? t("vin_found") : t("vin_found_check");
+          refresh();
+        },
+        onFail(reason) {
+          if (reason === "manual") { input.focus(); return; }
+          // камеры в витрине нет (старый Telegram, компьютер без камеры, запрет) — снимем обычным фото
+          status.className = "vin-status warn";
+          status.replaceChildren(t(reason === "denied" ? "vin_camera_denied" : "vin_camera_unavailable"), " ",
+            h("button", { class: "link", type: "button", onclick: () => camera.click() }, t("vin_take_photo")));
+        },
+      });
+    }
+
+    // запасной путь — фото: камера телефона (capture) и галерея, если техпаспорт уже сфотографирован
     const camera = h("input", { type: "file", accept: "image/*", capture: "environment", hidden: true });
     const gallery = h("input", { type: "file", accept: "image/*", hidden: true });
     for (const el of [camera, gallery]) {
@@ -807,7 +978,7 @@ screens.vin = {
     setFooter(save);
     return h("div", { class: "vin" },
       h("header", { class: "page-title" }, h("h1", {}, t("vin_title")), h("p", {}, t("vin_why"))),
-      h("button", { class: "vin-scan", type: "button", onclick: () => camera.click() },
+      h("button", { class: "vin-scan", type: "button", onclick: startScanner },
         icon("camera"),
         h("span", {}, h("b", {}, t("vin_scan")), h("small", {}, t("vin_scan_hint")))),
       h("button", { class: "link", type: "button", onclick: () => gallery.click() }, t("vin_gallery")),
