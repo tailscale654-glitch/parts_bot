@@ -1,8 +1,8 @@
-"""Фото деталей из электронного каталога JAC (EPC, uapp.jac.com.cn:4484).
+"""Фото деталей: электронный каталог JAC (EPC, uapp.jac.com.cn:4484) и свой магазин jac-zap.ru.
 
 Как попадают в бот:
-  1. В браузере, где выполнен вход в каталог JAC, собирается архив ZIP: index.json (артикул → картинка)
-     и картинки img/<md5>.jpg (имя — как в каталоге JAC).
+  1. В браузере собирается архив ZIP: index.json (источник и «артикул → картинка») и картинки img/<md5>.jpg.
+     Каталог JAC — 3D-рисунки (нужен вход), jac-zap.ru — настоящие фото (WooCommerce, открытый список товаров).
   2. Администратор загружает архив в веб-панели: «🖼 Фото деталей».
   3. Здесь картинки проверяются и пережимаются (JPEG до 800 px), сохраняются в базу (epc_images),
      артикулы связываются с картинками (epc_photos), и фото сразу ставится деталям без своего фото.
@@ -10,7 +10,8 @@
 
 У детали в поле photo — ссылка «/media/parts/<md5>.jpg»: витрина и панель отдают картинку из базы,
 бот отправляет её файлом и запоминает file_id Telegram — второй раз картинка уже не загружается.
-Своё фото из панели (ссылка в «Каталог → деталь») главнее фото из каталога JAC.
+Что главнее: своё фото из панели (ссылка в «Каталог → деталь») → фото магазина jac-zap.ru → рисунок каталога JAC.
+Архивы можно загружать в любом порядке: рисунок JAC не заменит уже загруженное фото магазина.
 """
 from __future__ import annotations
 
@@ -37,6 +38,7 @@ MAX_ZIP_MB = 400  # 3–10 тысяч фото по 10–30 КБ — 50–250 М
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_FILES = 60_000
 MAX_SIDE = 800  # картинки каталога 600×440 — не увеличиваем, огромные уменьшаем
+SOURCES = {"epc": 1, "jac-zap": 2}  # чем больше, тем главнее; неизвестный источник — как каталог JAC
 
 
 def url_for(md5: str) -> str:
@@ -61,6 +63,8 @@ class PhotoImport:
     new_images: int = 0
     numbers: int = 0  # артикулов связано с картинками
     parts: int = 0  # деталей в боте получили фото
+    kept: int = 0  # артикулов, где осталось фото из более главного источника
+    source: str = "epc"
     bad: list[str] = field(default_factory=list)  # что пропустили и почему (для панели)
 
 
@@ -83,12 +87,12 @@ def to_jpeg(data: bytes) -> bytes:
     return buf.getvalue()
 
 
-def open_archive(fileobj) -> tuple[zipfile.ZipFile, dict[str, dict], list[zipfile.ZipInfo]]:
-    """ZIP → (архив, {артикул: {"img", "en"}}, картинки в архиве). Чужие файлы в архиве не трогаем."""
+def open_archive(fileobj) -> tuple[zipfile.ZipFile, dict[str, dict], list[zipfile.ZipInfo], str]:
+    """ZIP → (архив, {артикул: {"img", "en"}}, картинки в архиве, источник). Чужие файлы в архиве не трогаем."""
     try:
         archive = zipfile.ZipFile(fileobj)
     except zipfile.BadZipFile:
-        raise ValueError("Это не ZIP-архив. Загрузите файл jac-epc-photos….zip, который скачал браузер.")
+        raise ValueError("Это не ZIP-архив. Загрузите архив с фото (jac-epc-photos….zip или jac-zap-photos….zip).")
     infos = archive.infolist()
     if len(infos) > MAX_FILES:
         raise ValueError(f"В архиве слишком много файлов ({len(infos)}).")
@@ -97,7 +101,7 @@ def open_archive(fileobj) -> tuple[zipfile.ZipFile, dict[str, dict], list[zipfil
     try:
         index = json.loads(archive.read("index.json"))
     except KeyError:
-        raise ValueError("В архиве нет index.json — это не выгрузка фото из каталога JAC.")
+        raise ValueError("В архиве нет index.json — это не выгрузка фото деталей.")
     except ValueError:
         raise ValueError("index.json в архиве повреждён.")
     numbers: dict[str, dict] = {}
@@ -109,7 +113,9 @@ def open_archive(fileobj) -> tuple[zipfile.ZipFile, dict[str, dict], list[zipfil
             numbers[pn] = {"img": img, "en": (str(item.get("en") or "").strip()[:255] or None)}
     if not numbers:
         raise ValueError("В index.json нет ни одного артикула с картинкой.")
-    return archive, numbers, [i for i in infos if ARCHIVE_IMAGE_RE.fullmatch(i.filename)]
+    source = str(index.get("kind") or "epc").strip().lower()
+    source = source if source in SOURCES else "epc"
+    return archive, numbers, [i for i in infos if ARCHIVE_IMAGE_RE.fullmatch(i.filename)], source
 
 
 def convert(archive: zipfile.ZipFile, infos: list[zipfile.ZipInfo]) -> tuple[dict[str, bytes], list[str]]:
@@ -133,8 +139,8 @@ BATCH = 300  # картинок за раз: в памяти не больше ~
 
 async def import_archive(session: AsyncSession, fileobj) -> PhotoImport:
     """Загрузка архива из панели: сохранить картинки, связать с артикулами, поставить фото деталям."""
-    archive, numbers, infos = open_archive(fileobj)
-    result = PhotoImport()
+    archive, numbers, infos, source = open_archive(fileobj)
+    result = PhotoImport(source=source)
     with archive:
         known = set(await session.scalars(select(EpcImage.md5)))
         todo, seen = [], set()
@@ -162,15 +168,18 @@ async def import_archive(session: AsyncSession, fileobj) -> PhotoImport:
         key = part_key(pn)
         row = existing.get(key)
         if row is None:
-            row = existing[key] = EpcPhoto(key=key, part_number=pn, image=info["img"])
+            row = existing[key] = EpcPhoto(key=key, part_number=pn, image=info["img"], source=source)
             session.add(row)
-        row.image, row.name_en = info["img"], info["en"]
+        elif SOURCES.get(row.source, 1) > SOURCES[source]:
+            result.kept += 1  # уже есть фото из более главного источника (рисунок JAC не заменит фото магазина)
+            continue
+        row.image, row.name_en, row.source = info["img"], info["en"], source
         result.numbers += 1
     await session.flush()
     result.parts = await apply_to_parts(session)
     await session.commit()
-    logger.info("EPC photos imported: %s images (%s new), %s numbers, %s parts updated, %s skipped",
-                result.images, result.new_images, result.numbers, result.parts, len(result.bad))
+    logger.info("Part photos imported (%s): %s images (%s new), %s numbers, %s kept, %s parts updated, %s skipped",
+                source, result.images, result.new_images, result.numbers, result.kept, result.parts, len(result.bad))
     return result
 
 
@@ -203,15 +212,17 @@ async def needed_numbers(session: AsyncSession) -> list[str]:
 
 
 async def summary(session: AsyncSession) -> dict[str, int]:
-    """Для страницы панели: сколько артикулов в боте, у скольких фото из каталога JAC, своё, без фото."""
+    """Для страницы панели: сколько артикулов в боте, у скольких фото из библиотеки, своё, без фото."""
     numbers: dict[str, str | None] = {}
     for number, photo in (await session.execute(select(Part.part_number, Part.photo).where(Part.active.is_(True)))).all():
         key = part_key(number)
         numbers[key] = numbers.get(key) or photo
     epc = sum(1 for p in numbers.values() if p and p.startswith(URL_PREFIX))
     own = sum(1 for p in numbers.values() if p and not p.startswith(URL_PREFIX))
+    by_source = dict((await session.execute(select(EpcPhoto.source, func.count()).group_by(EpcPhoto.source))).all())
     return {"total": len(numbers), "epc": epc, "own": own, "missing": len(numbers) - epc - own,
-            "library": await session.scalar(select(func.count()).select_from(EpcPhoto)) or 0,
+            "library": sum(by_source.values()), "library_epc": by_source.get("epc", 0),
+            "library_shop": by_source.get("jac-zap", 0),
             "images": await session.scalar(select(func.count()).select_from(EpcImage)) or 0}
 
 

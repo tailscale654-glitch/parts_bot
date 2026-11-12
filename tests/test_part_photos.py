@@ -27,12 +27,12 @@ def png(color, size=(600, 440), alpha=False) -> bytes:
 
 
 def archive(parts: dict[str, str], images: dict[str, bytes], extra: dict[str, bytes] | None = None,
-            index: bool = True) -> bytes:
-    """Как собирает браузер: index.json + img/<md5>.jpg."""
+            index: bool = True, kind: str | None = None) -> bytes:
+    """Как собирает браузер: index.json + img/<md5>.jpg. kind="jac-zap" — фото своего магазина."""
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as z:
         if index:
-            z.writestr("index.json", json.dumps({"source": "JAC EPC", "parts": [
+            z.writestr("index.json", json.dumps({"source": "JAC EPC", **({"kind": kind} if kind else {}), "parts": [
                 {"pn": pn, "img": md5, "en": f"PART {pn}"} for pn, md5 in parts.items()]}))
         for md5, data in images.items():
             z.writestr(f"img/{md5}.jpg", data)
@@ -55,7 +55,7 @@ async def test_photos_page_upload_and_bot(env):  # noqa: F811
     zip_bytes = archive({"101001": MD5_A, "999999": MD5_B}, {MD5_A: png((255, 0, 0, 0), alpha=True), MD5_B: png("blue")},
                         extra={"../evil.sh": b"rm -rf /", "img/" + "c" * 32 + ".jpg": b"not an image"})
     r = await upload(env.client, zip_bytes)
-    assert "Загружено: картинок <b>2</b> (новых 2), артикулов <b>2</b>" in r.text and "детал" in r.text
+    assert "Загружено из каталога JAC:" in r.text and "картинок <b>2</b> (новых 2), артикулов <b>2</b>" in r.text
     assert "не картинка" in r.text  # битый файл пропущен, остальные приняты
     part = await env.db.get(Part, 1)
     await env.db.refresh(part)
@@ -118,3 +118,20 @@ def test_md5_of_rejects_foreign_links():
     assert part_photos.md5_of(f"/media/parts/{MD5_A}.jpg") == MD5_A
     for bad in ("https://example.com/a.jpg", "/media/parts/../../etc/passwd", "/media/parts/abc.jpg", None, ""):
         assert part_photos.md5_of(bad) is None
+
+
+async def test_shop_photo_wins_over_jac_drawing(factory):  # noqa: F811
+    """Фото магазина jac-zap.ru главнее рисунка каталога JAC — в каком бы порядке ни загружали архивы."""
+    await sync(factory, [row(2, "1017100GD050", "ENGINE OIL FILTER ASSY.", "OOO «China Group»", model="M4")])
+    epc = archive({"1017100GD050": MD5_A, "5206100P3010": MD5_A}, {MD5_A: png("gray")})
+    shop = archive({"1017100GD050": MD5_B}, {MD5_B: png("white")}, kind="jac-zap")
+    async with factory() as s:
+        first = await part_photos.import_archive(s, io.BytesIO(epc))
+        assert first.source == "epc" and first.parts == 1
+        second = await part_photos.import_archive(s, io.BytesIO(shop))
+        assert second.source == "jac-zap" and second.parts == 1  # рисунок JAC заменён настоящим фото
+        again = await part_photos.import_archive(s, io.BytesIO(epc))  # каталог JAC ещё раз — фото магазина остаётся
+        assert again.kept == 1 and again.numbers == 1 and again.parts == 0
+        assert (await s.scalar(select(Part.photo))) == f"/media/parts/{MD5_B}.jpg"
+        summary = await part_photos.summary(s)
+        assert summary["library_shop"] == 1 and summary["library_epc"] == 1
