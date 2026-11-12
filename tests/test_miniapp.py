@@ -87,7 +87,7 @@ async def test_catalog_search_and_part(shop):
     parts = (await client.get(f"/api/parts?model_id={models[0]['id']}&node_id={node['id']}")).json()
     [oil] = parts["items"]
     assert oil["name"] == "Масляный фильтр" and oil["price"] == "85 000 сум" and oil["dealers"] == 2
-    assert oil["status"] == "stock"
+    assert oil["status"] == "stock" and oil["pic"] == "oil_filter"
 
     found = (await client.get("/api/search?q=3608100")).json()["items"]
     assert found[0]["status"] == "preorder" and found[0]["days"] == "1–2 дня"

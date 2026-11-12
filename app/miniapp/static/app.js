@@ -82,9 +82,17 @@ async function api(path, body) {
   return data;
 }
 
-/* Серая подложка: фото детали или тонкий значок её категории */
-function shot(photo, iconName, cls) {
-  const box = h("div", { class: "shot" + (cls ? " " + cls : ""), html: ICON[iconName] || ICON.other });
+/* Серая подложка: фото детали (если задано в панели) или её схематичный рисунок (pics.js) */
+const CATEGORY_PIC = { service: "oil_filter", body: "door", brakes: "brake_disc", electric: "headlamp", tools: "tools", other: "part" };
+const PICS = window.PICS || {};
+
+function picture(key) {
+  const inner = PICS[key] || PICS.part;
+  return inner ? `<svg class="pic" viewBox="0 0 120 90" aria-hidden="true">${inner}</svg>` : ICON.other; // свои статичные рисунки
+}
+
+function shot(photo, pic, cls) {
+  const box = h("div", { class: "shot" + (cls ? " " + cls : ""), html: picture(pic) });
   if (photo) {
     const img = h("img", { src: photo, alt: "", loading: "lazy" });
     img.addEventListener("load", () => { box.querySelector("svg")?.remove(); });
@@ -220,7 +228,7 @@ screens.home = {
           : h("h2", { class: "section" }, model.mine ? t("categories") : model.name),
         h("div", { class: "tiles" }, model.nodes.map((node) =>
           h("button", { class: "tile", type: "button", onclick: () => show("parts", { model, node }) },
-            shot(null, node.icon),
+            shot(null, CATEGORY_PIC[node.icon] || "part"),
             h("div", { class: "label" }, node.name),
             h("div", { class: "count" }, t("parts_n", { n: node.count }))))));
     }
@@ -239,7 +247,7 @@ function resultsView(data) {
 function productGrid(items) {
   return h("div", { class: "grid" }, items.map((item) =>
     h("button", { class: "product", type: "button", onclick: () => show("part", { id: item.id }) },
-      shot(item.photo, item.icon),
+      shot(item.photo, item.pic),
       h("div", { class: "pname" }, item.name),
       h("div", { class: "pnum" }, item.number),
       item.price ? h("div", { class: "pprice" }, item.status === "stock" && item.dealers > 1
@@ -275,7 +283,7 @@ screens.part = {
   async draw({ id }) {
     const p = await api(`/api/part/${id}`);
     const root = h("div", {},
-      shot(p.photo, p.icon, "part-shot"),
+      shot(p.photo, p.pic, "part-shot"),
       h("header", { class: "part-head" },
         h("h1", {}, p.name),
         h("div", { class: "sub" }, `${p.model}, ${p.node}`),
@@ -403,7 +411,7 @@ function cartView(data) {
   const root = h("div", {}, h("header", { class: "page-title" }, h("h1", {}, t("tab_cart"))));
   root.append(h("div", { class: "lines" }, data.items.map((item) =>
     h("div", { class: "line" },
-      shot(item.photo, item.icon),
+      shot(item.photo, item.pic),
       h("div", {},
         h("div", { class: "lname" }, item.name),
         h("div", { class: "lnum" }, item.number),

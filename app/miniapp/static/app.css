@@ -88,6 +88,19 @@ img { display: block; }
 .shot { display: grid; place-items: center; border-radius: 4px; background: var(--surface); overflow: hidden; color: var(--text-3); }
 .shot svg { width: 34%; height: 34%; stroke-width: 1.1px; }
 .shot img { width: 100%; height: 100%; object-fit: cover; }
+
+/* схематичные рисунки деталей (pics.js): линии одной толщины при любом размере */
+.shot svg.pic { width: 86%; height: 86%; color: var(--text-2); stroke-width: 1.35px; }
+.pic { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.pic * { vector-effect: non-scaling-stroke; }
+.pic .d { stroke-width: .9px; opacity: .6; }
+.pic .f { fill: currentColor; fill-opacity: .07; stroke: none; }
+.pic .k { fill: currentColor; stroke: none; opacity: .45; }
+.pic .t { stroke-width: 9; vector-effect: none; }
+.pic .ti { stroke: var(--surface); stroke-width: 6; vector-effect: none; }
+.pic .dash { stroke-dasharray: 2 2.5; }
+.part-shot svg.pic { width: 72%; height: 72%; stroke-width: 1.6px; }
+.line .shot svg.pic { stroke-width: 1.1px; }
 .tile:active .shot, .product:active .shot { background: var(--surface-press); }
 
 /* ---------- детали: сетка как в интернет-магазине ---------- */
