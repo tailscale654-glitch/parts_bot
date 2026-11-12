@@ -223,4 +223,4 @@ async def test_model_photos(shop):
     assert models["JAC RF8"]["photo"] == "/static/cars/rf8-s.webp"
     assert {m["key"]: m["photo"] for m in models["JAC M3"]["mods"]} == {
         "passenger": "/static/cars/m3-s.webp", "van": "/static/cars/m3-van-s.webp"}  # у фургона своё фото
-    assert models["JAC T9"]["photo"] is None  # фото T9 пока нет — витрина нарисует машину
+    assert all(m["photo"] for m in models.values())  # фото есть у всех 7 моделей, включая T9
