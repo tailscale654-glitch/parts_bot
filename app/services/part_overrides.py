@@ -130,10 +130,7 @@ async def reset(session: AsyncSession, part: Part) -> bool:
     if item is None:
         return False
     await session.delete(item)
-    from app.services.part_photos import urls_by_key
-
-    epc = (await urls_by_key(session)).get(item.key)  # своё фото убрали — снова фото из каталога JAC, если есть
     for p in await _same_number(session, part.part_number):  # фото и описание были только из правки
-        p.photo, p.description_ru, p.description_uz = epc, None, None
+        p.photo, p.description_ru, p.description_uz = None, None, None
     _request_sync(session, await session.get(BotSetting, SYNC_REQUEST_KEY))
     return True

@@ -462,11 +462,6 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow], keep_wareho
     if keep_warehouse is None:
         keep_warehouse = not any(r.warehouse for r in rows)
 
-    from app.services.part_catalog import part_key
-    from app.services.part_photos import URL_PREFIX, urls_by_key
-
-    epc_photos = await urls_by_key(session)  # фото из каталога JAC — если в панели не задано своё
-
     # Всё существующее загружаем одним запросом на таблицу — быстро даже для 50 000 строк
     models = {m.name_ru.lower(): m for m in (await session.scalars(select(CarModel))).unique()}
     nodes = {n.name_ru.lower(): n for n in (await session.scalars(select(Node))).unique()}
@@ -521,8 +516,6 @@ async def apply_import(session: AsyncSession, rows: list[ImportRow], keep_wareho
             _set_names(part, {**r.description, "ru": r.description["ru"] or part.description_ru}, prefix="description")
         if r.photo:
             part.photo = r.photo
-        elif (epc := epc_photos.get(part_key(r.part_number))) and (not part.photo or part.photo.startswith(URL_PREFIX)):
-            part.photo = epc
         part.active = True
         part.mod_codes = r.mod_codes
     await session.flush()

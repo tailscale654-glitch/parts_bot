@@ -270,25 +270,3 @@ async def test_vin_scan_rate_limit(shop):
     client, _, _ = shop
     codes = [(await client.post("/api/vin/scan", files={"photo": ("x.jpg", b"x", "image/jpeg")})).status_code for _ in range(21)]
     assert codes[:20] == [200] * 20 and codes[20] == 429  # не больше 20 фото в минуту
-
-
-async def test_epc_photo_in_shop(shop):
-    from app.database.models import EpcImage, EpcPhoto
-    from app.services import part_photos
-    from tests.test_part_photos import MD5_A, png
-
-    client, _, factory = shop
-    async with factory() as s:
-        s.add(EpcImage(md5=MD5_A, data=part_photos.to_jpeg(png("green"))))
-        s.add(EpcPhoto(key="1017100GD050", part_number="1017100GD050", image=MD5_A))
-        await s.flush()
-        assert await part_photos.apply_to_parts(s) == 1  # масляный фильтр M4
-        await s.commit()
-    item = (await client.get("/api/search?q=1017100")).json()["items"][0]
-    assert item["photo"] == f"/media/parts/{MD5_A}.jpg"
-    assert (await client.get(f"/api/part/{item['id']}")).json()["photo"] == item["photo"]
-    photo = await client.get(item["photo"], headers={"X-Telegram-Init-Data": ""})  # картинке подпись Telegram не нужна
-    assert photo.status_code == 200 and photo.headers["content-type"] == "image/jpeg"
-    assert "immutable" in photo.headers["cache-control"]
-    assert (await client.get("/media/parts/" + "0" * 32 + ".jpg")).status_code == 404
-    assert (await client.get("/media/parts/x.png")).status_code == 404

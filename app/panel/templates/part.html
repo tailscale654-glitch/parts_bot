@@ -20,10 +20,6 @@
   <p class="muted">«Остаток» — уже без штук в незакрытых заказах бота («В заказах»).</p>
 </div>
 <div>
-  {% if part.photo %}<div class="card"><b>Фото</b>
-    <p><img src="{{ part.photo }}" alt="" style="display:block;max-width:100%;max-height:260px;border-radius:6px;background:#fff"></p>
-    <p class="muted">{% if part.photo.startswith('/media/parts/') %}Из каталога запчастей JAC (раздел «🖼 Фото деталей»).
-      Своя ссылка ниже — главнее.{% else %}Своя ссылка из правки ниже.{% endif %}</p></div>{% endif %}
   <div class="card"><b>Название на языках</b>
     {% if part.name_en %}<p class="muted">Английское (из выгрузки): <b>{{ part.name_en }}</b></p>{% endif %}
     {% if can('catalog.edit') %}
