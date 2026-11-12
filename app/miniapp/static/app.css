@@ -230,6 +230,41 @@ img { display: block; }
   vertical-align: -3px; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .45); }
 .swatch.small { width: 12px; height: 12px; margin: 0; vertical-align: 0; }
 
+/* ---------- VIN ---------- */
+.vin-row { margin-top: 16px; }
+.vin-value { color: var(--text); letter-spacing: .04em; }
+.accent { color: var(--accent); }
+.link { display: inline-block; margin: 0; padding: 10px 0; border: 0; background: none; color: var(--text); font-size: 14px;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--text-3); }
+.link.danger { margin-top: 18px; color: var(--text-2); }
+.vin-scan { display: grid; grid-template-columns: 28px 1fr; gap: 14px; align-items: center; width: 100%; padding: 18px 16px;
+  border: 0; border-radius: 4px; background: var(--surface); text-align: left; }
+.vin-scan:active { background: var(--surface-press); }
+.vin-scan svg { width: 28px; height: 28px; }
+.vin-scan b { display: block; font-weight: 500; font-size: 16px; }
+.vin-scan small { display: block; margin-top: 3px; color: var(--text-2); font-size: 13px; line-height: 1.35; }
+.vin-shot { position: relative; height: 168px; margin-top: 8px; border-radius: 4px; overflow: hidden; background: var(--surface); }
+.vin-shot img { width: 100%; height: 100%; object-fit: contain; }
+.vin-shot.busy img { opacity: .55; }
+.vin-shot.busy::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent);
+  animation: sweep 1.4s ease-in-out infinite alternate; }
+@keyframes sweep { to { top: calc(100% - 2px); } }
+.vin-status { min-height: 1.45em; margin: 10px 0 0; color: var(--text-2); font-size: 14px; }
+.vin-status:empty { margin: 0; min-height: 0; }
+.vin-status.ok { color: var(--ok); }
+.vin-status.warn { color: var(--wait); }
+.vin-label { display: block; margin: 26px 0 8px; color: var(--text-2); font-size: 13px; }
+.vin-field { position: relative; }
+.vin-input { display: block; width: 100%; height: 56px; padding: 0 64px 0 16px; border: 0; border-radius: 4px;
+  background: var(--surface); font-size: 20px; font-weight: 500; letter-spacing: .08em; font-variant-numeric: tabular-nums;
+  text-transform: uppercase; outline: none; box-shadow: inset 0 0 0 1px transparent; }
+.vin-input:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.vin-input::placeholder { color: var(--text-3); font-size: 15px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.vin-count { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 13px;
+  font-variant-numeric: tabular-nums; pointer-events: none; }
+.vin-help { margin: 8px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.4; }
+.vin-help.bad { color: var(--wait); }
+
 /* ---------- пусто, ошибка, спасибо ---------- */
 .empty { padding: 96px 8px 24px; text-align: center; }
 .empty h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.2; font-weight: 500; letter-spacing: -.01em; }

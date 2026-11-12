@@ -91,7 +91,7 @@ templates.env.globals.update(
     human_size=lambda n: __import__("app.services.chat_files", fromlist=["x"]).human_size(n),
     file_view=lambda m: __import__("app.services.chat_files", fromlist=["view_of"]).view_of(m),
     today=lambda: datetime.now(orders_service.TIMEZONE).strftime("%d.%m.%Y"),
-    car_text=lambda u: __import__("app.services.cars", fromlist=["car_text"]).car_text(u, LANG),
+    car_text=lambda u: __import__("app.services.cars", fromlist=["car_with_vin"]).car_with_vin(u, LANG),
     tabs=[(k, i18n.t(LANG, f"tab_{k}")) for k in ORDER_FILTERS],
     ROLES=ROLES, ROLE_HINTS=ROLE_HINTS, brand=BRAND,
     # «JAC Motors Parts» → «JAC <span>Motors Parts</span>» (второе и дальше слова — акцентным цветом)
@@ -1005,9 +1005,9 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         if chat is not None:
             msgs = await support.messages(session, chat.id)
             orders_, _ = await AdminRepository(session).orders_page("all", 0, 5, user_id=chat.user_id)
-            from app.services.cars import car_text
+            from app.services.cars import car_with_vin
             context.update(messages=msgs, last_id=msgs[-1].id if msgs else 0, orders=orders_, seen=_epoch(chat.client_seen_at),
-                           car=car_text(chat.user, LANG) or "")
+                           car=car_with_vin(chat.user, LANG) or "")
         return render(request, "chat.html", web, **context)
 
     @app.get("/chat", response_class=HTMLResponse)

@@ -45,7 +45,8 @@ def profile_view(user: User) -> tuple[str, InlineKeyboardMarkup]:
         lang, "profile_text",
         name=name, phone=user.phone or "—", region=region_title(user), language=i18n.t(lang, "language_name"),
     )
-    return f"{text}\n{cars.car_line(user, lang)}", profile_keyboard(lang)
+    vin = f"\n{i18n.t(lang, 'vin_line', vin=user.car_vin)}" if user.car_vin else ""
+    return f"{text}\n{cars.car_line(user, lang)}{vin}", profile_keyboard(lang)
 
 
 async def region_prompt(user: User, session: AsyncSession, with_back: bool = False):

@@ -107,6 +107,12 @@ def car_text(user: User, lang: str | None) -> str | None:
                                     color_name(user.car_color, lang)]))
 
 
+def car_with_vin(user: User, lang: str | None) -> str | None:
+    """Для менеджеров (заказ, панель): «JAC M4 · Белый · VIN LJ12EKR17N4000123»."""
+    vin = getattr(user, "car_vin", None)
+    return " · ".join(filter(None, [car_text(user, lang), f"VIN {vin}" if vin else None])) or None
+
+
 def needs_car(user: User) -> bool:
     return not user.car_model
 

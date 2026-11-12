@@ -94,10 +94,11 @@ class OrderRepository:
 
         orders = []
         for (dealer_id, source_id), dealer_items in by_dealer.items():
-            from app.services.cars import car_text
+            from app.services.cars import car_with_vin
 
             order = Order(user_id=user.id, dealer_id=dealer_id, status="NEW", total_amount=Decimal(0),
-                          car=car_text(user, "ru"), preorder=source_id is not None, source_dealer_id=source_id)
+                          car=(car_with_vin(user, "ru") or "")[:128] or None, preorder=source_id is not None,
+                          source_dealer_id=source_id)
             for item in dealer_items:
                 stock = locked[item.stock_id]
                 part = stock.part

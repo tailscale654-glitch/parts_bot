@@ -23,6 +23,7 @@ const ICON = {
   cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M5 8h14l-1.2 11.1a1 1 0 0 1-1 .9H7.2a1 1 0 0 1-1-.9L5 8Z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/></svg>',
   orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17Z"/><path d="M9 8.5h6M9 12.5h6"/></svg>',
   profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.6 3.8-5.8 7.2-5.8s6.3 2.2 7.2 5.8"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3.5 8.5a1.5 1.5 0 0 1 1.5-1.5h2.6l1.6-2.2h5.6L16.4 7H19a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18V8.5Z"/><circle cx="12" cy="13" r="3.6"/></svg>',
   chev: '<svg viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 1.5 5 5-5 5"/></svg>',
 };
 
@@ -58,11 +59,11 @@ function haptic(kind) {
 }
 
 let toastTimer;
-function toast(text) {
+function toast(text, ms) {
   toastEl.textContent = text;
   toastEl.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2200);
+  toastTimer = setTimeout(() => { toastEl.hidden = true; }, ms || 2200);
 }
 
 class ApiError extends Error {
@@ -71,11 +72,12 @@ class ApiError extends Error {
 
 async function api(path, body) {
   let res;
+  const form = body instanceof FormData; // фото уходит как файл, остальное — JSON
   try {
     res = await fetch(path, {
       method: body ? "POST" : "GET",
-      headers: { "X-Telegram-Init-Data": tg.initData, ...(body ? { "Content-Type": "application/json" } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
+      headers: { "X-Telegram-Init-Data": tg.initData, ...(body && !form ? { "Content-Type": "application/json" } : {}) },
+      body: body ? (form ? body : JSON.stringify(body)) : undefined,
     });
   } catch (e) { throw new ApiError("network"); }
   const data = await res.json().catch(() => ({}));
@@ -549,7 +551,10 @@ screens.profile = {
             car ? h("div", { class: "car-meta" },
               car.hex ? h("span", { class: "swatch small", "data-hex": car.hex }) : null,
               [car.mod_name, car.color_name].filter(Boolean).join(", ")) : null,
-            h("div", { class: "car-change" }, car ? t("change") : t("choose_car")))));
+            h("div", { class: "car-change" }, car ? t("change") : t("choose_car")))),
+        h("div", { class: "settings vin-row" },
+          settingRow(t("vin"), p.vin ? h("span", { class: "vin-value" }, p.vin) : h("span", { class: "accent" }, t("vin_add")),
+            () => show("vin", { vin: p.vin }))));
     }
     root.append(h("h2", { class: "section" }, t("settings")),
       h("div", { class: "settings" },
@@ -645,6 +650,141 @@ screens.pickColor = {
     return root;
   },
 };
+
+// ---------- VIN: фото номера → сервер читает → клиент сверяет и сохраняет ----------
+const VIN_OK = /^[A-HJ-NPR-Z0-9]{13}[0-9]{4}$/;
+
+/* Как на сервере: заглавные, без пробелов; I → 1, O и Q → 0 (этих букв в VIN не бывает) */
+function vinClean(text) {
+  return (text || "").toUpperCase().replace(/I/g, "1").replace(/[OQ]/g, "0").replace(/[^A-Z0-9]/g, "").slice(0, 17);
+}
+
+/* Снимок с камеры — до 2000 px по большей стороне и JPEG: грузится за секунду, номер читается так же */
+async function shrinkPhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.naturalWidth * k);
+    canvas.height = Math.round(img.naturalHeight * k);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    return (await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.9))) || file;
+  } catch (e) {
+    return file; // не смогли уменьшить — отправим как есть (сервер примет до 10 МБ)
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+screens.vin = {
+  async draw({ vin }) {
+    const saved = vin || "";
+    const input = h("input", { id: "vin-input", class: "vin-input", type: "text", maxlength: "20", autocomplete: "off",
+      autocapitalize: "characters", autocorrect: "off", spellcheck: "false", enterkeyhint: "done",
+      placeholder: t("vin_placeholder"), "aria-describedby": "vin-help" });
+    input.value = saved;
+    const count = h("span", { class: "vin-count", "aria-hidden": "true" });
+    const help = h("p", { class: "vin-help", id: "vin-help" });
+    const status = h("p", { class: "vin-status", role: "status" });
+    const shot = h("div", { class: "vin-shot", hidden: true });
+    const save = h("button", { class: "cta", type: "button", onclick: () => saveVin(input.value) }, t("save"));
+
+    function refresh() {
+      const v = input.value;
+      const ok = VIN_OK.test(v);
+      count.textContent = `${v.length}/17`;
+      help.textContent = v.length === 17 && !ok ? t("vin_bad") : t("vin_where");
+      help.classList.toggle("bad", v.length === 17 && !ok);
+      save.disabled = !ok || v === saved;
+    }
+    input.addEventListener("input", () => {
+      const clean = vinClean(input.value);
+      if (clean !== input.value) {
+        const pos = Math.min(clean.length, input.selectionStart || clean.length);
+        input.value = clean;
+        input.setSelectionRange(pos, pos);
+      }
+      status.textContent = "";
+      refresh();
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+
+    async function scan(file) {
+      if (!file) return;
+      const blob = await shrinkPhoto(file);
+      shot.replaceChildren(); // фото показываем, пока сервер читает номер, — видно, что сняли
+      const url = URL.createObjectURL(blob);
+      const img = h("img", { src: url, alt: "" });
+      img.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
+      shot.append(img);
+      shot.hidden = false;
+      shot.classList.add("busy");
+      status.className = "vin-status";
+      status.textContent = t("vin_scanning");
+      const form = new FormData();
+      form.append("photo", blob, "vin.jpg");
+      try {
+        const r = await api("/api/vin/scan", form);
+        if (r.vin) {
+          input.value = r.vin;
+          status.className = r.check_ok ? "vin-status ok" : "vin-status warn";
+          status.textContent = r.check_ok ? t("vin_found") : t("vin_found_check");
+          haptic(r.check_ok ? "success" : "warning");
+        } else {
+          status.className = "vin-status warn";
+          status.textContent = t("vin_not_found");
+          haptic("error");
+        }
+      } catch (e) {
+        status.className = "vin-status warn";
+        status.textContent = e.code === "too_many" ? t("vin_too_many") : e.code === "expired" ? t("error") : t("vin_scan_error");
+        haptic("error");
+      } finally {
+        shot.classList.remove("busy");
+        refresh();
+      }
+    }
+
+    // два поля выбора файла: камера сразу (capture) и галерея — если техпаспорт уже сфотографирован
+    const camera = h("input", { type: "file", accept: "image/*", capture: "environment", hidden: true });
+    const gallery = h("input", { type: "file", accept: "image/*", hidden: true });
+    for (const el of [camera, gallery]) {
+      el.addEventListener("change", () => { const f = el.files[0]; el.value = ""; scan(f); });
+    }
+
+    refresh();
+    setFooter(save);
+    return h("div", { class: "vin" },
+      h("header", { class: "page-title" }, h("h1", {}, t("vin_title")), h("p", {}, t("vin_why"))),
+      h("button", { class: "vin-scan", type: "button", onclick: () => camera.click() },
+        icon("camera"),
+        h("span", {}, h("b", {}, t("vin_scan")), h("small", {}, t("vin_scan_hint")))),
+      h("button", { class: "link", type: "button", onclick: () => gallery.click() }, t("vin_gallery")),
+      camera, gallery, shot, status,
+      h("label", { class: "vin-label", for: "vin-input" }, t("vin_or")),
+      h("div", { class: "vin-field" }, input, count),
+      help,
+      saved ? h("button", { class: "link danger", type: "button", onclick: () => saveVin("") }, t("vin_remove")) : null);
+  },
+};
+
+async function saveVin(value) {
+  try {
+    const p = await api("/api/profile/vin", { vin: value });
+    haptic(!value || p.vin_check ? "success" : "warning");
+    state.tab = "profile";
+    show("profile", {}, { root: true });
+    if (!value) toast(t("vin_removed"));
+    else if (p.vin_check) toast(t("saved"));
+    else toast(t("vin_check_warn"), 5000); // номер возможен, но контрольная цифра не сошлась — пусть сверит ещё раз
+  } catch (e) {
+    haptic("error");
+    toast(e.code === "bad_vin" ? t("vin_bad") : t("error"));
+  }
+}
 
 // ---------- запуск ----------
 function applyScheme() {

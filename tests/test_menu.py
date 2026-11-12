@@ -28,3 +28,6 @@ def test_profile_view():
     assert [row[0].callback_data for row in kb.inline_keyboard] == ["car:start:0", "profile:phone", "menu:region", "menu:language"]
     from app.keyboards.car import CarCB
     assert CarCB.unpack(kb.inline_keyboard[0][0].callback_data).action == "start"  # кнопку узнаёт обработчик
+    assert "VIN" not in text
+    user.car_vin = "LJ12EKR17N4000123"  # добавлен в витрине — виден и в профиле бота
+    assert profile_view(user)[0].endswith("🔑 VIN: LJ12EKR17N4000123")

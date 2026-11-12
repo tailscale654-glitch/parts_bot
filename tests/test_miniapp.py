@@ -224,3 +224,49 @@ async def test_model_photos(shop):
     assert {m["key"]: m["photo"] for m in models["JAC M3"]["mods"]} == {
         "passenger": "/static/cars/m3-s.webp", "van": "/static/cars/m3-van-s.webp"}  # у фургона своё фото
     assert all(m["photo"] for m in models.values())  # фото есть у всех 7 моделей, включая T9
+
+
+async def test_vin_scan_and_save(shop):
+    from tests.test_vin import VIN, barcode_png, zxingcpp
+
+    client, bot, factory = shop
+    assert (await client.get("/api/profile")).json()["vin"] is None
+    # фото наклейки со штрих-кодом → номер; фото не сохраняется
+    found = (await client.post("/api/vin/scan", files={"photo": ("vin.png", barcode_png(VIN, zxingcpp.BarcodeFormat.Code128),
+                                                                  "image/png")})).json()
+    assert found == {"vin": VIN, "method": "barcode", "check_ok": True}
+    junk = (await client.post("/api/vin/scan", files={"photo": ("x.jpg", b"not a photo", "image/jpeg")})).json()
+    assert junk == {"vin": None, "method": None, "check_ok": False}
+    big = await client.post("/api/vin/scan", files={"photo": ("big.jpg", b"0" * (10 * 1024 * 1024 + 1), "image/jpeg")})
+    assert big.status_code == 413 and big.json() == {"error": "too_big"}
+    assert (await client.post("/api/vin/scan")).status_code == 422  # без фото
+
+    # клиент сверил и сохранил: пробелы и маленькие буквы не мешают, кривой номер — 422
+    p = (await client.post("/api/profile/vin", json={"vin": " lj1 2ekr1 7n4000123 "})).json()
+    assert p["vin"] == VIN and p["vin_check"] is True
+    assert (await client.post("/api/profile/vin", json={"vin": "LJ12EKR17N40001"})).json() == {"error": "bad_vin"}
+    p = (await client.post("/api/profile/vin", json={"vin": "LJ12EKR15N4000123"})).json()
+    assert p["vin"] == "LJ12EKR15N4000123" and p["vin_check"] is False  # сохраняем, но витрина попросит перепроверить
+    await client.post("/api/profile/vin", json={"vin": VIN})
+
+    # VIN попадает в заказ: администратор и дилер видят его в уведомлении и в панели
+    oil_id = (await client.get("/api/search?q=фильтр")).json()["items"][0]["id"]
+    best = (await client.get(f"/api/part/{oil_id}")).json()["offers"][0]
+    await client.post("/api/cart/add", json={"stock_id": best["stock_id"]})
+    order_id = (await client.post("/api/checkout")).json()["orders"][0]["id"]
+    async with factory() as s:
+        assert (await s.get(Order, order_id)).car == f"JAC M4 Luxe · VIN {VIN}"
+    admin_text = next(c.args[1] for c in bot.send_message.call_args_list if c.args[0] == 99)
+    assert VIN in admin_text
+
+    # другая модель — VIN от прошлой машины сбрасывается; «Удалить VIN» — тоже
+    p = (await client.post("/api/profile/car", json={"model": "JAC T8", "color": "gray"})).json()
+    assert p["vin"] is None
+    await client.post("/api/profile/vin", json={"vin": VIN})
+    assert (await client.post("/api/profile/vin", json={"vin": ""})).json()["vin"] is None
+
+
+async def test_vin_scan_rate_limit(shop):
+    client, _, _ = shop
+    codes = [(await client.post("/api/vin/scan", files={"photo": ("x.jpg", b"x", "image/jpeg")})).status_code for _ in range(21)]
+    assert codes[:20] == [200] * 20 and codes[20] == 429  # не больше 20 фото в минуту

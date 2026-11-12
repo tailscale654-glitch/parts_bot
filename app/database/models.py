@@ -47,6 +47,7 @@ class User(Base):
     car_model: Mapped[str | None] = mapped_column(String(128))
     car_modification: Mapped[str | None] = mapped_column(String(32))  # None — одна модификация или «не знаю»
     car_color: Mapped[str | None] = mapped_column(String(16))  # ключ из app/services/cars.py COLORS
+    car_vin: Mapped[str | None] = mapped_column(String(17))  # VIN (17 знаков) — менеджеру для точного подбора
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from aiogram import Bot
 from aiogram.utils.web_app import safe_parse_webapp_init_data
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -42,6 +43,7 @@ from app.services.import_mapping import ALL_MODELS, CATEGORIES
 from app.services.localization import i18n, localized_name
 from app.services.orders import fmt_date, order_status, progress_steps, stock_problems_text
 from app.services.pictures import picture_key
+from app.services.vin import MAX_UPLOAD, check_digit_ok, is_valid, normalize, read_vin
 
 logger = logging.getLogger(__name__)
 HERE = Path(__file__).parent
@@ -80,7 +82,7 @@ def asset_version() -> str:
 SECURITY_HEADERS = {
     # скрипт Telegram — единственный внешний; шрифты и всё остальное — свои
     "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https: data:; "
+        "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' https: data: blob:; "
         "font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; "
         "frame-ancestors https://web.telegram.org https://*.telegram.org"),
     "X-Content-Type-Options": "nosniff",
@@ -94,6 +96,8 @@ def create_app(settings: Settings | None = None, session_factory=None, bot: Bot 
     app = FastAPI(title="JAC Parts", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings, app.state.session_factory, app.state.bot = settings, session_factory, bot
     app.state.limiter = RateLimiter()
+    app.state.scan_limiter = RateLimiter(limit=20)  # распознавание VIN тяжёлое — не чаще 20 фото в минуту
+    app.state.scan_slots = asyncio.Semaphore(2)  # и не больше двух одновременно на весь сервер
     index = (STATIC / "index.html").read_text(encoding="utf-8").replace("{{v}}", asset_version())
 
     @app.middleware("http")
@@ -279,7 +283,8 @@ async def profile_json(session: AsyncSession, c: Client) -> dict:
     return {"name": " ".join(filter(None, [user.first_name, user.last_name])) or None, "phone": user.phone,
             "region": {"id": user.region_id, "name": localized_name(user.region, lang)},
             "lang": lang or "ru", "languages": [{"code": code, "name": i18n.t(code, "language_name")} for code in LANGUAGES],
-            "car": car, "staff_dealer": staff_dealer.name if staff_dealer else None}
+            "car": car, "staff_dealer": staff_dealer.name if staff_dealer else None,
+            "vin": user.car_vin, "vin_check": bool(user.car_vin) and check_digit_ok(user.car_vin)}
 
 
 class LanguageBody(BaseModel):
@@ -288,6 +293,10 @@ class LanguageBody(BaseModel):
 
 class RegionBody(BaseModel):
     region_id: int = Field(gt=0)
+
+
+class VinBody(BaseModel):
+    vin: str = Field(default="", max_length=40)  # пусто — удалить VIN
 
 
 class CarBody(BaseModel):
@@ -494,6 +503,27 @@ def register_api(app: FastAPI) -> None:
         if body.color not in cars.colors(body.model, body.mod or None):
             raise HTTPException(422, "bad_color")
         await UserRepository(session).set_car(c.user, model=body.model, modification=body.mod or None, color=body.color)
+        return await profile_json(session, c)
+
+    # ---------- VIN: фото → номер, затем клиент проверяет и сохраняет ----------
+
+    @app.post("/api/vin/scan")
+    async def vin_scan(request: Request, photo: UploadFile = File(...), c: Client = Depends(client)):
+        if not request.app.state.scan_limiter.allow(c.user.telegram_id):
+            raise HTTPException(429, "too_many")
+        data = await photo.read(MAX_UPLOAD + 1)
+        if len(data) > MAX_UPLOAD:
+            raise HTTPException(413, "too_big")
+        async with request.app.state.scan_slots:
+            vin, method = await asyncio.to_thread(read_vin, data)  # фото не сохраняем — только читаем номер
+        return {"vin": vin, "method": method, "check_ok": bool(vin) and check_digit_ok(vin)}
+
+    @app.post("/api/profile/vin")
+    async def set_vin(body: VinBody, c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        vin = normalize(body.vin)
+        if vin and not is_valid(vin):
+            raise HTTPException(422, "bad_vin")
+        await UserRepository(session).set_car(c.user, vin=vin or None)
         return await profile_json(session, c)
 
     @app.exception_handler(HTTPException)
