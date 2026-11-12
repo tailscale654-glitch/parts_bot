@@ -560,6 +560,7 @@ screens.profile = {
       h("div", { class: "settings" },
         settingRow(t("region"), p.region.name, () => show("pickRegion", { current: p.region.id })),
         settingRow(t("language"), (p.languages.find((l) => l.code === p.lang) || {}).name, () => show("pickLanguage", { p })),
+        settingRow(t("theme"), t("theme_" + themeChoice), () => show("pickTheme")),
         settingRow(t("phone"), phoneText(p.phone) || "—", sharePhone)),
       h("h2", { class: "section" }, t("help")),
       h("div", { class: "settings" }, settingRow(t("support"), null, () => tg.close(), t("support_hint"))));
@@ -612,6 +613,28 @@ screens.pickLanguage = {
   async draw({ p }) {
     return pickScreen(t("language"), null, p.languages.map((l) => ({ key: l.code, title: l.name, dealer: {} })), p.lang,
       (it) => saveProfile("/api/profile/language", { code: it.key }));
+  },
+};
+
+// тема: как в Telegram, светлая или тёмная; кружок показывает, как будет выглядеть
+const THEME_SWATCH = {
+  auto: "linear-gradient(135deg, #ffffff 50%, #171a20 50%)",
+  light: "#ffffff",
+  dark: "#171a20",
+};
+
+screens.pickTheme = {
+  async draw() {
+    const root = pickScreen(t("theme"), t("theme_note"),
+      THEMES.map((key) => ({ key, title: t("theme_" + key), hex: THEME_SWATCH[key], dealer: {} })), themeChoice,
+      (it) => {
+        setTheme(it.key);
+        haptic("success");
+        state.tab = "profile";
+        show("profile", {}, { root: true });
+      });
+    paintSwatches(root);
+    return root;
   },
 };
 
@@ -786,9 +809,49 @@ async function saveVin(value) {
   }
 }
 
+// ---------- тема ----------
+/* Выбор хранится на телефоне (сразу при открытии, без мигания) и в облаке Telegram (на других устройствах клиента). */
+const THEMES = ["auto", "light", "dark"];
+let themeChoice = readTheme();
+
+function readTheme() {
+  try {
+    const v = localStorage.getItem("theme");
+    return THEMES.includes(v) ? v : "auto";
+  } catch (e) { return "auto"; }
+}
+
+function cloudReady() {
+  return tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9");
+}
+
+function setTheme(value, fromCloud) {
+  if (!THEMES.includes(value)) return;
+  themeChoice = value;
+  try { localStorage.setItem("theme", value); } catch (e) { /* хранилище недоступно — тема до закрытия */ }
+  if (!fromCloud && cloudReady()) {
+    try { tg.CloudStorage.setItem("theme", value); } catch (e) { /* старый Telegram */ }
+  }
+  // плавная смена цветов там, где браузер умеет; иначе — сразу
+  if (document.startViewTransition && !fromCloud) document.startViewTransition(applyScheme);
+  else applyScheme();
+}
+
+function loadCloudTheme() {
+  if (!cloudReady()) return;
+  try {
+    tg.CloudStorage.getItem("theme", (err, value) => {
+      if (!err && THEMES.includes(value) && value !== themeChoice) {
+        setTheme(value, true);
+        if (state.stack.at(-1)?.name === "profile") render();
+      }
+    });
+  } catch (e) { /* старый Telegram */ }
+}
+
 // ---------- запуск ----------
 function applyScheme() {
-  const dark = tg && tg.colorScheme === "dark";
+  const dark = themeChoice === "dark" || (themeChoice === "auto" && tg && tg.colorScheme === "dark");
   document.documentElement.dataset.scheme = dark ? "dark" : "light";
   const color = dark ? "#171a20" : "#ffffff"; // шапка и фон Telegram — в цвет страницы
   try { tg.setHeaderColor(color); tg.setBackgroundColor(color); tg.setBottomBarColor(color); } catch (e) { /* старые версии */ }
@@ -804,7 +867,8 @@ async function start() {
   tg.ready();
   tg.expand();
   applyScheme();
-  tg.onEvent("themeChanged", applyScheme);
+  tg.onEvent("themeChanged", applyScheme); // при «как в Telegram» тема меняется вместе с ним
+  loadCloudTheme();
   tg.BackButton.onClick(back);
   try {
     state.me = await api("/api/me");

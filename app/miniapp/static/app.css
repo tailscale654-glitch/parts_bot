@@ -1,5 +1,5 @@
 /* JAC Parts — витрина в Telegram. Минимализм: монохром, много воздуха, один синий акцент — только у главной кнопки.
-   Светлая или тёмная схема — как у клиента в Telegram (data-scheme ставит app.js). */
+   Светлая или тёмная схема — как у клиента в Telegram или как он выбрал в профиле (data-scheme ставит app.js). */
 
 @font-face { font-family: "Golos Text"; font-weight: 400; font-display: swap;
   src: url(fonts/golos-text-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
@@ -99,6 +99,14 @@ img { display: block; }
 .pic .t { stroke-width: 9; vector-effect: none; }
 .pic .ti { stroke: var(--surface); stroke-width: 6; vector-effect: none; }
 .pic .dash { stroke-dasharray: 2 2.5; }
+/* объём: непрозрачная грань (прячет то, что сзади), теневая сторона, отверстия, волоски, тень на «полу», блик */
+.pic .o { fill: var(--surface); stroke: none; }
+.pic .f2 { fill: currentColor; fill-opacity: .17; stroke: none; }
+.pic .f3 { fill: currentColor; fill-opacity: .34; stroke: none; }
+.pic .l { stroke-width: .55px; opacity: .5; }
+.pic .sh { fill: currentColor; fill-opacity: .07; stroke: none; }
+.pic .w { stroke: var(--surface); stroke-width: 1.3px; opacity: .85; }
+.pic .tt { stroke: currentColor; stroke-opacity: .09; stroke-width: 6; vector-effect: none; }
 .part-shot svg.pic { width: 72%; height: 72%; stroke-width: 1.6px; }
 .line .shot svg.pic { stroke-width: 1.1px; }
 .tile:active .shot, .product:active .shot { background: var(--surface-press); }
@@ -229,6 +237,12 @@ img { display: block; }
 .swatch { display: inline-block; flex: none; width: 18px; height: 18px; margin-right: 10px; border-radius: 50%;
   vertical-align: -3px; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .45); }
 .swatch.small { width: 12px; height: 12px; margin: 0; vertical-align: 0; }
+
+/* смена темы: короткое растворение старых цветов в новые */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .25s; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}
 
 /* ---------- VIN ---------- */
 .vin-row { margin-top: 16px; }
