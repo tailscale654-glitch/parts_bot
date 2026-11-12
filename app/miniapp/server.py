@@ -20,7 +20,7 @@ from pathlib import Path
 from aiogram import Bot
 from aiogram.utils.web_app import safe_parse_webapp_init_data
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -42,6 +42,7 @@ from app.services.catalog import map_url, money, region_days
 from app.services.import_mapping import ALL_MODELS, CATEGORIES
 from app.services.localization import i18n, localized_name
 from app.services.orders import fmt_date, order_status, progress_steps, stock_problems_text
+from app.services.part_photos import NAME_RE, URL_PREFIX, image_bytes
 from app.services.pictures import picture_key
 from app.services.vin import MAX_UPLOAD, check_digit_ok, is_valid, normalize, read_vin
 
@@ -525,6 +526,15 @@ def register_api(app: FastAPI) -> None:
             raise HTTPException(422, "bad_vin")
         await UserRepository(session).set_car(c.user, vin=vin or None)
         return await profile_json(session, c)
+
+    @app.get(URL_PREFIX + "{name}")
+    async def part_photo(name: str, session: AsyncSession = Depends(get_session)):
+        """Фото детали из каталога JAC (хранится в базе). Имя — md5 картинки, поэтому кэшируем навсегда."""
+        m = NAME_RE.fullmatch(name)
+        data = await image_bytes(session, m.group(1)) if m else None
+        if data is None:
+            raise HTTPException(404, "not_found")
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException):

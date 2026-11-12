@@ -713,6 +713,63 @@ def register_routes(app: FastAPI) -> None:  # noqa: C901 — все маршру
         logger.info("Panel %s edited part %s: %s", web.login, part.part_number, details)
         return back(f"/catalog/{part.id}", flash)
 
+    # --- фото деталей из электронного каталога JAC (EPC) ---
+
+    @app.get("/photos", response_class=HTMLResponse)
+    async def photos_page(request: Request, web: WebUser = Depends(require("upload")),
+                          session: AsyncSession = Depends(get_session)):
+        from app.services import part_photos
+
+        return render(request, "photos.html", web, s=await part_photos.summary(session), max_mb=part_photos.MAX_ZIP_MB)
+
+    @app.post("/photos", response_class=HTMLResponse)
+    async def photos_upload(request: Request, file: UploadFile = File(...), csrf: str = Form(""),
+                            web: WebUser = Depends(require("upload")), session: AsyncSession = Depends(get_session)):
+        from app.services import part_photos
+
+        check_csrf(request, csrf)
+        limit = part_photos.MAX_ZIP_MB * 1024 * 1024
+
+        async def page(**extra):
+            return render(request, "photos.html", web, s=await part_photos.summary(session), max_mb=part_photos.MAX_ZIP_MB,
+                          **extra)
+
+        if not (file.filename or "").lower().endswith(".zip"):
+            return await page(error="Нужен архив .zip — тот, что скачал браузер из каталога JAC.")
+        file.file.seek(0, 2)
+        size = file.file.tell()
+        file.file.seek(0)
+        if size > limit:
+            return await page(error=f"Архив больше {part_photos.MAX_ZIP_MB} МБ.")
+        try:
+            result = await part_photos.import_archive(session, file.file)
+        except ValueError as e:  # архив не тот — ошибка до записи в базу
+            return await page(error=str(e))
+        details = (f"картинок {result.images} (новых {result.new_images}), артикулов {result.numbers}, "
+                   f"деталей получили фото {result.parts}")
+        await audit.log(session, web, "photos.import", file.filename or "", details)
+        logger.info("Panel %s imported EPC photos: %s", web.login, details)
+        return await page(result=result)
+
+    @app.get("/photos/needed.txt")
+    async def photos_needed(web: WebUser = Depends(require("upload")), session: AsyncSession = Depends(get_session)):
+        """Артикулы без фото — по одному в строке (для выгрузки из каталога JAC)."""
+        from app.services import part_photos
+
+        return Response("\n".join(await part_photos.needed_numbers(session)) + "\n", media_type="text/plain; charset=utf-8",
+                        headers=NO_STORE)
+
+    @app.get("/media/parts/{name}")
+    async def part_photo(name: str, web: WebUser = Depends(require("catalog.view")),
+                         session: AsyncSession = Depends(get_session)):
+        from app.services import part_photos
+
+        m = part_photos.NAME_RE.fullmatch(name)
+        data = await part_photos.image_bytes(session, m.group(1)) if m else None
+        if data is None:
+            raise HTTPException(404, "Фото не найдено.")
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
     # --- загрузка Excel ---
 
     @app.get("/upload", response_class=HTMLResponse)

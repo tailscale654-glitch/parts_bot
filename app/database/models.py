@@ -3,7 +3,8 @@ from datetime import datetime
 
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, Numeric, String, Text,
+                        UniqueConstraint, func)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.utils.names import dealer_key
@@ -451,6 +452,33 @@ class PartOverride(Base):
     @property
     def model_list(self) -> list[str]:
         return [m for m in (self.models or "").split("|") if m]
+
+
+class EpcImage(Base):
+    """Картинка детали из электронного каталога JAC (EPC): JPEG до 800 px, ~10–30 КБ. Храним в базе —
+    так её видят все сервисы (бот, витрина, панель, синхронизация) без общих папок. В ежедневный backup
+    не попадает (scripts/backup.sh) — при восстановлении базы архив фото загружают в панели заново."""
+
+    __tablename__ = "epc_images"
+
+    md5: Mapped[str] = mapped_column(String(32), primary_key=True)  # имя файла в каталоге JAC
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EpcPhoto(Base):
+    """Артикул → картинка из каталога JAC. Одна картинка может быть у нескольких артикулов.
+    В боте и витрине — если в панели не задано своё фото."""
+
+    __tablename__ = "epc_photos"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)  # артикул без пробелов, в верхнем регистре
+    part_number: Mapped[str] = mapped_column(String(64))
+    image: Mapped[str] = mapped_column(ForeignKey("epc_images.md5", ondelete="CASCADE"))
+    name_en: Mapped[str | None] = mapped_column(String(255))  # название в каталоге JAC — для проверки
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class SupportChat(Base):

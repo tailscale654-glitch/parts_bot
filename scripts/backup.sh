@@ -8,7 +8,10 @@ export PGPASSWORD="$POSTGRES_PASSWORD"
 
 backup() {
   file="/backups/jac_parts_$(date +%Y-%m-%d_%H%M).sql.gz"
-  if pg_dump -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner | gzip > "$file.tmp"; then
+  # Картинки деталей из каталога JAC (таблица epc_images, сотни МБ) в копию не кладём — их загружают
+  # заново архивом в панели («🖼 Фото деталей»). Сама таблица в копии есть, пустая.
+  if pg_dump -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exclude-table-data=epc_images \
+      | gzip > "$file.tmp"; then
     mv "$file.tmp" "$file"
     echo "$(date '+%F %T') backup OK: $file ($(du -h "$file" | cut -f1))"
   else

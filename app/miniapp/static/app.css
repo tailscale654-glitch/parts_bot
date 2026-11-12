@@ -88,6 +88,9 @@ img { display: block; }
 .shot { display: grid; place-items: center; border-radius: 4px; background: var(--surface); overflow: hidden; color: var(--text-3); }
 .shot svg { width: 34%; height: 34%; stroke-width: 1.1px; }
 .shot img { width: 100%; height: 100%; object-fit: cover; }
+/* фото из каталога JAC: деталь на белом фоне — целиком, белое «растворяется» в светлой подложке (и в тёмной теме) */
+.shot.photo, .tile:active .shot.photo, .product:active .shot.photo { background: #f4f4f4; }
+.shot.photo img { object-fit: contain; padding: 6%; mix-blend-mode: multiply; }
 
 /* схематичные рисунки деталей (pics.js): линии одной толщины при любом размере */
 .shot svg.pic { width: 86%; height: 86%; color: var(--text-2); stroke-width: 1.35px; }

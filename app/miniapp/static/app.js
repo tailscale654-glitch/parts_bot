@@ -99,7 +99,7 @@ function shot(photo, pic, cls) {
   const box = h("div", { class: "shot" + (cls ? " " + cls : ""), html: picture(pic) });
   if (photo) {
     const img = h("img", { src: photo, alt: "", loading: "lazy" });
-    img.addEventListener("load", () => { box.querySelector("svg")?.remove(); });
+    img.addEventListener("load", () => { box.querySelector("svg")?.remove(); box.classList.add("photo"); });
     img.addEventListener("error", () => img.remove());
     box.append(img);
   }

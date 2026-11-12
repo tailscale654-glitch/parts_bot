@@ -20,7 +20,7 @@ from app.keyboards.catalog import (
     pickup_keyboard,
 )
 from app.keyboards.phone import phone_keyboard
-from app.services import cars
+from app.services import cars, part_photos
 from app.services.catalog import (
     PAGE_SIZE,
     Preorder,
@@ -36,7 +36,8 @@ from app.services.localization import i18n, localized_name
 router = Router(name="catalog")
 
 
-async def _show(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None, photo: str | None = None) -> None:
+async def _show(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None,
+                photo: part_photos.TgPhoto | None = None) -> None:
     """Показать экран каталога на месте старого сообщения.
     Текст меняем через edit; если нужно фото (или было фото) — удаляем и отправляем заново,
     потому что Telegram не умеет превращать текстовое сообщение в фото и обратно."""
@@ -44,7 +45,7 @@ async def _show(callback: CallbackQuery, text: str, kb: InlineKeyboardMarkup | N
     await callback.answer()
     if photo:
         try:
-            await message.answer_photo(photo, caption=text[:1024], reply_markup=kb)
+            photo.sent(await message.answer_photo(photo.media, caption=text[:1024], reply_markup=kb))
             await _safe_delete(message)
             return
         except TelegramBadRequest:
@@ -242,7 +243,8 @@ async def card_view(part: Part, user: User, session: AsyncSession, page: int):
     elsewhere = 0 if offers or preorder else await stocks.regions_elsewhere(part.id, user.region_id)
     text = part_card_text(part, lang, user.region, offers, elsewhere, preorder)
     kb = part_card_keyboard(part, page, lang, offers, preorder, await CartRepository(session).total_qty(user))
-    photo = part.photo if len(text) <= 1024 else None  # подпись к фото — не длиннее 1024 символов
+    # подпись к фото — не длиннее 1024 символов; фото из каталога JAC — из базы (или file_id, если уже отправляли)
+    photo = await part_photos.for_telegram(session, part.photo) if len(text) <= 1024 else None
     return text, kb, photo
 
 
@@ -307,7 +309,7 @@ async def preorder_add(callback: CallbackQuery, callback_data: PreorderCB, user:
         if message.photo:
             await message.edit_caption(caption=text[:1024], reply_markup=kb)
         elif photo:
-            await message.answer_photo(photo, caption=text[:1024], reply_markup=kb)
+            photo.sent(await message.answer_photo(photo.media, caption=text[:1024], reply_markup=kb))
             await _safe_delete(message)
         else:
             await message.edit_text(text, reply_markup=kb)
