@@ -197,6 +197,25 @@ img { display: block; }
 .order .pickup a { display: inline-block; margin-top: 6px; margin-right: 18px; color: var(--text); text-decoration: underline;
   text-underline-offset: 3px; text-decoration-color: var(--text-3); }
 
+/* ---------- профиль ---------- */
+.car-card { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: center; width: 100%; padding: 0;
+  border: 0; background: none; text-align: left; }
+.car-pic { display: grid; place-items: center; height: 84px; border-radius: 4px; background: var(--surface); color: var(--text-2); }
+.car-pic svg.pic { width: 88%; height: 88%; stroke-width: 1.2px; }
+.car-model { font-size: 17px; font-weight: 500; }
+.car-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; color: var(--text-2); font-size: 14px; }
+.car-change { margin-top: 8px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--text-3); }
+.settings { border-top: 1px solid var(--line); }
+.setting { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 12px 0; border: 0;
+  border-bottom: 1px solid var(--line); background: none; text-align: left; }
+.setting .slabel { flex: 1; min-width: 0; }
+.setting .slabel small { display: block; margin-top: 2px; color: var(--text-2); font-size: 13px; }
+.setting .svalue { color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; }
+.setting svg { flex: none; width: 8px; height: 13px; color: var(--text-3); }
+.swatch { display: inline-block; flex: none; width: 18px; height: 18px; margin-right: 10px; border-radius: 50%;
+  vertical-align: -3px; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .45); }
+.swatch.small { width: 12px; height: 12px; margin: 0; vertical-align: 0; }
+
 /* ---------- пусто, ошибка, спасибо ---------- */
 .empty { padding: 96px 8px 24px; text-align: center; }
 .empty h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.2; font-weight: 500; letter-spacing: -.01em; }
@@ -208,7 +227,7 @@ img { display: block; }
 .skeleton { height: 160px; border-radius: 4px; background: var(--surface); margin-top: 24px; }
 
 /* ---------- вкладки ---------- */
-#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(3, 1fr);
+#tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(4, 1fr);
   padding: 6px 8px calc(4px + var(--bottom)); background: var(--bg); border-top: 1px solid var(--line); }
 #tabs button { display: grid; justify-items: center; gap: 2px; padding: 4px 0; border: 0; background: none; color: var(--text-3);
   font-size: 11px; font-weight: 500; position: relative; }

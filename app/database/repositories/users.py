@@ -39,8 +39,15 @@ class UserRepository:
         return user
 
     async def set_region(self, user: User, region: Region) -> User:
+        """Новый регион. Детали дилеров прежнего региона убираем из корзины: заказать можно только в своём."""
+        from app.database.repositories.cart import CartRepository
+
         user.region_id = region.id  # язык, телефон и заказы не трогаем
         user.region = region
+        for item in await CartRepository(self.session).items(user):
+            dealer = item.pickup_dealer if item.stock.dealer.is_warehouse else item.stock.dealer
+            if dealer is None or dealer.region_id != region.id:
+                await self.session.delete(item)
         await self.session.commit()
         return user
 

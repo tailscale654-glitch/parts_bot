@@ -163,3 +163,51 @@ def test_shop_button_only_with_https_url(monkeypatch):
     monkeypatch.setenv("MINIAPP_URL", "https://jac.tail1234.ts.net/")
     [[button]] = shop_row("ru")
     assert button.text == "🛍 Открыть витрину" and button.web_app.url == "https://jac.tail1234.ts.net/"
+
+
+# ---------- профиль ----------
+
+async def test_profile_view_and_language(shop):
+    client, bot, _ = shop
+    p = (await client.get("/api/profile")).json()
+    assert p["phone"] == "+998901112233" and p["region"]["name"] == "Ташкент" and p["lang"] == "ru"
+    assert [l["name"] for l in p["languages"]] == ["Русский", "O‘zbekcha", "English"]
+    assert p["car"]["model"] == "JAC M4 Luxe" and p["staff_dealer"] is None
+    assert [r["name"] for r in (await client.get("/api/regions")).json()["regions"]] == ["Ташкент", "Самарканд", "Хорезм"]
+
+    p = (await client.post("/api/profile/language", json={"code": "uz"})).json()
+    assert p["lang"] == "uz" and (await client.get("/api/me")).json()["t"]["tab_profile"] == "Profil"
+    # нижнее меню бота сразу приходит на новом языке
+    chat_id, text = bot.send_message.call_args.args[:2]
+    assert chat_id == 11 and "O‘zbekcha" in text and bot.send_message.call_args.kwargs["reply_markup"] is not None
+    assert (await client.post("/api/profile/language", json={"code": "de"})).status_code == 422
+
+
+async def test_profile_region_clears_foreign_cart(shop):
+    client, _, factory = shop
+    oil_id = (await client.get("/api/search?q=фильтр")).json()["items"][0]["id"]
+    best = (await client.get(f"/api/part/{oil_id}")).json()["offers"][0]
+    await client.post("/api/cart/add", json={"stock_id": best["stock_id"]})
+    assert (await client.get("/api/cart")).json()["count"] == 1
+    p = (await client.post("/api/profile/region", json={"region_id": 2})).json()
+    assert p["region"]["name"] == "Самарканд"
+    assert (await client.get("/api/cart")).json()["count"] == 0  # ташкентский дилер — не для Самарканда
+    assert (await client.post("/api/profile/region", json={"region_id": 999})).status_code == 404
+
+
+async def test_profile_car(shop):
+    client, _, _ = shop
+    models = {c["model"]: c for c in (await client.get("/api/cars")).json()["cars"]}
+    assert [m["key"] for m in models["JAC M3"]["mods"]] == ["passenger", "van"]
+    assert models["JAC M3"]["colors"]["van"][0] == {"key": "white", "name": "Белый", "hex": "#f4f4f4"}
+    assert models["JAC T8"]["mods"] == [] and "" in models["JAC T8"]["colors"]
+
+    p = (await client.post("/api/profile/car", json={"model": "JAC M3", "mod": "van", "color": "white"})).json()
+    assert p["car"] == {"model": "JAC M3", "mod": "van", "color": "white", "mod_name": "VAN (фургон)",
+                        "color_name": "Белый", "hex": "#f4f4f4"}
+    assert (await client.get("/api/me")).json()["car"] == "JAC M3 · VAN (фургон) · Белый"
+    for bad in ({"model": "JAC M3", "color": "white"},                       # у M3 комплектация обязательна
+                {"model": "JAC T8", "color": "red"},                         # такого цвета у T8 нет
+                {"model": "Tesla", "color": "white"}):
+        assert (await client.post("/api/profile/car", json=bad)).status_code == 422
+    assert (await client.post("/api/profile/car", json={"model": "JAC T8", "color": "gray"})).json()["car"]["mod"] is None

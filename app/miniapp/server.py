@@ -31,6 +31,8 @@ from app.database.models import Dealer, Order, Part, User
 from app.database.repositories.cart import CartRepository, item_available
 from app.database.repositories.catalog import CatalogRepository
 from app.database.repositories.orders import CheckoutError, OrderRepository
+from app.database.repositories.regions import RegionRepository
+from app.database.repositories.users import UserRepository
 from app.database.repositories.staff import StaffRepository
 from app.database.repositories.stocks import StockRepository
 from app.services import cars
@@ -245,6 +247,39 @@ def order_json(order: Order, lang: str | None) -> dict:
     }
 
 
+COLOR_HEX = {"white": "#f4f4f4", "black": "#1b1c1e", "silver": "#c3c6ca", "gray": "#8b8e93", "metallic_gray": "#6c7177",
+             "star_gray": "#b6babf", "red": "#b3162b", "blue": "#2b5aa8"}
+LANGUAGES = ("ru", "uz", "en")
+
+
+async def profile_json(session: AsyncSession, c: Client) -> dict:
+    user, lang = c.user, c.lang
+    staff_dealer = await session.get(Dealer, c.staff_dealer_id) if c.staff_dealer_id else None
+    car = None
+    if user.car_model:
+        car = {"model": user.car_model, "mod": user.car_modification, "color": user.car_color,
+               "mod_name": cars.mod_name(user.car_modification, lang), "color_name": cars.color_name(user.car_color, lang),
+               "hex": COLOR_HEX.get(user.car_color or "")}
+    return {"name": " ".join(filter(None, [user.first_name, user.last_name])) or None, "phone": user.phone,
+            "region": {"id": user.region_id, "name": localized_name(user.region, lang)},
+            "lang": lang or "ru", "languages": [{"code": code, "name": i18n.t(code, "language_name")} for code in LANGUAGES],
+            "car": car, "staff_dealer": staff_dealer.name if staff_dealer else None}
+
+
+class LanguageBody(BaseModel):
+    code: str = Field(min_length=2, max_length=2)
+
+
+class RegionBody(BaseModel):
+    region_id: int = Field(gt=0)
+
+
+class CarBody(BaseModel):
+    model: str = Field(max_length=64)
+    mod: str | None = Field(default=None, max_length=32)
+    color: str = Field(max_length=32)
+
+
 class AddBody(BaseModel):
     stock_id: int = Field(gt=0)
     dealer_id: int | None = Field(default=None, gt=0)  # предзаказ: у какого дилера заберёт
@@ -383,6 +418,65 @@ def register_api(app: FastAPI) -> None:
     @app.get("/api/orders")
     async def orders(c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
         return {"orders": [order_json(o, c.lang) for o in await OrderRepository(session).for_user(c.user, 20)]}
+
+    # ---------- профиль: то же, что «👤 Профиль» в боте ----------
+
+    @app.get("/api/profile")
+    async def profile(c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        return await profile_json(session, c)
+
+    @app.get("/api/regions")
+    async def regions(c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        return {"regions": [{"id": r.id, "name": localized_name(r, c.lang)}
+                            for r in await RegionRepository(session).list_active()]}
+
+    @app.get("/api/cars")
+    async def car_models(c: Client = Depends(client)):
+        lang = c.lang
+        result = []
+        for name in cars.models():
+            mods = cars.modifications(name)
+            result.append({
+                "model": name,
+                "mods": [{"key": m, "name": cars.mod_name(m, lang)} for m in mods],
+                "colors": {m: [{"key": k, "name": cars.color_name(k, lang), "hex": COLOR_HEX.get(k)}
+                               for k in cars.colors(name, m or None)] for m in (mods or [""])},
+            })
+        return {"cars": result}
+
+    @app.post("/api/profile/language")
+    async def set_language(body: LanguageBody, request: Request, c: Client = Depends(client),
+                           session: AsyncSession = Depends(get_session)):
+        """Язык меняем и в витрине, и в боте: нижнее меню чата сразу приходит на новом языке."""
+        from app.keyboards.main import main_reply_keyboard
+        from app.services.notify import send
+
+        if body.code not in LANGUAGES:
+            raise HTTPException(422, "bad_language")
+        await UserRepository(session).set_language(c.user, body.code)
+        await send(request.app.state.bot, c.user.telegram_id, i18n.t(body.code, "language_saved"),
+                   main_reply_keyboard(body.code, staff=c.full))
+        return await profile_json(session, c)
+
+    @app.post("/api/profile/region")
+    async def set_region(body: RegionBody, c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        region = await RegionRepository(session).get_active(body.region_id)
+        if region is None:
+            raise HTTPException(404, "not_found")
+        await UserRepository(session).set_region(c.user, region)
+        return await profile_json(session, c)
+
+    @app.post("/api/profile/car")
+    async def set_car(body: CarBody, c: Client = Depends(client), session: AsyncSession = Depends(get_session)):
+        mods = cars.modifications(body.model)
+        if body.model not in cars.models():
+            raise HTTPException(422, "bad_model")
+        if (body.mod or None) not in (mods or [None]):  # у модели с комплектациями она обязательна
+            raise HTTPException(422, "bad_mod")
+        if body.color not in cars.colors(body.model, body.mod or None):
+            raise HTTPException(422, "bad_color")
+        await UserRepository(session).set_car(c.user, model=body.model, modification=body.mod or None, color=body.color)
+        return await profile_json(session, c)
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException):

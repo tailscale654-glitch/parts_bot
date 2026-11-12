@@ -22,6 +22,8 @@ const ICON = {
   catalog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1"/></svg>',
   cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M5 8h14l-1.2 11.1a1 1 0 0 1-1 .9H7.2a1 1 0 0 1-1-.9L5 8Z"/><path d="M9 10.5V7a3 3 0 0 1 6 0v3.5"/></svg>',
   orders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2v-17Z"/><path d="M9 8.5h6M9 12.5h6"/></svg>',
+  profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20c.9-3.6 3.8-5.8 7.2-5.8s6.3 2.2 7.2 5.8"/></svg>',
+  chev: '<svg viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m1.5 1.5 5 5-5 5"/></svg>',
 };
 
 // ---------- помощники ----------
@@ -154,7 +156,7 @@ function setFooter(...nodes) {
 }
 
 function renderTabs() {
-  const items = [["catalog", "tab_catalog"], ["cart", "tab_cart"], ["orders", "tab_orders"]];
+  const items = [["catalog", "tab_catalog"], ["cart", "tab_cart"], ["orders", "tab_orders"], ["profile", "tab_profile"]];
   tabsEl.hidden = false;
   tabsEl.replaceChildren(...items.map(([key, label]) => {
     const btn = h("button", { type: "button", "aria-current": state.tab === key ? "page" : null, onclick: () => setTab(key) },
@@ -319,7 +321,9 @@ function openLink(url) {
 function optionList(items, chosenKey, onPick) {
   const buttons = items.map((it) => {
     const btn = h("button", { class: "option", type: "button", role: "radio", "aria-checked": String(it.key === chosenKey) },
-      h("div", { class: "top" }, h("span", { class: "oname" }, it.title), it.price ? h("span", { class: "oprice" }, it.price) : null),
+      h("div", { class: "top" },
+        h("span", { class: "oname" }, it.hex ? h("span", { class: "swatch", "data-hex": it.hex }) : null, it.title),
+        it.price ? h("span", { class: "oprice" }, it.price) : null),
       it.address ? h("div", { class: "oaddr" }, it.address) : null,
       it.meta ? h("div", { class: "ometa" }, it.meta) : null,
       dealerLinks(it.dealer));
@@ -498,6 +502,137 @@ function orderView(o) {
         d.map ? h("a", { href: d.map, onclick: (ev) => { ev.preventDefault(); openLink(d.map); } }, t("route")) : null,
         d.phone ? h("a", { href: "tel:" + d.phone.replace(/[^\d+]/g, "") }, t("call")) : null) : null) : null);
 }
+
+// ---------- профиль: то же, что «👤 Профиль» в боте ----------
+async function refreshMe() {
+  state.me = await api("/api/me");
+  state.t = state.me.t;
+  state.cart = state.me.cart;
+  state.catalog = null; // язык, регион или автомобиль поменялись — каталог другой
+  document.documentElement.lang = state.me.lang;
+}
+
+/* +998901112233 → +998 90 111 22 33 (узбекские номера), остальные — как есть */
+function phoneText(phone) {
+  const m = /^\+998(\d{2})(\d{3})(\d{2})(\d{2})$/.exec(phone || "");
+  return m ? `+998 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : phone || "";
+}
+
+function settingRow(label, value, onClick, extra) {
+  return h("button", { class: "setting", type: "button", onclick: onClick },
+    h("span", { class: "slabel" }, label, extra ? h("small", {}, extra) : null),
+    value ? h("span", { class: "svalue" }, value) : null,
+    icon("chev"));
+}
+
+screens.profile = {
+  async draw() {
+    const p = await api("/api/profile");
+    const root = h("div", {},
+      h("header", { class: "page-title" }, h("h1", {}, p.name || t("tab_profile")), h("p", {}, phoneText(p.phone))));
+    if (p.staff_dealer) root.append(h("p", { class: "lead" }, t("staff_of", { dealer: p.staff_dealer })));
+    if (!p.staff_dealer) {
+      const car = p.car;
+      root.append(h("h2", { class: "section" }, t("car")),
+        h("button", { class: "car-card", type: "button", onclick: () => show("pickModel", { current: car && car.model }) },
+          h("div", { class: "car-pic", html: picture("car") }),
+          h("div", { class: "car-info" },
+            h("div", { class: "car-model" }, car ? car.model : t("choose_car")),
+            car ? h("div", { class: "car-meta" },
+              car.hex ? h("span", { class: "swatch small", "data-hex": car.hex }) : null,
+              [car.mod_name, car.color_name].filter(Boolean).join(", ")) : null,
+            h("div", { class: "car-change" }, car ? t("change") : t("choose_car")))));
+    }
+    root.append(h("h2", { class: "section" }, t("settings")),
+      h("div", { class: "settings" },
+        settingRow(t("region"), p.region.name, () => show("pickRegion", { current: p.region.id })),
+        settingRow(t("language"), (p.languages.find((l) => l.code === p.lang) || {}).name, () => show("pickLanguage", { p })),
+        settingRow(t("phone"), phoneText(p.phone) || "—", sharePhone)),
+      h("h2", { class: "section" }, t("help")),
+      h("div", { class: "settings" }, settingRow(t("support"), null, () => tg.close(), t("support_hint"))));
+    paintSwatches(root);
+    return root;
+  },
+};
+
+/* Цвет машины задаём через style из своего справочника (не из HTML) */
+function paintSwatches(root) {
+  for (const el of root.querySelectorAll("[data-hex]")) el.style.background = el.dataset.hex;
+}
+
+function sharePhone() {
+  // Номер берёт сам Telegram и отправляет боту контактом — бот проверяет, что номер свой, и сохраняет
+  if (!tg.requestContact || !tg.isVersionAtLeast || !tg.isVersionAtLeast("6.9")) { toast(t("phone_old")); return; }
+  tg.requestContact((shared) => {
+    if (!shared) return;
+    toast(t("phone_sent"));
+    setTimeout(() => { if (state.stack.at(-1)?.name === "profile") render(); }, 2500);
+  });
+}
+
+async function saveProfile(path, body) {
+  try {
+    await api(path, body);
+    await refreshMe();
+    haptic("success");
+    state.tab = "profile";
+    show("profile", {}, { root: true });
+    toast(t("saved"));
+  } catch (e) { haptic("error"); toast(t("error")); }
+}
+
+function pickScreen(title, note, items, chosenKey, onPick) {
+  return h("div", {},
+    h("header", { class: "page-title" }, h("h1", {}, title), note ? h("p", {}, note) : null),
+    optionList(items, chosenKey, onPick));
+}
+
+screens.pickRegion = {
+  async draw({ current }) {
+    const data = await api("/api/regions");
+    return pickScreen(t("region"), t("region_note"), data.regions.map((r) => ({ key: r.id, title: r.name, dealer: {} })), current,
+      (it) => saveProfile("/api/profile/region", { region_id: it.key }));
+  },
+};
+
+screens.pickLanguage = {
+  async draw({ p }) {
+    return pickScreen(t("language"), null, p.languages.map((l) => ({ key: l.code, title: l.name, dealer: {} })), p.lang,
+      (it) => saveProfile("/api/profile/language", { code: it.key }));
+  },
+};
+
+// автомобиль: модель → комплектация (если их несколько) → цвет
+screens.pickModel = {
+  async draw({ current }) {
+    const data = await api("/api/cars");
+    return pickScreen(t("choose_model"), t("car_note"), data.cars.map((c) => ({ key: c.model, title: c.model, dealer: {} })),
+      current, (it) => {
+        const car = data.cars.find((c) => c.model === it.key);
+        if (car.mods.length > 1) show("pickMod", { car });
+        else show("pickColor", { car, mod: "" });
+      });
+  },
+};
+
+screens.pickMod = {
+  async draw({ car }) {
+    return pickScreen(car.model, t("choose_mod"), car.mods.map((m) => ({ key: m.key, title: m.name, dealer: {} })), null,
+      (it) => show("pickColor", { car, mod: it.key }));
+  },
+};
+
+screens.pickColor = {
+  async draw({ car, mod }) {
+    const colors = car.colors[mod] || [];
+    const modName = (car.mods.find((m) => m.key === mod) || {}).name;
+    const root = pickScreen(car.model, [modName, t("choose_color")].filter(Boolean).join(". "),
+      colors.map((c) => ({ key: c.key, title: c.name, hex: c.hex, dealer: {} })), null,
+      (it) => saveProfile("/api/profile/car", { model: car.model, mod: mod || null, color: it.key }));
+    paintSwatches(root);
+    return root;
+  },
+};
 
 // ---------- запуск ----------
 function applyScheme() {
