@@ -285,7 +285,7 @@ def order_json(order: Order, lang: str | None) -> dict:
 
 
 COLOR_HEX = {"white": "#f4f4f4", "black": "#1b1c1e", "silver": "#c3c6ca", "gray": "#8b8e93", "metallic_gray": "#555a61",
-             "star_gray": "#a2a6ab", "red": "#b3162b", "blue": "#2b5aa8"}
+             "star_gray": "#a2a6ab", "blue": "#2b5aa8"}
 LANGUAGES = ("ru", "uz", "en")
 
 # Фото моделей JAC: static/cars/<ключ>.webp (большое) и <ключ>-s.webp (маленькое, для списков).

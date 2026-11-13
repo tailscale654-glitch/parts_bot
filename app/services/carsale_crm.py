@@ -71,7 +71,7 @@ _COLOR_WORDS = (  # порядок важен: «Quantum Silver Gray» — се�
     ("metallic", "metallic_gray"), ("металлик", "metallic_gray"), ("star", "star_gray"), ("звезд", "star_gray"),
     ("silver gray", "gray"), ("white", "white"), ("бел", "white"), ("black", "black"), ("черн", "black"),
     ("silver", "silver"), ("серебр", "silver"), ("gray", "gray"), ("grey", "gray"), ("сер", "gray"),
-    ("red", "red"), ("красн", "red"), ("blue", "blue"), ("син", "blue"),
+    ("blue", "blue"), ("син", "blue"),
 )
 
 

@@ -34,7 +34,7 @@ def test_map_model(model, mod, expected):
 @pytest.mark.parametrize("color, expected", [
     ("White", "white"), ("Crystal White", "white"), ("Black", "black"), ("Sandalwood Black", "black"),
     ("Silver", "silver"), ("Metallic gray", "metallic_gray"), ("Star gray", "star_gray"),
-    ("Quantum Silver Gray", "gray"), ("Oriental Blue", "blue"), ("Red", "red"), ("", None), ("Розовый", None),
+    ("Quantum Silver Gray", "gray"), ("Oriental Blue", "blue"), ("Red", None), ("", None), ("Розовый", None),
 ])
 def test_map_color(color, expected):
     assert map_color(color) == expected

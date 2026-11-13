@@ -23,7 +23,6 @@ COLORS = {
     "gray": ("Серый", "Gray", "Kulrang"),
     "metallic_gray": ("Серый металлик", "Metallic gray", "Metallik kulrang"),
     "star_gray": ("Звёздный серый", "Star gray", "Och kulrang"),
-    "red": ("Красный", "Red", "Qizil"),
     "blue": ("Синий", "Blue", "Ko‘k"),
 }
 
@@ -50,7 +49,7 @@ CARS = [
     Car("JAC Sunray", "JAC Sunray", ("white", "black", "silver", "gray", "metallic_gray"), ("minibus", "van")),
     Car("JAC T8", "JAC T8", ("white", "black", "silver", "gray", "metallic_gray")),
     Car("JAC T9", "JAC T9", ("white", "black", "silver", "metallic_gray", "star_gray")),
-    Car("JAC JS8", "JAC JS8", ("white", "black", "red", "metallic_gray")),
+    Car("JAC JS8", "JAC JS8", ("white", "black", "metallic_gray")),
     Car("JAC RF8", "JAC RF8", ("white", "black", "gray", "blue")),
 ]
 LANG_INDEX = {"ru": 0, "en": 1, "uz": 2}
